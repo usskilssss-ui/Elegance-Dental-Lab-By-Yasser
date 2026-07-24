@@ -170,6 +170,8 @@ export class Admin implements OnInit, OnDestroy {
   customRingPrice = 0;
   customTryInPrice = 0;
 
+  currentPrintDate = new Date();
+
   pricingSaveSuccess = false;
   pricingSaveError = '';
   isPricingSaving = false;
@@ -1903,6 +1905,15 @@ export class Admin implements OnInit, OnDestroy {
   getDoctorPaymentsList(doctorName: string): any[] {
     const key = this.doctorGroupKey(doctorName);
     return this.doctorPayments.filter(p => this.doctorGroupKey(p.doctorName) === key);
+  }
+
+  printDoctorReceipt(): void {
+    if (!this.reportDoctorFilter) return;
+    this.currentPrintDate = new Date();
+    // setTimeout is used to ensure Angular has updated the view with currentPrintDate before printing
+    setTimeout(() => {
+      window.print();
+    }, 100);
   }
 
 }
