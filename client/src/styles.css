@@ -70,3 +70,101 @@ body {
 * {
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
+
+/* Print Styles for Receipt Printer (80mm) */
+@media print {
+  /* Hide all UI elements not related to print */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Make the print section visible and position it top left */
+  #print-receipt-section, #print-receipt-section * {
+    visibility: visible;
+  }
+  
+  #print-receipt-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace, 'Arial';
+    color: #000;
+  }
+
+  /* Force background colors (if any) and remove shadows */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Specific styles for the receipt content */
+  .receipt-header {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 10px;
+  }
+
+  .receipt-title {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+  }
+
+  .receipt-date {
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  .receipt-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1rem;
+    margin-bottom: 5px;
+  }
+
+  .receipt-row.bold {
+    font-weight: bold;
+  }
+  
+  .receipt-divider {
+    border-top: 1px dashed #000;
+    margin: 10px 0;
+  }
+
+  .receipt-table {
+    width: 100%;
+    font-size: 0.9rem;
+    text-align: right;
+    border-collapse: collapse;
+  }
+
+  .receipt-table th, .receipt-table td {
+    padding: 3px 0;
+    border-bottom: 1px dotted #000;
+  }
+
+  .receipt-footer {
+    text-align: center;
+    font-size: 0.85rem;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #000;
+  }
+
+  /* Hide print section on screen */
+}
+
+/* Hide print section on screen */
+@media screen {
+  #print-receipt-section {
+    display: none !important;
+  }
+}
