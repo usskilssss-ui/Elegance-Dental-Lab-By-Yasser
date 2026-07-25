@@ -1926,7 +1926,7 @@ export class Admin implements OnInit, OnDestroy {
     } else {
       payments.forEach((p: any) => {
         const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-GB') : '—';
-        const note = p.note || '—';
+        const note = p.notes || '—';
         paymentsRows += `<tr>
           <td style="text-align:right;padding:4px 2px;border-bottom:1px dotted #999;">${fmt(p.amount)} EGP</td>
           <td style="text-align:center;padding:4px 2px;border-bottom:1px dotted #999;">${note}</td>
