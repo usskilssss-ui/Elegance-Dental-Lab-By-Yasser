@@ -1087,3 +1087,87 @@
 
     </div>
   </div>
+
+  <!-- ===== Receipt Print Section ===== -->
+  <div id="print-receipt-section" *ngIf="reportDoctorFilter">
+
+    <!-- Header: Logo centered, date top-left -->
+    <div style="position:relative; margin-bottom:12px;">
+      <div style="font-size:0.78rem; color:#000;">
+        تاريخ الإصدار: {{ currentPrintDate | date:'yyyy-MM-dd HH:mm' }}
+      </div>
+      <div style="text-align:center; margin-top:-18px;">
+        <div style="font-size:1.6rem; font-weight:bold; letter-spacing:2px;">Elegance Lab</div>
+        <div style="font-size:0.8rem;">Precision Dental Laboratories</div>
+      </div>
+    </div>
+
+    <div style="border-top:2px solid #000; border-bottom:1px dashed #000; padding:4px 0; margin-bottom:10px; text-align:center; font-weight:bold; font-size:0.9rem;">
+      كشف حساب — د. {{ reportDoctorFilter }}
+    </div>
+
+    <!-- Summary Table -->
+    <table class="receipt-table" style="margin-bottom:12px;">
+      <thead>
+        <tr>
+          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">البيان</th>
+          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">القيمة</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:right; padding:4px 2px;">عدد الحالات الخارجة</td>
+          <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ reportFilteredCases.length }}</td>
+        </tr>
+        <tr>
+          <td style="text-align:right; padding:4px 2px;">إجمالي الحساب</td>
+          <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ getDoctorTotalDue(reportDoctorFilter) | number:'1.0-0' }} EGP</td>
+        </tr>
+        <tr>
+          <td style="text-align:right; padding:4px 2px;">المبلغ المدفوع</td>
+          <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ getDoctorTotalPaid(reportDoctorFilter) | number:'1.0-0' }} EGP</td>
+        </tr>
+        <tr style="border-top:1px solid #000;">
+          <td style="text-align:right; padding:4px 2px; font-weight:bold;">المبلغ المستحق (المتبقي)</td>
+          <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ (getDoctorTotalDue(reportDoctorFilter) - getDoctorTotalPaid(reportDoctorFilter)) | number:'1.0-0' }} EGP</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="border-top:1px dashed #000; margin-bottom:8px;"></div>
+
+    <!-- Payments Table -->
+    <div style="font-weight:bold; font-size:0.85rem; margin-bottom:4px; text-align:center;">سجل الدفعات</div>
+    <table class="receipt-table" style="margin-bottom:12px;">
+      <thead>
+        <tr>
+          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">المبلغ</th>
+          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">تاريخ الدفع</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let p of getDoctorPaymentsList(reportDoctorFilter)">
+          <td style="text-align:right; padding:4px 2px;">{{ p.amount | number:'1.0-0' }} EGP</td>
+          <td style="text-align:left;  padding:4px 2px;">{{ formatDateEn(p.paymentDate) }}</td>
+        </tr>
+        <tr *ngIf="getDoctorPaymentsList(reportDoctorFilter).length === 0">
+          <td colspan="2" style="text-align:center; padding:8px 0; font-style:italic;">لا توجد دفعات مسجلة</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Final Total Remaining -->
+    <div style="border-top:2px solid #000; padding-top:6px; margin-bottom:10px;">
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <td style="font-size:1rem; font-weight:bold; text-align:right; padding:2px;">إجمالي المبلغ المتبقي</td>
+          <td style="font-size:1rem; font-weight:bold; text-align:left;  padding:2px;">{{ (getDoctorTotalDue(reportDoctorFilter) - getDoctorTotalPaid(reportDoctorFilter)) | number:'1.0-0' }} EGP</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="border-top:1px dashed #000; padding-top:8px; text-align:center; font-size:0.8rem;">
+      شكراً لتعاملكم معنا — Elegance Dental Lab
+    </div>
+
+  </div>
