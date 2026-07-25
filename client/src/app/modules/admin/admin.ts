@@ -1909,11 +1909,79 @@ export class Admin implements OnInit, OnDestroy {
 
   printDoctorReceipt(): void {
     if (!this.reportDoctorFilter) return;
-    this.currentPrintDate = new Date();
-    // setTimeout is used to ensure Angular has updated the view with currentPrintDate before printing
-    setTimeout(() => {
-      window.print();
-    }, 100);
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const doctorName = this.reportDoctorFilter;
+    const totalDue = this.getDoctorTotalDue(doctorName);
+    const totalPaid = this.getDoctorTotalPaid(doctorName);
+    const remaining = totalDue - totalPaid;
+    const casesCount = this.reportFilteredCases.length;
+    const payments = this.getDoctorPaymentsList(doctorName);
+    const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    let paymentsRows = '';
+    if (payments.length === 0) {
+      paymentsRows = `<tr><td colspan="2" style="text-align:center;font-style:italic;padding:6px 0;">لا توجد دفعات مسجلة<\/td><\/tr>`;
+    } else {
+      payments.forEach((p: any) => {
+        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-GB') : '\u2014';
+        paymentsRows += `<tr><td style="text-align:right;padding:4px 2px;border-bottom:1px dotted #999;">${fmt(p.amount)} EGP<\/td><td style="text-align:left;padding:4px 2px;border-bottom:1px dotted #999;">${pDate}<\/td><\/tr>`;
+      });
+    }
+
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>كشف حساب<\/title>
+    <style>
+      @page { size: 80mm auto; margin: 4mm; }
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { background:#fff; color:#000; font-family:'Courier New',Courier,monospace; font-size:11px; width:72mm; }
+      table { width:100%; border-collapse:collapse; }
+      th { font-weight:bold; border-bottom:1px solid #000; padding:3px 2px; }
+      td { padding:3px 2px; }
+      .bold { font-weight:bold; }
+      .center { text-align:center; }
+      .dash { border-top:1px dashed #555; margin:6px 0; }
+      .solid { border-top:2px solid #000; margin:5px 0; }
+    <\/style>
+    <\/head><body>
+    <div style="margin-bottom:6px;">
+      <div style="font-size:9px;text-align:left;">تاريخ الإصدار: ${dateStr}<\/div>
+      <div class="center bold" style="font-size:18px;letter-spacing:2px;margin-top:-12px;">Elegance Lab<\/div>
+      <div class="center" style="font-size:9px;">Precision Dental Laboratories<\/div>
+    <\/div>
+    <div class="solid"><\/div>
+    <div class="center bold" style="font-size:12px;padding:3px 0;">كشف حساب — د. ${doctorName}<\/div>
+    <div class="solid"><\/div>
+    <table>
+      <thead><tr><th style="text-align:right;">البيان<\/th><th style="text-align:left;">القيمة<\/th><\/tr><\/thead>
+      <tbody>
+        <tr><td style="text-align:right;">عدد الحالات الخارجة<\/td><td style="text-align:left;" class="bold">${casesCount}<\/td><\/tr>
+        <tr><td style="text-align:right;">إجمالي الحساب<\/td><td style="text-align:left;" class="bold">${fmt(totalDue)} EGP<\/td><\/tr>
+        <tr><td style="text-align:right;">المبلغ المدفوع<\/td><td style="text-align:left;" class="bold">${fmt(totalPaid)} EGP<\/td><\/tr>
+        <tr><td style="text-align:right;border-top:1px solid #000;padding-top:4px;" class="bold">المبلغ المستحق<\/td><td style="text-align:left;border-top:1px solid #000;padding-top:4px;" class="bold">${fmt(remaining)} EGP<\/td><\/tr>
+      <\/tbody>
+    <\/table>
+    <div class="dash"><\/div>
+    <div class="center bold" style="margin:4px 0;">سجل الدفعات<\/div>
+    <table>
+      <thead><tr><th style="text-align:right;">المبلغ<\/th><th style="text-align:left;">تاريخ الدفع<\/th><\/tr><\/thead>
+      <tbody>${paymentsRows}<\/tbody>
+    <\/table>
+    <div class="solid"><\/div>
+    <table><tbody><tr>
+      <td style="text-align:right;" class="bold">إجمالي المتبقي<\/td>
+      <td style="text-align:left;" class="bold">${fmt(remaining)} EGP<\/td>
+    <\/tr><\/tbody><\/table>
+    <div class="dash"><\/div>
+    <div class="center" style="font-size:10px;">شكراً لتعاملكم معنا — Elegance Dental Lab<\/div>
+    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
+    <\/body><\/html>`;
+
+    const popup = window.open('', '_blank', 'width=380,height=650,toolbar=0,menubar=0,scrollbars=0');
+    if (popup) {
+      popup.document.write(html);
+      popup.document.close();
+    }
   }
 
 }
