@@ -1930,7 +1930,7 @@ export class Admin implements OnInit, OnDestroy {
         paymentsRows += `<tr>
           <td style="text-align:right;padding:4px 2px;border-bottom:1px dotted #999;">${fmt(p.amount)} EGP</td>
           <td style="text-align:center;padding:4px 2px;border-bottom:1px dotted #999;">${note}</td>
-          <td style="text-align:left;padding:4px 2px;border-bottom:1px dotted #999;">${pDate}</td>
+          <td style="text-align:left;padding:4px 2px 4px 6px;border-bottom:1px dotted #999;white-space:nowrap;">${pDate}</td>
         </tr>`;
       });
     }
@@ -1941,23 +1941,24 @@ export class Admin implements OnInit, OnDestroy {
   <meta charset="UTF-8">
   <title>كشف حساب — د. ${doctorName}</title>
   <style>
-    @page { margin: 0; size: 80mm auto; }
+    @page { margin: 2mm; size: 80mm auto; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
     body {
-      width: 78mm;
+      width: 100%;
+      max-width: 72mm;
       margin: 0 auto;
-      padding: 8px;
+      padding: 4px 8px;
       font-size: 11px;
-      color: #000;
-      background: #fff;
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
     .dash { border-top: 1px dashed #555; margin: 6px 0; }
     .solid { border-top: 2px solid #000; margin: 6px 0; }
     table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-    th { padding: 4px 2px; font-weight: bold; border-bottom: 1px solid #000; }
-    td { padding: 3px 2px; }
+    th { padding: 4px 4px; font-weight: bold; border-bottom: 1px solid #000; }
+    td { padding: 3px 4px; }
+    .val-col { text-align: left; padding-left: 6px !important; }
   </style>
 </head>
 <body>
@@ -1970,13 +1971,13 @@ export class Admin implements OnInit, OnDestroy {
   <div class="solid"></div>
   <table>
     <thead>
-      <tr><th style="text-align:right;">البيان</th><th style="text-align:left;">القيمة</th></tr>
+      <tr><th style="text-align:right;">البيان</th><th class="val-col">القيمة</th></tr>
     </thead>
     <tbody>
-      <tr><td style="text-align:right;">عدد الحالات الخارجة</td><td class="bold" style="text-align:left;">${casesCount}</td></tr>
-      <tr><td style="text-align:right;">إجمالي الحساب</td><td class="bold" style="text-align:left;">${fmt(totalDue)} EGP</td></tr>
-      <tr><td style="text-align:right;">المبلغ المدفوع</td><td class="bold" style="text-align:left;">${fmt(totalPaid)} EGP</td></tr>
-      <tr><td style="text-align:right;border-top:1px solid #000;padding-top:4px;" class="bold">المبلغ المستحق</td><td class="bold" style="text-align:left;border-top:1px solid #000;padding-top:4px;">${fmt(remaining)} EGP</td></tr>
+      <tr><td style="text-align:right;">عدد الحالات الخارجة</td><td class="bold val-col">${casesCount}</td></tr>
+      <tr><td style="text-align:right;">إجمالي الحساب</td><td class="bold val-col">${fmt(totalDue)} EGP</td></tr>
+      <tr><td style="text-align:right;">المبلغ المدفوع</td><td class="bold val-col">${fmt(totalPaid)} EGP</td></tr>
+      <tr><td style="text-align:right;border-top:1px solid #000;padding-top:4px;" class="bold">المبلغ المستحق</td><td class="bold val-col" style="border-top:1px solid #000;padding-top:4px;">${fmt(remaining)} EGP</td></tr>
     </tbody>
   </table>
   <div class="dash"></div>
@@ -1986,7 +1987,7 @@ export class Admin implements OnInit, OnDestroy {
       <tr>
         <th style="text-align:right;">المبلغ</th>
         <th style="text-align:center;">ملاحظات</th>
-        <th style="text-align:left;">تاريخ الدفع</th>
+        <th class="val-col" style="white-space:nowrap;">تاريخ الدفع</th>
       </tr>
     </thead>
     <tbody>
@@ -1996,8 +1997,8 @@ export class Admin implements OnInit, OnDestroy {
   <div class="solid"></div>
   <table>
     <tbody>
-      <tr><td style="text-align:right;font-size:12px;" class="bold">إجمالي المتبقي</td><td style="text-align:left;font-size:12px;" class="bold">${fmt(remaining)} EGP</td></tr>
-      <tr><td style="text-align:right;color:#444;" class="bold">تاريخ طباعة الوصل</td><td style="text-align:left;color:#444;" class="bold">${dateStr}</td></tr>
+      <tr><td style="text-align:right;font-size:12px;" class="bold">إجمالي المتبقي</td><td class="bold val-col" style="font-size:12px;">${fmt(remaining)} EGP</td></tr>
+      <tr><td style="text-align:right;color:#444;" class="bold">تاريخ طباعة الوصل</td><td class="bold val-col" style="color:#444;white-space:nowrap;">${dateStr}</td></tr>
     </tbody>
   </table>
   <div class="dash"></div>
@@ -2018,5 +2019,6 @@ export class Admin implements OnInit, OnDestroy {
     }
   }
 }
+
 
 
