@@ -1177,10 +1177,10 @@ export class Secretary implements OnInit, OnDestroy {
   <meta charset="UTF-8">
   <title>طباعة حالة — ${c.caseNumber}</title>
   <style>
-    @page { margin: 3mm; size: 80mm auto; }
+    @page { margin: 10mm; size: A4; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     html, body { margin: 0; padding: 0; background: #fff; color: #000; }
-    body { width: 100%; max-width: 74mm; margin: 0 auto; padding: 6px 8px; font-size: 11px; }
+    body { width: 100%; max-width: 190mm; margin: 0 auto; padding: 10mm 12mm; font-size: 12px; }
     .center { text-align: center; }
     .bold { font-weight: bold; }
     .dash { border-top: 1px dashed #555; margin: 5px 0; }
