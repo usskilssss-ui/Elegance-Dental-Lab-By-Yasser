@@ -1160,4 +1160,104 @@ export class Secretary implements OnInit, OnDestroy {
     
     return `${String(hour).padStart(2, '0')}:${minute}:00`;
   }
-}
+
+  printCaseCard(c: any): void {
+    const now = new Date();
+    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    const receivedDate = c.receivedDate ? this.formatDateValue(c.receivedDate) : { date: '', time: '' };
+    const deliveryDate = c.deliveryDate ? this.formatDateValue(c.deliveryDate) : null;
+
+    const workTypeDisplay = this.formatWorkTypeForDisplay ? this.formatWorkTypeForDisplay(c.workType) : (c.workType || '');
+    const requesterLabel = c.requesterType === 'student' ? 'طالب' : 'دكتور';
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>طباعة حالة — ${c.caseNumber}</title>
+  <style>
+    @page { margin: 3mm; size: 80mm auto; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+    body { width: 100%; max-width: 74mm; margin: 0 auto; padding: 6px 8px; font-size: 11px; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .dash { border-top: 1px dashed #555; margin: 5px 0; }
+    .solid { border-top: 2px solid #000; margin: 5px 0; }
+    .row { display: flex; justify-content: space-between; margin: 3px 0; }
+    .label { color: #555; font-size: 10px; }
+    .value { font-weight: bold; }
+    .case-number { font-size: 13px; font-weight: bold; letter-spacing: 0.5px; }
+    .badge { display: inline-block; background: #e8e8e8; border-radius: 4px; padding: 1px 6px; font-size: 10px; margin-right: 4px; }
+    .section-title { font-size: 11px; font-weight: bold; margin: 5px 0 3px; border-right: 3px solid #000; padding-right: 5px; }
+  </style>
+</head>
+<body>
+  <div class="center bold" style="font-size:16px;letter-spacing:1px;margin-bottom:2px;">Elegance Lab</div>
+  <div class="center" style="font-size:9px;color:#555;">Precision Dental Laboratories</div>
+  <div class="solid"></div>
+
+  <div class="row" style="align-items:center;">
+    <span class="case-number">${c.caseNumber || ''}</span>
+    <span class="badge">${requesterLabel}</span>
+  </div>
+
+  <div class="dash"></div>
+  <div class="section-title">بيانات الطبيب والمريض</div>
+  <div class="row">
+    <span class="label">الطبيب</span>
+    <span class="value">${c.doctor || '—'}</span>
+  </div>
+  <div class="row">
+    <span class="label">المريض</span>
+    <span class="value">${c.patient || '—'}</span>
+  </div>
+
+  <div class="dash"></div>
+  <div class="section-title">تفاصيل العمل</div>
+  <div class="row">
+    <span class="label">نوع العمل</span>
+    <span class="value">${workTypeDisplay || '—'}</span>
+  </div>
+  ${c.workDetail ? `<div class="row"><span class="label">ملاحظات العمل</span><span class="value">${c.workDetail}</span></div>` : ''}
+  <div class="row">
+    <span class="label">اللون</span>
+    <span class="value">${c.color || '—'}</span>
+  </div>
+  <div class="row">
+    <span class="label">الكمية</span>
+    <span class="value">${c.quantity || '—'}</span>
+  </div>
+  ${c.size ? `<div class="row"><span class="label">الحجم</span><span class="value">${c.size}</span></div>` : ''}
+
+  <div class="dash"></div>
+  <div class="section-title">التواريخ</div>
+  <div class="row">
+    <span class="label">تاريخ الاستلام</span>
+    <span class="value">${receivedDate.date}${receivedDate.time ? ' ' + receivedDate.time : ''}</span>
+  </div>
+  ${deliveryDate ? `<div class="row"><span class="label">تاريخ التسليم</span><span class="value">${deliveryDate.date}${deliveryDate.time ? ' ' + deliveryDate.time : ''}</span></div>` : ''}
+
+  <div class="solid"></div>
+  <div class="row" style="font-size:10px;color:#555;">
+    <span>تاريخ الطباعة</span>
+    <span>${printDate}</span>
+  </div>
+  <div class="center" style="font-size:9px;margin-top:6px;color:#555;">Elegance Dental Lab</div>
+  <script>
+    window.onload = function() {
+      window.print();
+      window.onafterprint = function() { window.close(); };
+    };
+  </script>
+</body>
+</html>`;
+
+    const popup = window.open('', '_blank', 'width=380,height=600,toolbar=0,menubar=0,scrollbars=0');
+    if (popup) {
+      popup.document.write(html);
+      popup.document.close();
+    }
+  }
+}
