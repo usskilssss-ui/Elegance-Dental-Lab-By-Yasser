@@ -21,24 +21,31 @@ const setupSocket = (server) => {
     },
   });
 
-  // Middleware to verify token
+  // Middleware to verify token OR print-agent secret
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token;
+      // Print Agent connects with agentSecret instead of JWT
+      const agentSecret = socket.handshake.auth.agentSecret;
+      if (agentSecret) {
+        if (agentSecret === process.env.PRINT_AGENT_SECRET) {
+          socket.isPrintAgent = true;
+          return next();
+        }
+        return next(new Error('Invalid agent secret'));
+      }
 
+      const token = socket.handshake.auth.token;
       if (!token) {
         return next(new Error('No token provided'));
       }
 
       const decoded = verifyToken(token);
-
       if (!decoded) {
         return next(new Error('Invalid token'));
       }
 
       socket.userId = decoded.userId;
       socket.userRole = decoded.role;
-
       next();
     } catch (error) {
       next(error);
@@ -46,6 +53,15 @@ const setupSocket = (server) => {
   });
 
   io.on('connection', async (socket) => {
+    // ── Print Agent connection ──────────────────────────
+    if (socket.isPrintAgent) {
+      socket.join('print-agents');
+      console.log('🖨️  Print Agent connected and joined print-agents room');
+      socket.on('disconnect', () => console.log('🖨️  Print Agent disconnected'));
+      return; // Don't run user-related logic for agents
+    }
+
+    // ── Regular user connection ─────────────────────────
     console.log(`User ${socket.userId} connected: ${socket.id}`);
 
     // Store user connection

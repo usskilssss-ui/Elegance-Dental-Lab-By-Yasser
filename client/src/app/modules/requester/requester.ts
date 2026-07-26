@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -10,6 +10,7 @@ import { buildCreateCasePayload, mapApiCaseToDentalCase } from '../../core/mappe
 import { Subscription } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { environment } from '../../../environments/environment';
 
 function todayYmd(): string {
   const d = new Date();
@@ -46,7 +47,10 @@ export class RequesterComponent implements OnInit, OnDestroy {
   private readonly sharedCases = inject(SharedCasesService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
+  private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+
+  private readonly apiBase = environment.apiUrl;
 
   private readonly socketSubs: Subscription[] = [];
 
@@ -286,10 +290,27 @@ export class RequesterComponent implements OnInit, OnDestroy {
     };
 
     this.closeDialog();
-    this.flash('تم تجهيز الطباعة ✓');
+    this.saveInProgress.set(true);
 
-    // Auto print directly
-    setTimeout(() => this.printCaseCard(createdCase), 100);
+    const now = new Date();
+    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    // Send to remote print API
+    this.http.post(`${this.apiBase}/print/job`, {
+      printData: {
+        ...createdCase,
+        printDate,
+      }
+    }).subscribe({
+      next: () => {
+        this.saveInProgress.set(false);
+        this.flash('✅ تم إرسال الريكويست للطباعة');
+      },
+      error: () => {
+        this.saveInProgress.set(false);
+        this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
+      }
+    });
   }
 
   logout(): void {
