@@ -73,10 +73,32 @@ socket.on('print:new-job', async (job) => {
   }
 });
 
+// Find local Chrome/Edge executable path to avoid downloading Chromium
+function getLocalBrowserPath() {
+  const paths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return undefined; // fallback
+}
+
 // ── Generate PDF from HTML ────────────────────────────────
 async function generatePdf(html, outputPath) {
+  const executablePath = getLocalBrowserPath();
+  if (executablePath) {
+    console.log(`   🌐 Using local browser: ${executablePath}`);
+  } else {
+    console.log('   ⚠️  No local Chrome/Edge found. Falling back to default Puppeteer browser.');
+  }
+
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: 'new',
+    executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const page = await browser.newPage();
