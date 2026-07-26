@@ -57,6 +57,20 @@ const setupSocket = (server) => {
     if (socket.isPrintAgent) {
       socket.join('print-agents');
       console.log('🖨️  Print Agent connected and joined print-agents room');
+
+      socket.on('print:job-status', async (data) => {
+        try {
+          const PrintJob = require('../models/PrintJob');
+          await PrintJob.findByIdAndUpdate(data.jobId, {
+            status: data.status,
+            errorMessage: data.error || ''
+          });
+          console.log(`🖨️  Print Job ${data.jobId} status updated to: ${data.status}`);
+        } catch (err) {
+          console.error('Error updating print job status via socket:', err);
+        }
+      });
+
       socket.on('disconnect', () => console.log('🖨️  Print Agent disconnected'));
       return; // Don't run user-related logic for agents
     }
