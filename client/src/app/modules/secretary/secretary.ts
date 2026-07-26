@@ -1177,74 +1177,121 @@ export class Secretary implements OnInit, OnDestroy {
   <meta charset="UTF-8">
   <title>طباعة حالة — ${c.caseNumber}</title>
   <style>
-    @page { margin: 10mm; size: A4; }
+    @page { margin: 15mm 20mm; size: A4; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
-    body { width: 100%; max-width: 190mm; margin: 0 auto; padding: 10mm 12mm; font-size: 12px; }
-    .center { text-align: center; }
-    .bold { font-weight: bold; }
-    .dash { border-top: 1px dashed #555; margin: 5px 0; }
-    .solid { border-top: 2px solid #000; margin: 5px 0; }
-    .row { display: flex; justify-content: space-between; margin: 3px 0; }
-    .label { color: #555; font-size: 10px; }
-    .value { font-weight: bold; }
-    .case-number { font-size: 13px; font-weight: bold; letter-spacing: 0.5px; }
-    .badge { display: inline-block; background: #e8e8e8; border-radius: 4px; padding: 1px 6px; font-size: 10px; margin-right: 4px; }
-    .section-title { font-size: 11px; font-weight: bold; margin: 5px 0 3px; border-right: 3px solid #000; padding-right: 5px; }
+    html { height: 100%; }
+    body {
+      margin: 0; padding: 0;
+      background: #fff; color: #000;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 16px;
+    }
+    .page-content {
+      flex: 1;
+    }
+    .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #000; }
+    .header h1 { font-size: 28px; font-weight: bold; margin: 0 0 5px 0; letter-spacing: 2px; }
+    .header p { font-size: 13px; color: #555; margin: 0; }
+    .case-ref {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 20px 0;
+    }
+    .case-ref .num { font-size: 22px; font-weight: bold; }
+    .case-ref .badge {
+      background: #222; color: #fff;
+      border-radius: 4px; padding: 4px 14px;
+      font-size: 14px;
+    }
+    .section { margin: 20px 0; }
+    .section-title {
+      font-size: 14px; font-weight: bold;
+      border-right: 4px solid #000; padding-right: 10px;
+      margin-bottom: 10px; color: #222;
+    }
+    .row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 15px;
+    }
+    .row:last-child { border-bottom: none; }
+    .label { color: #666; }
+    .value { font-weight: bold; text-align: left; }
+    .footer {
+      margin-top: 30px;
+      padding-top: 12px;
+      border-top: 2px solid #000;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #555;
+    }
   </style>
 </head>
 <body>
-  <div class="center bold" style="font-size:16px;letter-spacing:1px;margin-bottom:2px;">Elegance Lab</div>
-  <div class="center" style="font-size:9px;color:#555;">Precision Dental Laboratories</div>
-  <div class="solid"></div>
+<div class="page-content">
+  <div class="header">
+    <h1>Elegance Lab</h1>
+    <p>Precision Dental Laboratories</p>
+  </div>
 
-  <div class="row" style="align-items:center;">
-    <span class="case-number">${c.caseNumber || ''}</span>
+  <div class="case-ref">
+    <span class="num">${c.caseNumber || ''}</span>
     <span class="badge">${requesterLabel}</span>
   </div>
 
-  <div class="dash"></div>
-  <div class="section-title">بيانات الطبيب والمريض</div>
-  <div class="row">
-    <span class="label">الطبيب</span>
-    <span class="value">${c.doctor || '—'}</span>
-  </div>
-  <div class="row">
-    <span class="label">المريض</span>
-    <span class="value">${c.patient || '—'}</span>
+  <div class="section">
+    <div class="section-title">بيانات الطبيب والمريض</div>
+    <div class="row">
+      <span class="label">الطبيب</span>
+      <span class="value">${c.doctor || '—'}</span>
+    </div>
+    <div class="row">
+      <span class="label">المريض</span>
+      <span class="value">${c.patient || '—'}</span>
+    </div>
   </div>
 
-  <div class="dash"></div>
-  <div class="section-title">تفاصيل العمل</div>
-  <div class="row">
-    <span class="label">نوع العمل</span>
-    <span class="value">${workTypeDisplay || '—'}</span>
+  <div class="section">
+    <div class="section-title">تفاصيل العمل</div>
+    <div class="row">
+      <span class="label">نوع العمل</span>
+      <span class="value">${workTypeDisplay || '—'}</span>
+    </div>
+    ${c.workDetail ? `<div class="row"><span class="label">ملاحظات العمل</span><span class="value">${c.workDetail}</span></div>` : ''}
+    <div class="row">
+      <span class="label">اللون</span>
+      <span class="value">${c.color || '—'}</span>
+    </div>
+    <div class="row">
+      <span class="label">الكمية</span>
+      <span class="value">${c.quantity || '—'}</span>
+    </div>
+    ${c.size ? `<div class="row"><span class="label">الحجم</span><span class="value">${c.size}</span></div>` : ''}
   </div>
-  ${c.workDetail ? `<div class="row"><span class="label">ملاحظات العمل</span><span class="value">${c.workDetail}</span></div>` : ''}
-  <div class="row">
-    <span class="label">اللون</span>
-    <span class="value">${c.color || '—'}</span>
-  </div>
-  <div class="row">
-    <span class="label">الكمية</span>
-    <span class="value">${c.quantity || '—'}</span>
-  </div>
-  ${c.size ? `<div class="row"><span class="label">الحجم</span><span class="value">${c.size}</span></div>` : ''}
 
-  <div class="dash"></div>
-  <div class="section-title">التواريخ</div>
-  <div class="row">
-    <span class="label">تاريخ الاستلام</span>
-    <span class="value">${receivedDate.date}${receivedDate.time ? ' ' + receivedDate.time : ''}</span>
+  <div class="section">
+    <div class="section-title">التواريخ</div>
+    <div class="row">
+      <span class="label">تاريخ الاستلام</span>
+      <span class="value">${receivedDate.date}${receivedDate.time ? ' — ' + receivedDate.time : ''}</span>
+    </div>
+    ${deliveryDate ? `<div class="row"><span class="label">تاريخ التسليم</span><span class="value">${deliveryDate.date}${deliveryDate.time ? ' — ' + deliveryDate.time : ''}</span></div>` : ''}
   </div>
-  ${deliveryDate ? `<div class="row"><span class="label">تاريخ التسليم</span><span class="value">${deliveryDate.date}${deliveryDate.time ? ' ' + deliveryDate.time : ''}</span></div>` : ''}
 
-  <div class="solid"></div>
-  <div class="row" style="font-size:10px;color:#555;">
-    <span>تاريخ الطباعة</span>
-    <span>${printDate}</span>
+  <div class="footer">
+    <span>تاريخ الطباعة: ${printDate}</span>
+    <span>Elegance Dental Lab</span>
   </div>
-  <div class="center" style="font-size:9px;margin-top:6px;color:#555;">Elegance Dental Lab</div>
+</div>
   <script>
     window.onload = function() {
       window.print();
