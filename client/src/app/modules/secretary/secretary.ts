@@ -1186,54 +1186,64 @@ export class Secretary implements OnInit, OnDestroy {
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      font-size: 16px;
+      font-size: 19px;
     }
-    .page-content {
-      flex: 1;
-    }
-    .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #000; }
-    .header h1 { font-size: 28px; font-weight: bold; margin: 0 0 5px 0; letter-spacing: 2px; }
-    .header p { font-size: 13px; color: #555; margin: 0; }
+    .page-content { flex: 1; }
+    .header { text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #000; }
+    .header h1 { font-size: 34px; font-weight: bold; margin: 0 0 6px 0; letter-spacing: 2px; }
+    .header p { font-size: 15px; color: #555; margin: 0; }
     .case-ref {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #f5f5f5;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 12px 16px;
-      margin: 20px 0;
+      display: flex; justify-content: space-between; align-items: center;
+      background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px;
+      padding: 14px 20px; margin: 22px 0;
     }
-    .case-ref .num { font-size: 22px; font-weight: bold; }
-    .case-ref .badge {
-      background: #222; color: #fff;
-      border-radius: 4px; padding: 4px 14px;
-      font-size: 14px;
-    }
-    .section { margin: 20px 0; }
+    .case-ref .num { font-size: 26px; font-weight: bold; }
+    .case-ref .badge { background: #222; color: #fff; border-radius: 4px; padding: 5px 16px; font-size: 16px; }
+    .section { margin: 22px 0; }
     .section-title {
-      font-size: 14px; font-weight: bold;
-      border-right: 4px solid #000; padding-right: 10px;
-      margin-bottom: 10px; color: #222;
+      font-size: 17px; font-weight: bold;
+      border-right: 4px solid #000; padding-right: 12px;
+      margin-bottom: 12px; color: #222;
     }
     .row {
       display: flex; justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
-      font-size: 15px;
+      padding: 10px 0; border-bottom: 1px solid #eee;
+      font-size: 18px;
     }
     .row:last-child { border-bottom: none; }
     .label { color: #666; }
     .value { font-weight: bold; text-align: left; }
     .footer {
-      margin-top: 30px;
-      padding-top: 12px;
+      margin-top: 30px; padding-top: 14px;
       border-top: 2px solid #000;
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-      color: #555;
+      display: flex; justify-content: space-between;
+      font-size: 15px; color: #555;
     }
+    /* Teeth chart */
+    .teeth-section { margin-top: 36px; }
+    .teeth-title {
+      font-size: 17px; font-weight: bold;
+      border-right: 4px solid #000; padding-right: 12px;
+      margin-bottom: 14px; color: #222;
+    }
+    .teeth-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 17px;
+    }
+    .teeth-table th {
+      background: #2980b9; color: #fff;
+      text-align: center; padding: 8px 0;
+      font-size: 18px; font-weight: bold;
+      width: 50%;
+    }
+    .teeth-table td {
+      text-align: center; padding: 10px 2px;
+      font-size: 18px; font-weight: bold;
+      width: 6.25%;
+    }
+    .teeth-table .divider td { border-top: 2px solid #333; padding: 0; height: 0; }
+    .jaw-row td { border-bottom: none; }
+    .center-line { border-right: 2px solid #333; }
   </style>
 </head>
 <body>
@@ -1285,6 +1295,29 @@ export class Secretary implements OnInit, OnDestroy {
       <span class="value">${receivedDate.date}${receivedDate.time ? ' — ' + receivedDate.time : ''}</span>
     </div>
     ${deliveryDate ? `<div class="row"><span class="label">تاريخ التسليم</span><span class="value">${deliveryDate.date}${deliveryDate.time ? ' — ' + deliveryDate.time : ''}</span></div>` : ''}
+  </div>
+
+  <div class="teeth-section">
+    <div class="teeth-title">مخطط الأسنان</div>
+    <table class="teeth-table">
+      <thead>
+        <tr>
+          <th colspan="8">R</th>
+          <th colspan="8">L</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="jaw-row">
+          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
+          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
+        </tr>
+        <tr class="divider"><td colspan="16"></td></tr>
+        <tr class="jaw-row">
+          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
+          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="footer">
