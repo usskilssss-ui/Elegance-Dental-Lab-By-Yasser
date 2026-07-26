@@ -9,6 +9,7 @@ import { CaseManagementComponent } from './modules/case-management/case-manageme
 import { SecretaryDashboardComponent } from './modules/secretary-dashboard/secretary-dashboard';
 import { Finishing } from './modules/finishing/finishing';
 import { RequesterComponent } from './modules/requester/requester';
+import { EntryComponent } from './modules/entry/entry';
 
 /** Admin may open designer / secretary / finisher workspaces from the admin UI. */
 const WITH_ADMIN: (r: AppRole) => AppRole[] = r => [r, 'admin'];
@@ -49,11 +50,20 @@ export const routes: Routes = [
   },
 
   {
+    path: 'entry',
+    canActivate: [authGuard, roleGuard(WITH_ADMIN('finisher'))],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+      { path: 'dashboard', component: EntryComponent },
+    ],
+  },
+
+  {
     path: 'finisher',
     canActivate: [authGuard, roleGuard(WITH_ADMIN('finisher'))],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
-      { path: 'dashboard', component: Finishing },
+      { path: 'dashboard', component: EntryComponent },
     ],
   },
 
@@ -68,7 +78,7 @@ export const routes: Routes = [
 
   /* Legacy URLs → canonical RBAC paths */
   { path: 'secretary-dashboard', pathMatch: 'full', redirectTo: '/secretary/stats' },
-  { path: 'finishing', pathMatch: 'full', redirectTo: '/finisher/dashboard' },
+  { path: 'finishing', pathMatch: 'full', redirectTo: '/entry/dashboard' },
   { path: 'design', pathMatch: 'full', redirectTo: '/designer/dashboard' },
 
   { path: '', pathMatch: 'full', redirectTo: 'login' },

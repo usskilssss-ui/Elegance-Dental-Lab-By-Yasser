@@ -254,7 +254,7 @@ export class AuthService {
       case 'designer':
         return '/designer/dashboard';
       case 'finisher':
-        return '/finisher/dashboard';
+        return '/entry/dashboard';
       case 'secretary':
         return '/secretary/dashboard';
       case 'requester':

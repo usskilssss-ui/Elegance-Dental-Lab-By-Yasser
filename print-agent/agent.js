@@ -57,8 +57,8 @@ socket.on('print:new-job', async (job) => {
     await generatePdf(html, pdfPath);
     console.log(`   ✅ PDF generated: ${pdfPath}`);
 
-    // 3. Print silently
-    await print(pdfPath, { printer: PRINTER_NAME });
+    // 3. Print silently using SumatraPDF with explicit options (A5, grayscale)
+    await printPdf(pdfPath);
     console.log(`   🖨️  Printed successfully on [${PRINTER_NAME}]`);
 
     // 4. Update job status → done
@@ -87,6 +87,27 @@ function getLocalBrowserPath() {
   return undefined; // fallback
 }
 
+// Helper: print PDF using SumatraPDF with forced settings
+function printPdf(pdfPath) {
+  return new Promise((resolve, reject) => {
+    const sumatraPath = path.join(__dirname, 'node_modules', 'pdf-to-printer', 'dist', 'SumatraPDF-3.4.6-32.exe');
+    const args = [
+      '-print-to', PRINTER_NAME,
+      '-silent',
+      '-print-settings', 'papersize=A5',
+      pdfPath,
+    ];
+    const { execFile } = require('child_process');
+    execFile(sumatraPath, args, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`Print failed: ${error.message}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 // ── Generate PDF from HTML ────────────────────────────────
 async function generatePdf(html, outputPath) {
   const executablePath = getLocalBrowserPath();
@@ -105,16 +126,19 @@ async function generatePdf(html, outputPath) {
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
     path: outputPath,
-    format: 'A4',
+    format: 'A5',
     printBackground: true,
-    margin: { top: '10mm', right: '20mm', bottom: '15mm', left: '20mm' },
+    margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
   });
   await browser.close();
 }
 
 // ── Build HTML print template ─────────────────────────────
 function buildPrintHtml(c) {
-  const printDate = c.printDate || new Date().toLocaleDateString('en-GB');
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const dateStr = now.toLocaleDateString('en-GB'); // dd/mm/yyyy
+  const printDate = c.printDate || `${timeStr} ${dateStr}`;
   const workTypeDisplay = c.workType || '—';
   const quantity = c.caseType === 'Empty' ? 0 : (c.quantity || 0);
 
@@ -124,70 +148,138 @@ function buildPrintHtml(c) {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { size: A4; margin: 0mm 20mm 15mm 20mm; }
+    @page { size: A5; margin: 10mm 12mm 10mm 12mm; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { margin: 0; padding: 0; background: #fff; color: #000; font-size: 19px; }
-    .section { margin: 22px 0; }
-    .section-title { font-size: 17px; font-weight: bold; border-right: 4px solid #000; padding-right: 12px; margin-bottom: 12px; color: #222; }
-    .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 18px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: #fff;
+      color: #000;
+      font-size: 14px;
+      line-height: 1.6;
+      direction: rtl;
+      padding-top: 120px;
+    }
+
+    /* ── Section ─────────────────────────── */
+    .section { margin-bottom: 18px; }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #000;
+      border-right: 4px solid #000;
+      padding-right: 10px;
+      margin-bottom: 8px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1.5px solid #000;
+      font-size: 14px;
+    }
     .row:last-child { border-bottom: none; }
-    .label { color: #666; }
-    .value { font-weight: bold; text-align: left; }
-    .footer { margin-top: 30px; padding-top: 14px; border-top: 2px solid #000; display: flex; justify-content: flex-end; font-size: 15px; color: #555; }
-    .footer-brand { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-    .footer-brand-name { font-weight: bold; font-size: 16px; color: #222; }
-    .footer-date { font-size: 13px; color: #666; }
-    .teeth-section { margin-top: 36px; }
-    .teeth-title { font-size: 17px; font-weight: bold; border-right: 4px solid #000; padding-right: 12px; margin-bottom: 14px; color: #222; }
-    .teeth-table { width: 100%; border-collapse: collapse; font-size: 17px; }
-    .teeth-table th { background: #2980b9; color: #fff; text-align: center; padding: 8px 0; font-size: 18px; font-weight: bold; width: 50%; }
-    .teeth-table td { text-align: center; padding: 10px 2px; font-size: 18px; font-weight: bold; width: 6.25%; }
-    .teeth-table .divider td { border-top: 2px solid #333; padding: 0; height: 0; }
-    .center-line { border-right: 2px solid #333; }
+    .label { color: #000; font-weight: bold; }
+    .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
+
+    /* ── Teeth Chart ─────────────────────── */
+    .teeth-section { margin-top: 20px; margin-bottom: 16px; }
+    .teeth-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #000;
+      border-right: 4px solid #000;
+      padding-right: 10px;
+      margin-bottom: 10px;
+    }
+    .teeth-chart { width: 100%; direction: ltr; }
+    .teeth-chart .side-labels {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 4%;
+      margin-bottom: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #000;
+    }
+    .teeth-row {
+      display: flex;
+      width: 100%;
+      border-bottom: 1.5px solid #000;
+      padding: 6px 0;
+    }
+    .teeth-row:last-child { border-bottom: none; }
+    .teeth-row .tooth {
+      flex: 1;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: #000;
+    }
+    .teeth-row .tooth.center-r {
+      border-right: 2px solid #000;
+      padding-right: 2px;
+    }
+
+    /* ── Footer ──────────────────────────── */
+    .footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 2px solid #000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #000;
+      direction: ltr;
+    }
+    .footer-lab { font-weight: 700; color: #000; font-size: 12px; }
+    .footer-date { color: #000; font-size: 11px; direction: rtl; }
   </style>
 </head>
 <body>
 
+  <!-- بيانات الطبيب والمريض -->
   <div class="section">
     <div class="section-title">بيانات الطبيب والمريض</div>
     <div class="row"><span class="label">الطبيب</span><span class="value">${c.doctor || '—'}</span></div>
     <div class="row"><span class="label">المريض</span><span class="value">${c.patient || '—'}</span></div>
   </div>
 
+  <!-- تفاصيل العمل -->
   <div class="section">
     <div class="section-title">تفاصيل العمل</div>
-    <div class="row"><span class="label">نوع العمل</span><span class="value">${workTypeDisplay || '—'}</span></div>
+    <div class="row"><span class="label">نوع العمل</span><span class="value">${workTypeDisplay}</span></div>
     ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${c.workDetail}</span></div>` : ''}
     <div class="row"><span class="label">اللون</span><span class="value">${c.color || '—'}</span></div>
     <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
   </div>
 
+  <!-- مخطط الأسنان -->
   <div class="teeth-section">
     <div class="teeth-title">مخطط الأسنان</div>
-    <table class="teeth-table" dir="ltr">
-      <thead>
-        <tr><th colspan="8">R</th><th colspan="8">L</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
-          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
-        </tr>
-        <tr class="divider"><td colspan="16"></td></tr>
-        <tr>
-          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
-          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="teeth-chart">
+      <div class="side-labels"><span>R</span><span>L</span></div>
+      <div class="teeth-row">
+        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
+        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
+        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
+        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+      </div>
+      <div class="teeth-row">
+        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
+        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
+        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
+        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+      </div>
+    </div>
   </div>
 
+  <!-- Footer -->
   <div class="footer">
-    <div class="footer-brand">
-      <span class="footer-brand-name">Elegance Dental Lab</span>
-      <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
-    </div>
+    <span class="footer-lab">Elegance Dental Lab</span>
+    <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
   </div>
 
 </body>

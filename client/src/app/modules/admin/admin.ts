@@ -273,7 +273,7 @@ export class Admin implements OnInit, OnDestroy {
     joinDate: new Date().toISOString().split('T')[0],
   };
 
-  readonly positions = ['مصمم', 'فني تشطيب', 'سكرتير', 'مدير', 'ريكويست'] as const;
+  readonly positions = ['مصمم', 'مسؤول الطباعة', 'سكرتير', 'مدير', 'ريكويست'] as const;
 
   get filteredStaff(): StaffMember[] {
     if (!this.searchTerm.trim()) return this.staffMembers;
@@ -1646,7 +1646,7 @@ export class Admin implements OnInit, OnDestroy {
     if (r === 'admin') return 'مدير';
     if (r === 'secretary') return 'سكرتير';
     if (r === 'designer') return 'مصمم';
-    if (r === 'finisher') return 'فني تشطيب';
+    if (r === 'finisher') return 'مسؤول الطباعة';
     if (r === 'requester') return 'ريكويست';
     return 'سكرتير';
   }
@@ -1656,7 +1656,7 @@ export class Admin implements OnInit, OnDestroy {
     if (p === 'admin' || p === 'مدير') return 'admin';
     if (p === 'secretary' || p === 'سكرتير') return 'secretary';
     if (p === 'designer' || p === 'مصمم') return 'designer';
-    if (p === 'finisher' || p === 'فني تشطيب') return 'finisher';
+    if (p === 'finisher' || p === 'مسؤول الطباعة' || p === 'فني تشطيب') return 'finisher';
     if (p === 'requester' || p === 'ريكويست') return 'requester';
     return 'secretary';
   }

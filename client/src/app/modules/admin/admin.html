@@ -76,6 +76,7 @@
         <div class="page-header-actions">
           <a routerLink="/designer/dashboard" class="action-btn">فتح شاشة التصميم</a>
           <a routerLink="/secretary/dashboard" class="action-btn">فتح شاشة السكرتارية</a>
+          <a routerLink="/entry/dashboard" class="action-btn">فتح شاشة الدخول</a>
         </div>
       </div>
 
@@ -378,7 +379,7 @@
               <div class="detail-section-title">فريق العمل</div>
               <div class="patient-detail-row"><span>السكرتير</span><strong>{{ selectedCase?.secretaryName || 'غير موجود' }}</strong></div>
               <div class="patient-detail-row" *ngIf="selectedCase?.designerName"><span>المصمم</span><strong>{{ selectedCase?.designerName }}</strong></div>
-              <div class="patient-detail-row" *ngIf="selectedCase?.finisherName"><span>فني التشطيب</span><strong>{{ selectedCase?.finisherName }}</strong></div>
+              <div class="patient-detail-row" *ngIf="selectedCase?.finisherName"><span>مسؤول الطباعة</span><strong>{{ selectedCase?.finisherName }}</strong></div>
             </div>
           </div>
         </div>
