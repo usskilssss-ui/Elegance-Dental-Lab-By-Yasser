@@ -329,7 +329,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { margin: 45mm 20mm 15mm 20mm; size: A4; }
+    @page { margin: 75mm 20mm 15mm 20mm; size: A4; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     html { height: 100%; }
     body { margin: 0; padding: 0; background: #fff; color: #000; font-size: 19px; }
