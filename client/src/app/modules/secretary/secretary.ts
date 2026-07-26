@@ -1299,11 +1299,11 @@ export class Secretary implements OnInit, OnDestroy {
 
   <div class="teeth-section">
     <div class="teeth-title">مخطط الأسنان</div>
-    <table class="teeth-table">
+    <table class="teeth-table" dir="ltr">
       <thead>
         <tr>
           <th colspan="8">R</th>
-          <th colspan="8">L</th>
+          <th colspan="8" style="border-right: none;">L</th>
         </tr>
       </thead>
       <tbody>
