@@ -49,10 +49,10 @@ const updateFinancialsValidation = [
 // All case routes require authentication
 router.use(authenticate);
 
-// Create case - Secretary and Admin
+// Create case - Secretary, Admin, and Requester
 router.post(
   '/',
-  authorize('admin', 'secretary'),
+  authorize('admin', 'secretary', 'requester'),
   createCaseValidation,
   caseController.createCase
 );

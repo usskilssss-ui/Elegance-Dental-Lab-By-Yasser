@@ -16,7 +16,7 @@ const registerValidation = [
   body('email').isEmail().normalizeEmail(),
   body('phone').trim().notEmpty(),
   body('password').isLength({ min: 6 }),
-  body('role').optional().isIn(['admin', 'secretary', 'designer', 'finisher']),
+  body('role').optional().isIn(['admin', 'secretary', 'designer', 'finisher', 'requester']),
   body('department').optional().trim(),
 ];
 
