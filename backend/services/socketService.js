@@ -58,6 +58,25 @@ const setupSocket = (server) => {
       socket.join('print-agents');
       console.log('🖨️  Print Agent connected and joined print-agents room');
 
+      // Fetch and send accumulated pending print jobs
+      (async () => {
+        try {
+          const PrintJob = require('../models/PrintJob');
+          const pendingJobs = await PrintJob.find({ status: 'pending' }).sort({ createdAt: 1 });
+          if (pendingJobs.length > 0) {
+            console.log(`🖨️  Sending ${pendingJobs.length} pending print jobs to connected agent`);
+            pendingJobs.forEach(job => {
+              socket.emit('print:new-job', {
+                jobId: job._id,
+                printData: job.printData,
+              });
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching pending jobs on agent connection:', err);
+        }
+      })();
+
       socket.on('print:job-status', async (data) => {
         try {
           const PrintJob = require('../models/PrintJob');
