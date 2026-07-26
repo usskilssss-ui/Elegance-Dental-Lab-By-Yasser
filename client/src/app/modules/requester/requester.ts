@@ -327,7 +327,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>ريكويست — ${c.caseNumber || ''}</title>
+  <title>ريكويست</title>
   <style>
     @page { margin: 15mm 20mm; size: A4; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -336,13 +336,6 @@ export class RequesterComponent implements OnInit, OnDestroy {
     .header { text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #000; }
     .header h1 { font-size: 34px; font-weight: bold; margin: 0 0 6px 0; letter-spacing: 2px; }
     .header p { font-size: 15px; color: #555; margin: 0; }
-    .case-ref {
-      display: flex; justify-content: space-between; align-items: center;
-      background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px;
-      padding: 14px 20px; margin: 22px 0;
-    }
-    .case-ref .num { font-size: 26px; font-weight: bold; }
-    .case-ref .badge { background: #222; color: #fff; border-radius: 4px; padding: 5px 16px; font-size: 16px; }
     .section { margin: 22px 0; }
     .section-title { font-size: 17px; font-weight: bold; border-right: 4px solid #000; padding-right: 12px; margin-bottom: 12px; color: #222; }
     .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 18px; }
@@ -363,11 +356,6 @@ export class RequesterComponent implements OnInit, OnDestroy {
   <div class="header">
     <h1>Elegance Lab</h1>
     <p>Precision Dental Laboratories</p>
-  </div>
-
-  <div class="case-ref">
-    <span class="num">${c.caseNumber || '—'}</span>
-    <span class="badge">دكتور</span>
   </div>
 
   <div class="section">
