@@ -82,6 +82,18 @@
         <h2 class="modal-title">إضافة ريكويست جديد</h2>
         <form class="case-form" (ngSubmit)="save()">
 
+          <!-- Case Number -->
+          <label class="form-field">
+            <span>رقم الحالة <span class="label-optional">(اختياري)</span></span>
+            <input
+              type="text"
+              name="caseNumber"
+              [(ngModel)]="formDraft.caseNumber"
+              placeholder="مثال: 1234"
+              autocomplete="off"
+            />
+          </label>
+
           <!-- Doctor -->
           <label class="form-field">
             <span>اسم الطبيب <abbr title="مطلوب">*</abbr></span>
@@ -228,9 +240,9 @@
           </label>
 
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeDialog()" [disabled]="saveInProgress()">إلغاء</button>
-            <button type="submit" class="btn-primary" [disabled]="saveInProgress()">
-              {{ saveInProgress() ? 'جاري الحفظ…' : 'حفظ وطباعة' }}
+            <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
+            <button type="submit" class="btn-primary">
+              طباعة الريكويست
             </button>
           </div>
         </form>

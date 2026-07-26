@@ -21,6 +21,7 @@ function todayYmd(): string {
 
 function emptyDraft() {
   return {
+    caseNumber: '',
     doctor: '',
     patient: '',
     workType: '',
@@ -273,46 +274,22 @@ export class RequesterComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const payload = buildCreateCasePayload({
-      requesterType: 'doctor' as const,
-      studentPrice: 0,
+    const createdCase = {
+      ...d,
+      caseNumber: d.caseNumber ? d.caseNumber.trim() : '',
       doctor: d.doctor.trim(),
       patient: d.patient.trim(),
-      patientPhone: '',
       workType: d.workType.trim(),
       workDetail: (d.workDetail || '').trim(),
       color: (d.color || '').trim(),
-      size: '',
       quantity: d.caseType === 'Empty' ? 0 : (d.quantity || 1),
-      date: todayYmd(), // أوتوماتيك دايماً
-      deliveryDate: '',
-      deliveryTime: '',
-    });
+    };
 
-    this.saveInProgress.set(true);
-    this.caseApi.createCase(payload).subscribe({
-      next: (res: any) => {
-        this.saveInProgress.set(false);
-        const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
-        this.closeDialog();
-        this.flash('تم إضافة الريكويست ✓');
+    this.closeDialog();
+    this.flash('تم تجهيز الطباعة ✓');
 
-        // Auto print after save
-        const createdCase = {
-          ...d,
-          caseNumber: res?.case?.caseNumber || res?.case?.case_number || '',
-          requesterType: 'doctor',
-        };
-        setTimeout(() => this.printCaseCard(createdCase), 300);
-      },
-      error: (err: unknown) => {
-        this.saveInProgress.set(false);
-        const msg = err instanceof HttpErrorResponse
-          ? (err.error?.message || err.message)
-          : 'حدث خطأ';
-        this.flash(msg);
-      }
-    });
+    // Auto print directly
+    setTimeout(() => this.printCaseCard(createdCase), 100);
   }
 
   logout(): void {
