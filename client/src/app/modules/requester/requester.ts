@@ -329,7 +329,8 @@ export class RequesterComponent implements OnInit, OnDestroy {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { margin: 75mm 20mm 15mm 20mm; size: A4; }
+    @page { size: A4; margin: 0mm 20mm 15mm 20mm; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     html { height: 100%; }
     body { margin: 0; padding: 0; background: #fff; color: #000; font-size: 19px; }
@@ -339,7 +340,10 @@ export class RequesterComponent implements OnInit, OnDestroy {
     .row:last-child { border-bottom: none; }
     .label { color: #666; }
     .value { font-weight: bold; text-align: left; }
-    .footer { margin-top: 30px; padding-top: 14px; border-top: 2px solid #000; display: flex; justify-content: space-between; font-size: 15px; color: #555; }
+    .footer { margin-top: 30px; padding-top: 14px; border-top: 2px solid #000; display: flex; justify-content: flex-end; font-size: 15px; color: #555; }
+    .footer-brand { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .footer-brand-name { font-weight: bold; font-size: 16px; color: #222; }
+    .footer-date { font-size: 13px; color: #666; }
     .teeth-section { margin-top: 36px; }
     .teeth-title { font-size: 17px; font-weight: bold; border-right: 4px solid #000; padding-right: 12px; margin-bottom: 14px; color: #222; }
     .teeth-table { width: 100%; border-collapse: collapse; font-size: 17px; }
@@ -386,8 +390,10 @@ export class RequesterComponent implements OnInit, OnDestroy {
   </div>
 
   <div class="footer">
-    <span>تاريخ الطباعة: ${printDate}</span>
-    <span>Elegance Dental Lab</span>
+    <div class="footer-brand">
+      <span class="footer-brand-name">Elegance Dental Lab</span>
+      <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
+    </div>
   </div>
   <script>
     window.onload = function() { window.print(); window.onafterprint = function() { window.close(); }; };
