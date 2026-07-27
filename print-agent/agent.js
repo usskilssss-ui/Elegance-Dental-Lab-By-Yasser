@@ -110,7 +110,40 @@ function printPdf(pdfPath) {
 
 // ── Generate PDF from HTML ────────────────────────────────
 async function generatePdf(html, outputPath) {
-  const executablePath = getLocalBrowserPath();
+  const tempHtmlPath = outputPath + '.html';
+  fs.writeFileSync(tempHtmlPath, html, 'utf8');
+
+  const browserPath = getLocalBrowserPath();
+
+  if (browserPath) {
+    console.log(`   🌐 Generating PDF using native browser: ${browserPath}`);
+    try {
+      await new Promise((resolve, reject) => {
+        const { execFile } = require('child_process');
+        const fileUrl = 'file:///' + tempHtmlPath.replace(/\\/g, '/');
+        const args = [
+          '--headless',
+          '--disable-gpu',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          `--print-to-pdf=${outputPath}`,
+          fileUrl,
+        ];
+        execFile(browserPath, args, (error) => {
+          if (error) reject(error);
+          else if (!fs.existsSync(outputPath)) reject(new Error('PDF output file was not created'));
+          else resolve();
+        });
+      });
+      // Clean up temp HTML
+      fs.unlink(tempHtmlPath, () => {});
+      return;
+    } catch (err) {
+      console.warn(`   ⚠️ Native browser PDF generation failed (${err.message}). Trying Puppeteer fallback...`);
+    }
+  }
+
+  // Fallback: Puppeteer launch
   const launchArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -120,29 +153,11 @@ async function generatePdf(html, outputPath) {
     '--disable-dev-shm-usage',
   ];
 
-  let browser;
-  if (executablePath) {
-    try {
-      console.log(`   🌐 Using local browser: ${executablePath}`);
-      browser = await puppeteer.launch({
-        headless: 'new',
-        executablePath,
-        args: launchArgs,
-      });
-    } catch (e) {
-      console.warn(`   ⚠️ Local browser launch failed (${e.message}), falling back...`);
-      browser = await puppeteer.launch({
-        headless: 'new',
-        args: launchArgs,
-      });
-    }
-  } else {
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: launchArgs,
-    });
-  }
-
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath: browserPath || undefined,
+    args: launchArgs,
+  });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
@@ -152,6 +167,9 @@ async function generatePdf(html, outputPath) {
     margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
   });
   await browser.close();
+
+  // Clean up temp HTML
+  fs.unlink(tempHtmlPath, () => {});
 }
 
 // ── Build HTML print template ─────────────────────────────
