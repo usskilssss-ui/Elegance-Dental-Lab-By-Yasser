@@ -87,25 +87,13 @@ function getLocalBrowserPath() {
   return undefined; // fallback
 }
 
-// Helper: print PDF using SumatraPDF with forced settings
+// Helper: print PDF using pdf-to-printer (handles spaces in printer names cleanly)
 function printPdf(pdfPath) {
-  return new Promise((resolve, reject) => {
-    const sumatraPath = path.join(__dirname, 'node_modules', 'pdf-to-printer', 'dist', 'SumatraPDF-3.4.6-32.exe');
-    const printTargetArgs = PRINTER_NAME ? ['-print-to', PRINTER_NAME] : ['-print-to-default'];
-    const args = [
-      ...printTargetArgs,
-      '-silent',
-      pdfPath,
-    ];
-    const { execFile } = require('child_process');
-    execFile(sumatraPath, args, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`Print failed: ${error.message}`));
-      } else {
-        resolve();
-      }
-    });
-  });
+  const options = {};
+  if (PRINTER_NAME && PRINTER_NAME.trim()) {
+    options.printer = PRINTER_NAME.trim();
+  }
+  return print(pdfPath, options);
 }
 
 // ── Generate PDF from HTML ────────────────────────────────
