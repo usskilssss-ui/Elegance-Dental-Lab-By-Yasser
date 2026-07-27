@@ -3,8 +3,19 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const printController = require('../controllers/printController');
 
-// Create print job (requester / secretary / admin)
-router.post('/job', authenticate, printController.createPrintJob);
+const { verifyToken } = require('../config/jwt');
+
+// Create print job (requester / public / secretary / admin)
+router.post('/job', (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = verifyToken(token);
+      if (decoded) req.user = { userId: decoded.userId };
+    } catch (e) {}
+  }
+  next();
+}, printController.createPrintJob);
 
 // Print Agent updates job status (uses AGENT_SECRET header instead of JWT)
 router.patch('/job/:id/status', (req, res, next) => {

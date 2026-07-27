@@ -46,7 +46,21 @@ const updateFinancialsValidation = [
   body('paymentStatus').optional().isIn(['paid', 'unpaid']),
 ];
 
-// All case routes require authentication
+const { verifyToken } = require('../config/jwt');
+
+// Get all cases (public or authenticated - for doctor suggestions)
+router.get('/', (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = verifyToken(token);
+      if (decoded) req.user = { userId: decoded.userId, role: decoded.role };
+    } catch (e) {}
+  }
+  next();
+}, caseController.getAllCases);
+
+// All other case routes require authentication
 router.use(authenticate);
 
 // Create case - Secretary, Admin, and Requester
@@ -57,8 +71,6 @@ router.post(
   caseController.createCase
 );
 
-// Get all cases
-router.get('/', caseController.getAllCases);
 router.get('/financial-report', authorize('admin'), caseController.getFinancialReport);
 
 // Get case by ID

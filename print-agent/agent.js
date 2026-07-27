@@ -43,34 +43,52 @@ socket.on('disconnect', (reason) => {
   console.warn('⚠️  Disconnected:', reason, '— will reconnect automatically...');
 });
 
-// ── Receive print job ─────────────────────────────────────
-socket.on('print:new-job', async (job) => {
-  console.log(`\n📄 New print job received: ${job.jobId}`);
-  console.log(`   Patient: ${job.printData.patient} | Doctor: ${job.printData.doctor}`);
+// ── Print Queue Management ────────────────────────────────
+const jobQueue = [];
+let isProcessingQueue = false;
 
-  try {
-    // 1. Build HTML (same template as original)
-    const html = buildPrintHtml(job.printData);
+async function processQueue() {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
 
-    // 2. Generate PDF with Puppeteer
-    const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
-    await generatePdf(html, pdfPath);
-    console.log(`   ✅ PDF generated: ${pdfPath}`);
+  while (jobQueue.length > 0) {
+    const job = jobQueue.shift();
+    console.log(`\n📄 Processing print job: ${job.jobId}`);
+    console.log(`   Patient: ${job.printData.patient} | Doctor: ${job.printData.doctor}`);
 
-    // 3. Print silently using SumatraPDF with explicit options (A5, grayscale)
-    await printPdf(pdfPath);
-    console.log(`   🖨️  Printed successfully on [${PRINTER_NAME}]`);
+    try {
+      // 1. Build HTML
+      const html = buildPrintHtml(job.printData);
 
-    // 4. Update job status → done
-    socket.emit('print:job-status', { jobId: job.jobId, status: 'done' });
+      // 2. Generate PDF with Puppeteer
+      const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
+      await generatePdf(html, pdfPath);
+      console.log(`   ✅ PDF generated: ${pdfPath}`);
 
-    // 5. Cleanup temp PDF
-    fs.unlink(pdfPath, () => {});
+      // 3. Print silently using pdf-to-printer
+      await printPdf(pdfPath);
+      console.log(`   🖨️  Printed successfully on [${PRINTER_NAME}]`);
 
-  } catch (err) {
-    console.error(`   ❌ Print failed:`, err.message);
-    socket.emit('print:job-status', { jobId: job.jobId, status: 'failed', error: err.message });
+      // 4. Update job status → done
+      socket.emit('print:job-status', { jobId: job.jobId, status: 'done' });
+
+      // 5. Cleanup temp PDF
+      fs.unlink(pdfPath, () => {});
+
+    } catch (err) {
+      console.error(`   ❌ Print failed:`, err.message);
+      socket.emit('print:job-status', { jobId: job.jobId, status: 'failed', error: err.message });
+    }
   }
+
+  isProcessingQueue = false;
+}
+
+// ── Receive print job ─────────────────────────────────────
+socket.on('print:new-job', (job) => {
+  console.log(`\n📥 New print job queued: ${job.jobId}`);
+  jobQueue.push(job);
+  processQueue();
 });
 
 // Find local Chrome/Edge executable path to avoid downloading Chromium

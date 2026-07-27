@@ -7,8 +7,8 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { Subscription } from 'rxjs';
-import { SocketService } from '../../core/services/socket.service';
-import { ThemeService } from '../../core/services/theme.service';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 function todayYmd(): string {
   const d = new Date();
@@ -262,6 +262,9 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.dialogOpen.set(false);
   }
 
+  private readonly http = inject(HttpClient);
+  private readonly apiBase = environment.apiBaseUrl;
+
   save(): void {
     const d = this.formDraft;
 
@@ -285,9 +288,29 @@ export class EntryComponent implements OnInit, OnDestroy {
     };
 
     this.closeDialog();
-    this.flash('تم تجهيز الطباعة ✓');
+    this.saveInProgress.set(true);
 
-    // Auto print using local browser
+    const now = new Date();
+    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    // Send to remote Print Agent API
+    this.http.post(`${this.apiBase}/print/job`, {
+      printData: {
+        ...createdCase,
+        printDate,
+      }
+    }).subscribe({
+      next: () => {
+        this.saveInProgress.set(false);
+        this.flash('✅ تم إرسال الريكويست للطباعة');
+      },
+      error: () => {
+        this.saveInProgress.set(false);
+        this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
+      }
+    });
+
+    // Also trigger local popup print as fallback
     setTimeout(() => this.printCaseCard(createdCase), 100);
   }
 

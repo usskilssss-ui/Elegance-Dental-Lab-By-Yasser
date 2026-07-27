@@ -69,7 +69,6 @@ export const routes: Routes = [
 
   {
     path: 'requester',
-    canActivate: [authGuard, roleGuard(WITH_ADMIN('requester'))],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: RequesterComponent },
