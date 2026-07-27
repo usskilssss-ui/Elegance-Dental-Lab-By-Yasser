@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
+import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { Subscription } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
