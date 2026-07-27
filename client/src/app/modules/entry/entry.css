@@ -1,1 +1,199 @@
 @import '../requester/requester.css';
+
+/* ── Entry page layout ───────────────────────────── */
+.entry-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+.entry-main {
+  flex: 1;
+  padding: 24px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Page header ─────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-header-text h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.page-header-text p {
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  margin: 0;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+/* ── Empty state ─────────────────────────────────── */
+.empty-list {
+  text-align: center;
+  color: var(--text-muted, #888);
+  padding: 60px 20px;
+  font-size: 15px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 80px 20px;
+  color: var(--text-muted, #aaa);
+}
+.empty-state svg { opacity: 0.35; }
+.empty-state p { font-size: 16px; margin: 0; font-weight: 600; }
+.empty-sub { font-size: 13px !important; font-weight: 400 !important; }
+
+/* ── Job list ────────────────────────────────────── */
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Case card — identical style to secretary ─────── */
+.case-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: box-shadow 0.2s, transform 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.case-card:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,.1);
+  transform: translateY(-1px);
+}
+
+.case-main {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .case-main { grid-template-columns: 1fr 1fr; }
+}
+
+/* head */
+.case-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 80px;
+}
+
+.case-id {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary, #2563eb);
+  font-feature-settings: "tnum";
+}
+
+.case-phase-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* status colors */
+.status-pending  { background: #fef3c7; color: #92400e; }
+.status-printing { background: #dbeafe; color: #1e40af; }
+.status-done     { background: #d1fae5; color: #065f46; }
+.status-failed   { background: #fee2e2; color: #991b1b; }
+
+/* people */
+.case-people { display: flex; flex-direction: column; gap: 4px; }
+.doctor { font-size: 15px; font-weight: 700; }
+.patient { font-size: 13px; color: var(--text-muted, #666); }
+
+.requester-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #dbeafe;
+  color: #1e40af;
+  width: fit-content;
+}
+
+/* work */
+.case-work { display: flex; flex-direction: column; gap: 4px; }
+.work-type { font-size: 14px; font-weight: 600; }
+.work-detail { font-size: 12px; color: var(--text-muted, #888); }
+.case-spec { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.spec-item { font-size: 12px; color: var(--text-muted, #777); background: var(--tag-bg, #f3f4f6); padding: 2px 8px; border-radius: 8px; }
+
+/* meta */
+.case-meta { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.date-block { display: flex; flex-direction: column; gap: 2px; }
+.date-label { font-size: 11px; color: var(--text-muted, #aaa); }
+.date-value { font-size: 13px; font-weight: 600; }
+.time-value { font-size: 12px; color: var(--text-muted, #888); }
+
+/* actions */
+.case-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.action-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+.action-btn--reprint {
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  color: #fff;
+}

@@ -23,6 +23,13 @@ exports.createPrintJob = async (req, res) => {
         jobId: job._id,
         printData: job.printData,
       });
+      // Also broadcast to entry screens so they see the new job in real-time
+      io.emit('print:job-created', {
+        jobId: job._id,
+        printData: job.printData,
+        status: job.status,
+        createdAt: job.createdAt,
+      });
     }
 
     return res.status(201).json({
@@ -56,6 +63,12 @@ exports.updateJobStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'الجوب مش موجود' });
     }
 
+    // Broadcast status update to entry screens
+    const io = getIO();
+    if (io) {
+      io.emit('print:job-status-updated', { jobId: job._id, status: job.status });
+    }
+
     return res.json({ success: true, job });
   } catch (err) {
     console.error('updateJobStatus error:', err);
@@ -74,6 +87,23 @@ exports.listJobs = async (req, res) => {
     return res.json({ success: true, jobs });
   } catch (err) {
     console.error('listJobs error:', err);
+    return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+  }
+};
+
+// GET /api/print/jobs/today — list today's jobs for entry screen
+exports.listTodayJobs = async (req, res) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const jobs = await PrintJob.find({
+      createdAt: { $gte: startOfDay }
+    }).sort({ createdAt: 1 });
+
+    return res.json({ success: true, jobs });
+  } catch (err) {
+    console.error('listTodayJobs error:', err);
     return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
   }
 };

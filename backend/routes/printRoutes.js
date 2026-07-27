@@ -29,4 +29,16 @@ router.patch('/job/:id/status', (req, res, next) => {
 // List recent jobs — admin only
 router.get('/jobs', authenticate, printController.listJobs);
 
+// List today's jobs for entry screen (finisher/admin — public token optional)
+router.get('/jobs/today', (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = require('../config/jwt').verifyToken(token);
+      if (decoded) req.user = { userId: decoded.userId, role: decoded.role };
+    } catch (e) {}
+  }
+  next();
+}, printController.listTodayJobs);
+
 module.exports = router;

@@ -24,7 +24,7 @@ const printJobSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Auto-delete jobs older than 24 hours
-printJobSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+// Auto-delete jobs older than 7 days
+printJobSchema.index({ createdAt: 1 }, { expireAfterSeconds: 604800 });
 
 module.exports = mongoose.model('PrintJob', printJobSchema);

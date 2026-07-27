@@ -1,4 +1,4 @@
-<div class="requester-page" dir="rtl">
+<div class="entry-page" dir="rtl">
   @if (toast(); as message) {
     <div class="toast" role="status">{{ message }}</div>
   }
@@ -28,7 +28,7 @@
         <span class="elegance-navbar-title">Elegance</span>
         <span class="elegance-navbar-dot"></span>
       </div>
-      <p class="elegance-navbar-sub">Precision Labs — الدخول</p>
+      <p class="elegance-navbar-sub">Precision Labs — شاشة الدخول</p>
     </div>
 
     <div class="topbar-right">
@@ -57,22 +57,90 @@
   </header>
 
   <!-- Main content -->
-  <main class="requester-main">
-    <div class="welcome-section">
-      <div class="welcome-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-        </svg>
+  <main class="entry-main">
+
+    <!-- Page header + add button -->
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1>شاشة الدخول</h1>
+        <p>ريكويستات اليوم — {{ printJobs().length }} ريكويست</p>
       </div>
-      <h1 class="welcome-title">شاشة الدخول</h1>
-      <p class="welcome-subtitle">اضغط على الزر لإضافة ريكويست جديد وطباعته</p>
-      <button id="openEntryRequestBtn" type="button" class="btn-request" (click)="openDialog()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22">
+      <button id="openEntryRequestBtn" type="button" class="btn-primary" (click)="openDialog()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
         </svg>
         إضافة ريكويست
       </button>
     </div>
+
+    <!-- Jobs list -->
+    @if (jobsLoading()) {
+      <p class="empty-list">جاري تحميل الريكويستات...</p>
+    } @else if (printJobs().length === 0) {
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" width="64" height="64">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+        </svg>
+        <p>لا توجد ريكويستات اليوم</p>
+        <p class="empty-sub">اضغط على "إضافة ريكويست" لإضافة ريكويست جديد</p>
+      </div>
+    } @else {
+      <section class="job-list" aria-label="قائمة الريكويستات">
+        @for (job of printJobs(); track job._id) {
+          <article class="case-card">
+            <div class="case-main">
+              <div class="case-head">
+                <span class="case-id">{{ formatTime(job.createdAt) }}</span>
+                <span class="case-phase-badge" [ngClass]="getStatusColor(job.status)">
+                  {{ getStatusLabel(job.status) }}
+                </span>
+              </div>
+
+              <div class="case-people">
+                <div class="doctor">{{ job.printData.doctor }}</div>
+                <span class="requester-badge">دكتور</span>
+                <div class="patient">{{ job.printData.patient }}</div>
+              </div>
+
+              <div class="case-work">
+                <div class="work-type">{{ formatWorkTypeForDisplay(job.printData.workType) }}</div>
+                @if (job.printData.workDetail) {
+                  <div class="work-detail">{{ job.printData.workDetail }}</div>
+                }
+                <div class="case-spec">
+                  @if (job.printData.color) {
+                    <span class="spec-item">Color: {{ job.printData.color }}</span>
+                  }
+                  <span class="spec-item">Qty: {{ job.printData.quantity }}</span>
+                </div>
+              </div>
+
+              <div class="case-meta">
+                <div class="date-block">
+                  <span class="date-label">وقت الإرسال</span>
+                  <span class="date-value">{{ formatDate(job.createdAt) }}</span>
+                  <span class="time-value">{{ formatTime(job.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="case-actions">
+              <button
+                type="button"
+                class="action-btn action-btn--reprint"
+                (click)="reprintJob(job)"
+                title="إعادة طباعة"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+                </svg>
+                إعادة طباعة
+              </button>
+            </div>
+          </article>
+        }
+      </section>
+    }
   </main>
 
   <!-- Dialog -->
@@ -134,7 +202,7 @@
             </select>
           </label>
 
-          <!-- Work Type chips (hidden when غير معروف) -->
+          <!-- Work Type chips -->
           @if (formDraft.caseType !== 'Empty') {
             <div class="form-field">
               <span>نوع العمل <abbr title="مطلوب">*</abbr></span>
@@ -230,6 +298,9 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
             <button type="submit" class="btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+              </svg>
               طباعة الريكويست
             </button>
           </div>

@@ -34,6 +34,23 @@ function emptyDraft() {
   };
 }
 
+export interface PrintJobCard {
+  _id: string;
+  printData: {
+    doctor: string;
+    patient: string;
+    caseType: string;
+    workType: string;
+    workDetail: string;
+    color: string;
+    quantity: number;
+    caseNumber: string;
+    printDate: string;
+  };
+  status: 'pending' | 'printing' | 'done' | 'failed';
+  createdAt: string;
+}
+
 @Component({
   selector: 'app-entry',
   standalone: true,
@@ -47,14 +64,20 @@ export class EntryComponent implements OnInit, OnDestroy {
   private readonly sharedCases = inject(SharedCasesService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
+  private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
 
+  private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
 
   readonly dialogOpen = signal(false);
   readonly saveInProgress = signal(false);
   readonly toast = signal<string | null>(null);
   readonly notificationsOpen = signal(false);
+  readonly jobsLoading = signal(true);
+
+  // Today's print jobs list
+  readonly printJobs = signal<PrintJobCard[]>([]);
 
   formDraft = emptyDraft();
 
@@ -234,7 +257,19 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.formDraft.quantity = total || 1;
   }
 
+  private loadTodayJobs(): void {
+    this.jobsLoading.set(true);
+    this.http.get<{ success: boolean; jobs: PrintJobCard[] }>(`${this.apiBase}/print/jobs/today`).subscribe({
+      next: res => {
+        if (res.success) this.printJobs.set(res.jobs);
+        this.jobsLoading.set(false);
+      },
+      error: () => this.jobsLoading.set(false),
+    });
+  }
+
   ngOnInit(): void {
+    // Load doctor suggestions
     this.caseApi.getAllCases(1, 3000).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
@@ -244,7 +279,29 @@ export class EntryComponent implements OnInit, OnDestroy {
       },
       error: () => {}
     });
+
+    // Load today's print jobs
+    this.loadTodayJobs();
+
+    // Real-time: listen for new jobs
     this.socketService.connect();
+    const socket = (this.socketService as any).socket;
+    if (socket) {
+      const onNew = (job: PrintJobCard) => {
+        this.printJobs.update(jobs => [job, ...jobs]);
+      };
+      const onUpdate = (data: { jobId: string; status: string }) => {
+        this.printJobs.update(jobs =>
+          jobs.map(j => j._id === data.jobId ? { ...j, status: data.status as any } : j)
+        );
+      };
+      socket.on('print:job-created', onNew);
+      socket.on('print:job-status-updated', onUpdate);
+      this.socketSubs.push({ unsubscribe: () => {
+        socket.off('print:job-created', onNew);
+        socket.off('print:job-status-updated', onUpdate);
+      }} as Subscription);
+    }
   }
 
   ngOnDestroy(): void {
@@ -263,9 +320,6 @@ export class EntryComponent implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
   }
-
-  private readonly http = inject(HttpClient);
-  private readonly apiBase = environment.apiUrl;
 
   save(): void {
     const d = this.formDraft;
@@ -297,14 +351,13 @@ export class EntryComponent implements OnInit, OnDestroy {
 
     // Send to remote Print Agent API
     this.http.post(`${this.apiBase}/print/job`, {
-      printData: {
-        ...createdCase,
-        printDate,
-      }
+      printData: { ...createdCase, printDate },
     }).subscribe({
       next: () => {
         this.saveInProgress.set(false);
         this.flash('✅ تم إرسال الريكويست للطباعة');
+        // Refresh today's jobs list
+        this.loadTodayJobs();
       },
       error: () => {
         this.saveInProgress.set(false);
@@ -341,6 +394,43 @@ export class EntryComponent implements OnInit, OnDestroy {
     return display;
   }
 
+  formatTime(dateStr: string): string {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  formatDate(dateStr: string): string {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+  }
+
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'pending': return 'انتظار';
+      case 'printing': return 'جاري الطباعة';
+      case 'done': return 'تمت الطباعة';
+      case 'failed': return 'فشل';
+      default: return status;
+    }
+  }
+
+  getStatusColor(status: string): string {
+    switch (status) {
+      case 'pending': return 'status-pending';
+      case 'printing': return 'status-printing';
+      case 'done': return 'status-done';
+      case 'failed': return 'status-failed';
+      default: return '';
+    }
+  }
+
+  reprintJob(job: PrintJobCard): void {
+    this.printCaseCard(job.printData);
+    this.flash('🖨️ جاري إعادة الطباعة...');
+  }
+
   printCaseCard(c: any): void {
     const now = new Date();
     const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -374,13 +464,11 @@ export class EntryComponent implements OnInit, OnDestroy {
   </style>
 </head>
 <body>
-
   <div class="section">
     <div class="section-title">بيانات الطبيب والمريض</div>
     <div class="row"><span class="label">الطبيب</span><span class="value">${c.doctor || '—'}</span></div>
     <div class="row"><span class="label">المريض</span><span class="value">${c.patient || '—'}</span></div>
   </div>
-
   <div class="section">
     <div class="section-title">تفاصيل العمل</div>
     <div class="row"><span class="label">نوع العمل</span><span class="value">${workTypeDisplay || '—'}</span></div>
@@ -388,13 +476,10 @@ export class EntryComponent implements OnInit, OnDestroy {
     <div class="row"><span class="label">اللون</span><span class="value">${c.color || '—'}</span></div>
     <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
   </div>
-
   <div class="teeth-section">
     <div class="teeth-title">مخطط الأسنان</div>
     <table class="teeth-table" dir="ltr">
-      <thead>
-        <tr><th colspan="8">R</th><th colspan="8">L</th></tr>
-      </thead>
+      <thead><tr><th colspan="8">R</th><th colspan="8">L</th></tr></thead>
       <tbody>
         <tr>
           <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
@@ -408,9 +493,8 @@ export class EntryComponent implements OnInit, OnDestroy {
       </tbody>
     </table>
   </div>
-
   <div class="footer">
-    <span>تاريخ الطباعة: ${printDate}</span>
+    <span>تاريخ الطباعة: ${c.printDate || printDate}</span>
     <span>Elegance Dental Lab</span>
   </div>
   <script>
