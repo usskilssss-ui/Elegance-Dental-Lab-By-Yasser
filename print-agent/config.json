@@ -1,5 +1,5 @@
 {
   "SERVER_URL": "https://elegance-dental-lab-by-yasser-production.up.railway.app",
   "PRINT_AGENT_SECRET": "elegance-print-secret-2024",
-  "PRINTER_NAME": "Canon PIXMA G3420"
+  "PRINTER_NAME": "POSPrinter POS80"
 }

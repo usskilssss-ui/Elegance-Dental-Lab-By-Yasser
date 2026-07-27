@@ -91,10 +91,10 @@ function getLocalBrowserPath() {
 function printPdf(pdfPath) {
   return new Promise((resolve, reject) => {
     const sumatraPath = path.join(__dirname, 'node_modules', 'pdf-to-printer', 'dist', 'SumatraPDF-3.4.6-32.exe');
+    const printTargetArgs = PRINTER_NAME ? ['-print-to', PRINTER_NAME] : ['-print-to-default'];
     const args = [
-      '-print-to', PRINTER_NAME,
+      ...printTargetArgs,
       '-silent',
-      '-print-settings', 'papersize=A5',
       pdfPath,
     ];
     const { execFile } = require('child_process');
@@ -111,17 +111,38 @@ function printPdf(pdfPath) {
 // ── Generate PDF from HTML ────────────────────────────────
 async function generatePdf(html, outputPath) {
   const executablePath = getLocalBrowserPath();
+  const launchArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-gpu',
+    '--no-zygote',
+    '--single-process',
+    '--disable-dev-shm-usage',
+  ];
+
+  let browser;
   if (executablePath) {
-    console.log(`   🌐 Using local browser: ${executablePath}`);
+    try {
+      console.log(`   🌐 Using local browser: ${executablePath}`);
+      browser = await puppeteer.launch({
+        headless: 'new',
+        executablePath,
+        args: launchArgs,
+      });
+    } catch (e) {
+      console.warn(`   ⚠️ Local browser launch failed (${e.message}), falling back...`);
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: launchArgs,
+      });
+    }
   } else {
-    console.log('   ⚠️  No local Chrome/Edge found. Falling back to default Puppeteer browser.');
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: launchArgs,
+    });
   }
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
