@@ -125,6 +125,11 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
+// Redirect frontend routes on backend server to Vercel
+app.get(['/requester*', '/entry*', '/login', '/admin*', '/secretary*', '/designer*'], (req, res) => {
+  res.redirect(`https://dental-system-kappa.vercel.app${req.originalUrl}`);
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
