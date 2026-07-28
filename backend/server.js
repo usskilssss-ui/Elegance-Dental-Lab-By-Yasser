@@ -95,7 +95,18 @@ setupSocket(server);
 // ROUTES
 // ════════════════════════════════════════════════
 
-// Health check
+// Health check & Root route
+app.get('/', (req, res) => {
+  if (req.accepts('html')) {
+    return res.redirect('https://dental-system-kappa.vercel.app');
+  }
+  res.status(200).json({
+    success: true,
+    message: 'Elegance Dental Lab API Server is active',
+    webAppUrl: 'https://dental-system-kappa.vercel.app'
+  });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -129,6 +140,9 @@ app.use('/uploads', (req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  if (req.accepts('html')) {
+    return res.redirect('https://dental-system-kappa.vercel.app');
+  }
   res.status(404).json({
     success: false,
     message: 'Route not found',

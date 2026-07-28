@@ -48,11 +48,7 @@
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
         </svg>
       </button>
-      <button type="button" class="icon-btn" (click)="logout()" title="تسجيل الخروج">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-        </svg>
-      </button>
+
     </div>
   </header>
 
@@ -73,6 +69,19 @@
         إضافة ريكويست
       </button>
     </div>
+
+    <!-- Request list with search -->
+    <section class="request-list" style="margin-top:2rem;">
+      <input type="text" placeholder="بحث عن طبيب..." [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()" class="search-input" style="margin-bottom:1rem; width:100%; padding:0.6rem 1rem; border-radius:8px; border:1px solid var(--border-primary, #ccc);" />
+      @for (r of requests; track $index) {
+        <div class="request-item" style="border:1px solid #ccc; padding:0.75rem; margin-bottom:0.5rem; border-radius:8px;">
+          <div><strong>طبيب:</strong> {{ r.doctor }}</div>
+          <div><strong>مريض:</strong> {{ r.patient }}</div>
+          <div><strong>الفرع:</strong> {{ r.branch }}</div>
+          <div><strong>النوع:</strong> {{ formatWorkTypeForDisplay(r.workType) }}</div>
+        </div>
+      }
+    </section>
   </main>
 
   <!-- Dialog -->
@@ -115,14 +124,13 @@
           <!-- Patient -->
           <label class="form-field">
             <span>اسم المريض <abbr title="مطلوب">*</abbr></span>
-            <input
-              type="text"
-              name="patient"
-              [(ngModel)]="formDraft.patient"
-              placeholder="الاسم كما في السجل"
-              required
-              autocomplete="off"
-            />
+            <input type="text" name="patient" [(ngModel)]="formDraft.patient" placeholder="الاسم كما في السجل" required autocomplete="off" />
+          </label>
+
+          <!-- Branch -->
+          <label class="form-field">
+            <span>الفرع <abbr title="مطلوب">*</abbr></span>
+            <input type="text" name="branch" [(ngModel)]="formDraft.branch" placeholder="اسم الفرع" required autocomplete="off" />
           </label>
 
           <!-- Case Type -->
@@ -218,8 +226,8 @@
 
           <!-- Color -->
           <label class="form-field">
-            <span>اللون <span class="label-optional">(اختياري)</span></span>
-            <input type="text" name="color" [(ngModel)]="formDraft.color" placeholder="مثال: A2" autocomplete="off" />
+            <span>اللون <abbr title="مطلوب">*</abbr></span>
+            <input type="text" name="color" [(ngModel)]="formDraft.color" placeholder="مثال: A2" required autocomplete="off" />
           </label>
 
           <!-- Work Detail -->

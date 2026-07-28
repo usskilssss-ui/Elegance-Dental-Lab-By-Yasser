@@ -80,6 +80,6 @@ export const routes: Routes = [
   { path: 'finishing', pathMatch: 'full', redirectTo: '/entry/dashboard' },
   { path: 'design', pathMatch: 'full', redirectTo: '/designer/dashboard' },
 
-  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  { path: '', pathMatch: 'full', redirectTo: 'requester/dashboard' },
   { path: '**', redirectTo: '/login' },
 ];

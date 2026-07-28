@@ -28,6 +28,7 @@ function emptyDraft() {
     workType: '',
     workDetail: '',
     color: '',
+    branch: '',
     quantity: 1,
     date: todayYmd(),
     caseType: 'New' as 'New' | 'Modification' | 'Redo' | 'Empty',
@@ -55,6 +56,11 @@ export class RequesterComponent implements OnInit, OnDestroy {
   private readonly socketSubs: Subscription[] = [];
 
   readonly dialogOpen = signal(false);
+  // Search & request handling
+  public searchTerm: string = '';
+  public allRequests: any[] = [];
+  public requests: any[] = [];
+
   readonly saveInProgress = signal(false);
   readonly toast = signal<string | null>(null);
   readonly notificationsOpen = signal(false);
@@ -63,7 +69,8 @@ export class RequesterComponent implements OnInit, OnDestroy {
 
   // Work type state
   readonly workTypeOptions = [
-    'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
+    'Zircon',
+    'Emax', 'Pmma Cad',
     'Peek', 'Titanium', 'Try in', 'Mokup',
     'Night Guard', 'Wax', 'Ring'
   ];
@@ -238,16 +245,40 @@ export class RequesterComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadRequests();
+    this.socketService.connect();
+  }
+
+  loadRequests(): void {
     this.caseApi.getAllCases(1, 3000).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {
-          this.sharedCases.setCasesFromServer(rows.map(r => mapApiCaseToDentalCase(r)));
+          this.allRequests = rows.map(r => mapApiCaseToDentalCase(r));
+          this.applySortingAndFilter();
         }
       },
       error: () => {}
     });
-    this.socketService.connect();
+  }
+
+  applySortingAndFilter(): void {
+    // sort by createdAt descending (newest first)
+    const sorted = this.allRequests.sort((a: any, b: any) => {
+      const aDate = new Date((a as any).createdAt || (a as any).date);
+      const bDate = new Date((b as any).createdAt || (b as any).date);
+      return bDate.getTime() - aDate.getTime();
+    });
+    if (this.searchTerm) {
+      const term = this.searchTerm.toLowerCase();
+      this.requests = sorted.filter(r => (r.doctor || '').toLowerCase().includes(term));
+    } else {
+      this.requests = sorted;
+    }
+  }
+
+  onSearchChange(): void {
+    this.applySortingAndFilter();
   }
 
   ngOnDestroy(): void {
@@ -272,6 +303,8 @@ export class RequesterComponent implements OnInit, OnDestroy {
 
     if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
     if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
+    if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
+    if (!d.color?.trim()) { this.flash('يرجى إدخال اللون'); return; }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
@@ -380,6 +413,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
     <div class="section-title">بيانات الطبيب والمريض</div>
     <div class="row"><span class="label">الطبيب</span><span class="value">${c.doctor || '—'}</span></div>
     <div class="row"><span class="label">المريض</span><span class="value">${c.patient || '—'}</span></div>
+    <div class="row"><span class="label">الفرع</span><span class="value">${c.branch || '—'}</span></div>
   </div>
 
   <div class="section">

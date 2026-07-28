@@ -38,16 +38,21 @@
   max-width: 1040px;
 }
 
-/* Keep form left / hero right regardless of RTL text */
 .login-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   direction: ltr;
-  background: var(--card);
+  background: var(--bg-card, #fff);
   border-radius: var(--radius-card);
   box-shadow: 0 24px 60px rgba(15, 38, 79, 0.14);
   overflow: hidden;
   min-height: min(640px, calc(100vh - 3rem));
+}
+
+@media (prefers-color-scheme: dark) {
+  .login-card {
+    background: #1e293b !important;
+  }
 }
 
 .form-panel {
