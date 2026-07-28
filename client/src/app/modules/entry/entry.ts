@@ -257,11 +257,19 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.formDraft.quantity = total || 1;
   }
 
+  private sortJobs(jobs: PrintJobCard[]): PrintJobCard[] {
+    const failedJobs   = jobs.filter(j => j.status === 'failed')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const otherJobs    = jobs.filter(j => j.status !== 'failed')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return [...failedJobs, ...otherJobs];
+  }
+
   private loadTodayJobs(): void {
     this.jobsLoading.set(true);
     this.http.get<{ success: boolean; jobs: PrintJobCard[] }>(`${this.apiBase}/print/jobs/today`).subscribe({
       next: res => {
-        if (res.success) this.printJobs.set(res.jobs);
+        if (res.success) this.printJobs.set(this.sortJobs(res.jobs));
         this.jobsLoading.set(false);
       },
       error: () => this.jobsLoading.set(false),
@@ -288,11 +296,11 @@ export class EntryComponent implements OnInit, OnDestroy {
     const socket = (this.socketService as any).socket;
     if (socket) {
       const onNew = (job: PrintJobCard) => {
-        this.printJobs.update(jobs => [job, ...jobs]);
+        this.printJobs.update(jobs => this.sortJobs([...jobs, job]));
       };
       const onUpdate = (data: { jobId: string; status: string }) => {
         this.printJobs.update(jobs =>
-          jobs.map(j => j._id === data.jobId ? { ...j, status: data.status as any } : j)
+          this.sortJobs(jobs.map(j => j._id === data.jobId ? { ...j, status: data.status as any } : j))
         );
       };
       socket.on('print:job-created', onNew);
