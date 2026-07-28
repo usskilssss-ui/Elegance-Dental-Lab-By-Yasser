@@ -95,6 +95,10 @@ export class EntryComponent implements OnInit, OnDestroy {
     );
   });
 
+  readonly doneJobsCount = computed(() => this.printJobs().filter(j => j.status === 'done').length);
+  readonly pendingJobsCount = computed(() => this.printJobs().filter(j => j.status === 'pending' || j.status === 'printing').length);
+  readonly failedJobsCount = computed(() => this.printJobs().filter(j => j.status === 'failed').length);
+
   formDraft = emptyDraft();
 
   // Work type state

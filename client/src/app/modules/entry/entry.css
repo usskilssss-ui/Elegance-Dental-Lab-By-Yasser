@@ -150,7 +150,16 @@ body.dark-theme .case-card,
 /* people */
 .case-people { display: flex; flex-direction: column; gap: 4px; }
 .doctor { font-size: 15px; font-weight: 700; }
-.patient { font-size: 13px; color: var(--text-muted, #666); }
+.patient {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin-top: 2px;
+}
+body.dark-theme .patient,
+.dark-theme .patient {
+  color: #f8fafc;
+}
 
 .requester-badge {
   display: inline-block;
@@ -323,3 +332,50 @@ body.dark-theme .spec-branch,
   background: #ef4444;
   color: #fff;
 }
+
+/* Stats Counters Bar */
+.stats-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s, border-color 0.2s;
+}
+body.dark-theme .stat-pill,
+.dark-theme .stat-pill {
+  background: #1e293b;
+  border-color: #334155;
+}
+.stat-pill:hover {
+  transform: translateY(-2px);
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.stat-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  margin-top: 4px;
+}
+
+.stat-total .stat-num { color: #2563eb; }
+.stat-done .stat-num { color: #10b981; }
+.stat-pending .stat-num { color: #f59e0b; }
+.stat-failed .stat-num { color: #ef4444; }

@@ -83,6 +83,26 @@
       </div>
     </div>
 
+    <!-- Stats Counters -->
+    <div class="stats-counters">
+      <div class="stat-pill stat-total">
+        <span class="stat-num">{{ printJobs().length }}</span>
+        <span class="stat-text">إجمالي الريكويستات</span>
+      </div>
+      <div class="stat-pill stat-done">
+        <span class="stat-num">{{ doneJobsCount() }}</span>
+        <span class="stat-text">تمت الطباعة</span>
+      </div>
+      <div class="stat-pill stat-pending">
+        <span class="stat-num">{{ pendingJobsCount() }}</span>
+        <span class="stat-text">قيد الانتظار</span>
+      </div>
+      <div class="stat-pill stat-failed">
+        <span class="stat-num">{{ failedJobsCount() }}</span>
+        <span class="stat-text">فشلت</span>
+      </div>
+    </div>
+
     <!-- Search box -->
     <div class="search-bar-wrap">
       <div class="search-box">
@@ -129,9 +149,6 @@
                 <div class="doctor">{{ job.printData.doctor }}</div>
                 <span class="requester-badge">دكتور</span>
                 <div class="patient">{{ job.printData.patient }}</div>
-                @if (job.printData.branch) {
-                  <div class="branch-badge">📍 {{ job.printData.branch }}</div>
-                }
               </div>
 
               <div class="case-work">
