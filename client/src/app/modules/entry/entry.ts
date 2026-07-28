@@ -259,9 +259,9 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   private sortJobs(jobs: PrintJobCard[]): PrintJobCard[] {
     const failedJobs   = jobs.filter(j => j.status === 'failed')
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const otherJobs    = jobs.filter(j => j.status !== 'failed')
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return [...failedJobs, ...otherJobs];
   }
 
