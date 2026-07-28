@@ -107,3 +107,36 @@ exports.listTodayJobs = async (req, res) => {
     return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
   }
 };
+
+// DELETE /api/print/job/:id — delete a single job
+exports.deletePrintJob = async (req, res) => {
+  try {
+    const job = await PrintJob.findByIdAndDelete(req.params.id);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'الريكويست غير موجود' });
+    }
+    const io = getIO();
+    if (io) {
+      io.emit('print:job-deleted', { jobId: req.params.id });
+    }
+    return res.json({ success: true, message: 'تم حذف الريكويست' });
+  } catch (err) {
+    console.error('deletePrintJob error:', err);
+    return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+  }
+};
+
+// DELETE /api/print/jobs/all — clear all jobs
+exports.clearAllJobs = async (req, res) => {
+  try {
+    await PrintJob.deleteMany({});
+    const io = getIO();
+    if (io) {
+      io.emit('print:all-jobs-cleared');
+    }
+    return res.json({ success: true, message: 'تم مسح جميع الريكويستات' });
+  } catch (err) {
+    console.error('clearAllJobs error:', err);
+    return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+  }
+};

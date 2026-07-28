@@ -292,3 +292,34 @@ body.dark-theme .spec-branch,
   background: rgba(45, 212, 191, 0.1) !important;
   color: #2dd4bf !important;
 }
+
+/* Delete button styles */
+.btn-secondary-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn-secondary-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  transform: translateY(-1px);
+}
+
+.action-btn--delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.action-btn--delete:hover {
+  background: #ef4444;
+  color: #fff;
+}

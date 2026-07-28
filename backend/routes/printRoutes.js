@@ -41,4 +41,10 @@ router.get('/jobs/today', (req, res, next) => {
   next();
 }, printController.listTodayJobs);
 
+// Delete a single print job
+router.delete('/job/:id', printController.deletePrintJob);
+
+// Delete all print jobs
+router.delete('/jobs/all', printController.clearAllJobs);
+
 module.exports = router;

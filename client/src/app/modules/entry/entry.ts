@@ -319,11 +319,21 @@ export class EntryComponent implements OnInit, OnDestroy {
           this.sortJobs(jobs.map(j => j._id === data.jobId ? { ...j, status: data.status as any } : j))
         );
       };
+      const onDelete = (data: { jobId: string }) => {
+        this.printJobs.update(jobs => jobs.filter(j => j._id !== data.jobId));
+      };
+      const onClearAll = () => {
+        this.printJobs.set([]);
+      };
       socket.on('print:job-created', onNew);
       socket.on('print:job-status-updated', onUpdate);
+      socket.on('print:job-deleted', onDelete);
+      socket.on('print:all-jobs-cleared', onClearAll);
       this.socketSubs.push({ unsubscribe: () => {
         socket.off('print:job-created', onNew);
         socket.off('print:job-status-updated', onUpdate);
+        socket.off('print:job-deleted', onDelete);
+        socket.off('print:all-jobs-cleared', onClearAll);
       }} as Subscription);
     }
   }
@@ -533,5 +543,27 @@ export class EntryComponent implements OnInit, OnDestroy {
       popup.document.write(html);
       popup.document.close();
     }
+  }
+
+  deleteJob(jobId: string): void {
+    if (!confirm('هل أنت تأكد من حذف هذا الريكويست؟')) return;
+    this.http.delete<{ success: boolean }>(`${this.apiBase}/print/job/${jobId}`).subscribe({
+      next: () => {
+        this.printJobs.update(jobs => jobs.filter(j => j._id !== jobId));
+        this.flash('✅ تم حذف الريكويست');
+      },
+      error: () => this.flash('❌ فشل حذف الريكويست'),
+    });
+  }
+
+  clearAllJobs(): void {
+    if (!confirm('هل أنت تأكد من مسح جميع الريكويستات في صفحة الدخول؟')) return;
+    this.http.delete<{ success: boolean }>(`${this.apiBase}/print/jobs/all`).subscribe({
+      next: () => {
+        this.printJobs.set([]);
+        this.flash('✅ تم مسح جميع الريكويستات');
+      },
+      error: () => this.flash('❌ فشل مسح الريكويستات'),
+    });
   }
 }
