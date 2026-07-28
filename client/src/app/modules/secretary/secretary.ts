@@ -1268,6 +1268,10 @@ export class Secretary implements OnInit, OnDestroy {
       <span class="label">المريض</span>
       <span class="value">${c.patient || '—'}</span>
     </div>
+    <div class="row">
+      <span class="label">الفرع</span>
+      <span class="value">${c.branch || '—'}</span>
+    </div>
   </div>
 
   <div class="section">
