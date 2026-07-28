@@ -213,8 +213,14 @@
 
           <!-- Color -->
           <label class="form-field">
-            <span>اللون <abbr title="مطلوب">*</abbr></span>
-            <input type="text" name="color" [(ngModel)]="formDraft.color" placeholder="مثال: A2" required autocomplete="off" />
+            @if (isColorOptional) {
+              <span>اللون <span class="label-optional">(اختياري)</span></span>
+            } @else {
+              <span>اللون <abbr title="مطلوب">*</abbr></span>
+            }
+            <input type="text" name="color" [(ngModel)]="formDraft.color"
+                   [placeholder]="isColorOptional ? 'اختياري' : 'مثال: A2'"
+                   autocomplete="off" />
           </label>
 
           <!-- Work Detail -->

@@ -87,6 +87,18 @@ export class RequesterComponent implements OnInit, OnDestroy {
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   workTypeError = '';
 
+  // Work types that do NOT require a color
+  readonly colorOptionalTypes = new Set(['Try in', 'Mokup', 'Night Guard', 'Wax', 'Ring']);
+
+  /** Returns true when ALL selected work types are color-optional */
+  get isColorOptional(): boolean {
+    if (this.selectedWorkTypes.size === 0) return false;
+    for (const wt of this.selectedWorkTypes) {
+      if (!this.colorOptionalTypes.has(wt)) return false;
+    }
+    return true;
+  }
+
   // Doctor autocomplete
   readonly showDoctorSuggestions = signal(false);
   readonly activeSuggestionIndex = signal(-1);
@@ -304,7 +316,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
     if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
     if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
     if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
-    if (!d.color?.trim()) { this.flash('يرجى إدخال اللون'); return; }
+    if (!this.isColorOptional && !d.color?.trim()) { this.flash('يرجى إدخال اللون'); return; }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
