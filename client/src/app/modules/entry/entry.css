@@ -203,3 +203,92 @@ body.dark-theme .case-card,
   background: linear-gradient(135deg, #2563eb, #0d9488);
   color: #fff;
 }
+
+/* ── Search bar ───────────────── */
+.search-bar-wrap {
+  margin-bottom: 16px;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+body.dark-theme .search-box,
+.dark-theme .search-box {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+.search-box:focus-within {
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.search-box svg {
+  color: #64748b;
+  flex-shrink: 0;
+}
+.search-box input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: inherit;
+  font-family: inherit;
+}
+.search-box input::placeholder {
+  color: #94a3b8;
+}
+.clear-search-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transition: color 0.15s;
+}
+.clear-search-btn:hover {
+  color: #ef4444;
+}
+
+/* Branch styling */
+.branch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(13, 148, 136, 0.15);
+  color: #0d9488;
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  width: fit-content;
+  margin-top: 2px;
+}
+body.dark-theme .branch-badge,
+.dark-theme .branch-badge {
+  background: rgba(45, 212, 191, 0.15);
+  color: #2dd4bf;
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+.spec-branch {
+  font-weight: 600;
+  background: rgba(13, 148, 136, 0.1) !important;
+  color: #0d9488 !important;
+  border: 1px solid rgba(13, 148, 136, 0.2);
+}
+body.dark-theme .spec-branch,
+.dark-theme .spec-branch {
+  background: rgba(45, 212, 191, 0.1) !important;
+  color: #2dd4bf !important;
+}

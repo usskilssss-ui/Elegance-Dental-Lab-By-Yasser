@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
@@ -28,6 +28,7 @@ function emptyDraft() {
     workType: '',
     workDetail: '',
     color: '',
+    branch: '',
     quantity: 1,
     date: todayYmd(),
     caseType: 'New' as 'New' | 'Modification' | 'Redo' | 'Empty',
@@ -39,6 +40,7 @@ export interface PrintJobCard {
   printData: {
     doctor: string;
     patient: string;
+    branch?: string;
     caseType: string;
     workType: string;
     workDetail: string;
@@ -78,6 +80,20 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   // Today's print jobs list
   readonly printJobs = signal<PrintJobCard[]>([]);
+
+  // Search filter
+  readonly searchTerm = signal<string>('');
+
+  readonly filteredJobs = computed(() => {
+    const term = this.searchTerm().trim().toLowerCase();
+    const jobs = this.printJobs();
+    if (!term) return jobs;
+    return jobs.filter(j =>
+      (j.printData.doctor || '').toLowerCase().includes(term) ||
+      (j.printData.patient || '').toLowerCase().includes(term) ||
+      (j.printData.branch || '').toLowerCase().includes(term)
+    );
+  });
 
   formDraft = emptyDraft();
 
