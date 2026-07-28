@@ -47,12 +47,47 @@
   box-shadow: 0 24px 60px rgba(15, 38, 79, 0.14);
   overflow: hidden;
   min-height: min(640px, calc(100vh - 3rem));
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 @media (prefers-color-scheme: dark) {
   .login-card {
     background: #1e293b !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
   }
+}
+
+body.dark-theme .login-card,
+.dark-theme .login-card {
+  background: #1e293b !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-theme .title,
+.dark-theme .title {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .subtitle,
+.dark-theme .subtitle {
+  color: #94a3b8 !important;
+}
+
+body.dark-theme .field label,
+.dark-theme .field label {
+  color: #e2e8f0 !important;
+}
+
+body.dark-theme .input-wrap input,
+.dark-theme .input-wrap input {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+body.dark-theme .input-wrap input::placeholder,
+.dark-theme .input-wrap input::placeholder {
+  color: #64748b !important;
 }
 
 .form-panel {
