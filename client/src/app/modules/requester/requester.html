@@ -69,19 +69,6 @@
         إضافة ريكويست
       </button>
     </div>
-
-    <!-- Request list with search -->
-    <section class="request-list" style="margin-top:2rem;">
-      <input type="text" placeholder="بحث عن طبيب..." [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()" class="search-input" style="margin-bottom:1rem; width:100%; padding:0.6rem 1rem; border-radius:8px; border:1px solid var(--border-primary, #ccc);" />
-      @for (r of requests; track $index) {
-        <div class="request-item" style="border:1px solid #ccc; padding:0.75rem; margin-bottom:0.5rem; border-radius:8px;">
-          <div><strong>طبيب:</strong> {{ r.doctor }}</div>
-          <div><strong>مريض:</strong> {{ r.patient }}</div>
-          <div><strong>الفرع:</strong> {{ r.branch }}</div>
-          <div><strong>النوع:</strong> {{ formatWorkTypeForDisplay(r.workType) }}</div>
-        </div>
-      }
-    </section>
   </main>
 
   <!-- Dialog -->
