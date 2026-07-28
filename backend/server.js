@@ -95,9 +95,13 @@ setupSocket(server);
 // ROUTES
 // ════════════════════════════════════════════════
 
-// Health check & Root route (Redirects root visits straight to Vercel Frontend)
+// Health check & Root route
 app.get('/', (req, res) => {
-  res.redirect('https://dental-system-kappa.vercel.app');
+  res.status(200).json({
+    success: true,
+    message: 'Elegance Dental Lab API Backend is running',
+    frontend: 'https://dental-system-kappa.vercel.app'
+  });
 });
 
 app.get('/health', (req, res) => {
@@ -129,17 +133,12 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
-
-
-// 404 handler: If route starts with /api return json, otherwise redirect to Vercel app
+// 404 handler
 app.use((req, res) => {
-  if (req.originalUrl && req.originalUrl.startsWith('/api')) {
-    return res.status(404).json({
-      success: false,
-      message: 'Route not found',
-    });
-  }
-  res.redirect('https://dental-system-kappa.vercel.app');
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+  });
 });
 
 // Error handler middleware
