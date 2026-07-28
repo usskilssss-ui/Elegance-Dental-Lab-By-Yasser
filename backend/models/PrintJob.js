@@ -5,6 +5,7 @@ const printJobSchema = new mongoose.Schema(
     printData: {
       doctor:     { type: String, required: true },
       patient:    { type: String, required: true },
+      branch:     { type: String, default: '' },
       caseType:   { type: String, default: '' },
       workType:   { type: String, default: '' },
       workDetail: { type: String, default: '' },
