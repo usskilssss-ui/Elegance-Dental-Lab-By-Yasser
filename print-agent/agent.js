@@ -290,6 +290,7 @@ function buildPrintHtml(c) {
     <div class="section-title">بيانات الطبيب والمريض</div>
     <div class="row"><span class="label">الطبيب</span><span class="value">${c.doctor || '—'}</span></div>
     <div class="row"><span class="label">المريض</span><span class="value">${c.patient || '—'}</span></div>
+    <div class="row"><span class="label">الفرع</span><span class="value">${c.branch || '—'}</span></div>
   </div>
 
   <!-- تفاصيل العمل -->
