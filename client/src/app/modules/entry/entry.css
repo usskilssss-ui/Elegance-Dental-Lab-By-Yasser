@@ -149,16 +149,20 @@ body.dark-theme .case-card,
 
 /* people */
 .case-people { display: flex; flex-direction: column; gap: 4px; }
-.doctor { font-size: 15px; font-weight: 700; }
-.patient {
+.doctor {
   font-size: 17px;
   font-weight: 700;
   color: var(--text-primary, #0f172a);
-  margin-top: 2px;
 }
-body.dark-theme .patient,
-.dark-theme .patient {
+body.dark-theme .doctor,
+.dark-theme .doctor {
   color: #f8fafc;
+}
+.patient {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  margin-top: 2px;
 }
 
 .requester-badge {
