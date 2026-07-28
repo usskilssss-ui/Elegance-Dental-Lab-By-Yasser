@@ -4,14 +4,22 @@
   --bg-primary: #f5f7fa;
   --bg-secondary: #eef1f6;
   --bg-card: #ffffff;
-  
+  --card-bg: #ffffff;
+  --card: #ffffff;
+  --bg: #f5f7fa;
+
   --text-primary: #0f172a;
   --text-secondary: #64748b;
-  --text-muted: #94a3b8;
-  
+  --text-muted: #64748b;
+  --text: #0f172a;
+
   --border-primary: #e2e8f0;
   --border-secondary: #cbd5e1;
   --border-tertiary: #d4dce6;
+  --border: #e2e8f0;
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --tag-bg: #f1f5f9;
 
   /* Accent Colors (Light) */
   --accent-primary: #185FA5;
@@ -33,15 +41,23 @@ body.dark-theme {
   /* DARK THEME TOKENS */
   --bg-primary: #0f172a;       /* Darkest background (page body) */
   --bg-secondary: #1e293b;     /* Slightly lighter for panels/sidebars */
-  --bg-card: #1e293b;          /* Same as secondary or distinct for cards */
-  
+  --bg-card: #1e293b;          /* Dark card background */
+  --card-bg: #1e293b;
+  --card: #1e293b;
+  --bg: #0f172a;
+
   --text-primary: #f8fafc;     /* White/Off-white for main text */
   --text-secondary: #cbd5e1;   /* Light gray for secondary text */
-  --text-muted: #64748b;       /* Muted text */
-  
+  --text-muted: #94a3b8;       /* Muted text */
+  --text: #f8fafc;
+
   --border-primary: #334155;
   --border-secondary: #475569;
   --border-tertiary: #334155;
+  --border: #334155;
+  --input-bg: #0f172a;
+  --input-border: #334155;
+  --tag-bg: #334155;
 
   /* Accent Colors (Dark) */
   --accent-primary: #3b82f6;   /* Brighter blue for dark mode visibility */
@@ -57,6 +73,30 @@ body.dark-theme {
   --badge-red-text: #f87171;
   --badge-amber-bg: rgba(251, 191, 36, 0.15);
   --badge-amber-text: #fbbf24;
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not(.light-theme) {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #1e293b;
+    --card-bg: #1e293b;
+    --card: #1e293b;
+    --bg: #0f172a;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text: #f8fafc;
+
+    --border-primary: #334155;
+    --border-secondary: #475569;
+    --border-tertiary: #334155;
+    --border: #334155;
+    --input-bg: #0f172a;
+    --input-border: #334155;
+    --tag-bg: #334155;
+  }
 }
 
 /* Base Body Styles */

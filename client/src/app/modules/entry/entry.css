@@ -85,15 +85,21 @@
 
 /* ── Case card — identical style to secretary ─────── */
 .case-card {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, var(--card-bg, #ffffff));
+  border: 1px solid var(--border-primary, var(--border, #e5e7eb));
   border-radius: 14px;
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transition: box-shadow 0.2s, transform 0.15s;
+  transition: box-shadow 0.2s, transform 0.15s, background-color 0.3s;
   box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+body.dark-theme .case-card,
+.dark-theme .case-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc;
 }
 .case-card:hover {
   box-shadow: 0 4px 18px rgba(0,0,0,.1);
