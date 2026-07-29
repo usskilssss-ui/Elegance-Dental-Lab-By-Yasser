@@ -13,12 +13,16 @@
 
 const { io } = require('socket.io-client');
 const puppeteer = require('puppeteer');
-const { print } = require('pdf-to-printer');
+const { print, getPrinters } = require('pdf-to-printer');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
 const https = require('https');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 
 // ── Config ────────────────────────────────────────────────
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
@@ -27,11 +31,13 @@ const AGENT_SECRET    = config.PRINT_AGENT_SECRET;
 const PRINTER_NAME    = config.PRINTER_NAME;
 const RECONNECT_DELAY = 3000; // ms
 const POLL_INTERVAL_MS = Number(config.POLL_INTERVAL_MS) || 20000;
+const PRINT_CONFIRM_TIMEOUT_MS = Number(config.PRINT_CONFIRM_TIMEOUT_MS) || 90000;
 
 console.log('🖨️  Elegance Print Agent starting...');
 console.log(`   Server  : ${SERVER_URL}`);
 console.log(`   Printer : ${PRINTER_NAME}`);
 console.log(`   Poll    : every ${POLL_INTERVAL_MS / 1000}s`);
+console.log(`   Confirm : ${PRINT_CONFIRM_TIMEOUT_MS / 1000}s spooler timeout`);
 
 // ── Keep Windows from sleeping while agent runs ───────────
 function enableKeepAwake() {
@@ -113,6 +119,195 @@ function enqueueJob(job, source) {
   processQueue();
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function escapePsSingleQuoted(value) {
+  return String(value || '').replace(/'/g, "''");
+}
+
+async function runPowerShell(script, timeoutMs = 20000) {
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+    { windowsHide: true, timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 }
+  );
+  return String(stdout || '').trim();
+}
+
+/** Check printer exists and is not offline / in error via Win32_Printer */
+async function getPrinterHealth(printerName) {
+  const name = (printerName || '').trim();
+  if (!name) {
+    return { ok: false, error: 'PRINTER_NAME is empty in config.json' };
+  }
+
+  const script = `
+$ErrorActionPreference = 'Stop'
+$name = '${escapePsSingleQuoted(name)}'
+$p = Get-CimInstance -ClassName Win32_Printer | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+if (-not $p) {
+  (@{ ok = $false; error = "Printer not found: $name"; offline = $true; status = -1; detectedError = -1 }) | ConvertTo-Json -Compress
+  exit 0
+}
+$offline = [bool]$p.WorkOffline
+$status = [int]$p.PrinterStatus
+$detected = [int]$p.DetectedErrorState
+# Win32 PrinterStatus: 7 = Offline. DetectedErrorState: 2 = No Error; >=3 often paper/toner/jam.
+$ok = (-not $offline) -and ($status -ne 7)
+if ($detected -ge 3) { $ok = $false }
+$errorText = ''
+if (-not $ok) {
+  if ($offline -or $status -eq 7) { $errorText = "Printer offline: $name" }
+  elseif ($detected -ge 3) { $errorText = "Printer error state ($detected): $name" }
+  else { $errorText = "Printer not ready: $name" }
+}
+(@{
+  ok = $ok
+  error = $errorText
+  offline = $offline
+  status = $status
+  detectedError = $detected
+  name = $p.Name
+}) | ConvertTo-Json -Compress
+`;
+
+  try {
+    const raw = await runPowerShell(script);
+    const parsed = JSON.parse(raw || '{}');
+    return {
+      ok: Boolean(parsed.ok),
+      error: parsed.error || '',
+      offline: Boolean(parsed.offline),
+      status: Number(parsed.status),
+      detectedError: Number(parsed.detectedError),
+      name: parsed.name || name,
+    };
+  } catch (err) {
+    // Fallback: at least verify printer is listed by pdf-to-printer
+    try {
+      const printers = await getPrinters();
+      const found = (printers || []).find(
+        (p) => String(p.name || '').toLowerCase() === name.toLowerCase()
+      );
+      if (!found) {
+        return { ok: false, error: `Printer not found: ${name}` };
+      }
+      return {
+        ok: true,
+        error: '',
+        offline: false,
+        status: -1,
+        detectedError: -1,
+        name,
+        warning: `Health check via WMI failed (${err.message}); printer name exists`,
+      };
+    } catch (e2) {
+      return { ok: false, error: `Cannot verify printer: ${err.message}` };
+    }
+  }
+}
+
+async function assertPrinterReady(printerName) {
+  const health = await getPrinterHealth(printerName);
+  if (!health.ok) {
+    throw new Error(health.error || 'Printer is not ready');
+  }
+  if (health.warning) {
+    console.warn(`   ⚠️  ${health.warning}`);
+  }
+  return health;
+}
+
+async function listSpoolerJobs(printerName) {
+  const script = `
+$ErrorActionPreference = 'Stop'
+$name = '${escapePsSingleQuoted(printerName)}'
+try {
+  $jobs = @(Get-PrintJob -PrinterName $name -ErrorAction Stop | ForEach-Object {
+    @{
+      id = [string]$_.Id
+      status = [string]$_.JobStatus
+      name = [string]$_.DocumentName
+    }
+  })
+  ,@($jobs) | ConvertTo-Json -Compress -Depth 4
+} catch {
+  '[]'
+}
+`;
+  try {
+    const raw = await runPowerShell(script);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') return [parsed];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function jobLooksFailed(statusText) {
+  const s = String(statusText || '').toLowerCase();
+  return /error|offline|paperout|papercritical|userintervention|blocked|deleted/.test(s);
+}
+
+function jobLooksPrinted(statusText) {
+  const s = String(statusText || '').toLowerCase();
+  return /printed|complete|retained/.test(s);
+}
+
+/**
+ * After sending to Windows spooler, wait until:
+ * - new job appears then clears / Printed, OR
+ * - printer stays healthy briefly (drivers that don't expose jobs), OR
+ * - timeout / offline / error → fail
+ */
+async function waitForPrintConfirmation(printerName, beforeJobIds) {
+  const started = Date.now();
+  let sawNewJob = false;
+  let healthyEmptyTicks = 0;
+
+  while (Date.now() - started < PRINT_CONFIRM_TIMEOUT_MS) {
+    await sleep(500);
+
+    const health = await getPrinterHealth(printerName);
+    if (!health.ok) {
+      throw new Error(health.error || 'Printer went offline during print');
+    }
+
+    const jobs = await listSpoolerJobs(printerName);
+    const newJobs = jobs.filter((j) => j && j.id && !beforeJobIds.has(String(j.id)));
+
+    for (const j of newJobs) {
+      if (jobLooksFailed(j.status)) {
+        throw new Error(`Spooler job failed (${j.status})`);
+      }
+    }
+
+    if (newJobs.length > 0) {
+      sawNewJob = true;
+      healthyEmptyTicks = 0;
+      if (newJobs.every((j) => jobLooksPrinted(j.status))) {
+        return { mode: 'printed-status' };
+      }
+    } else if (sawNewJob) {
+      return { mode: 'spooler-cleared' };
+    } else {
+      healthyEmptyTicks += 1;
+      // Some POS drivers never expose Get-PrintJob; accept only if printer stayed healthy
+      // for a few seconds after Windows accepted the print command.
+      if (Date.now() - started >= 3500 && healthyEmptyTicks >= 6) {
+        return { mode: 'accepted-healthy' };
+      }
+    }
+  }
+
+  throw new Error(`Print confirmation timeout after ${PRINT_CONFIRM_TIMEOUT_MS / 1000}s`);
+}
+
 async function processQueue() {
   if (isProcessingQueue) return;
   isProcessingQueue = true;
@@ -125,13 +320,22 @@ async function processQueue() {
     try {
       reportStatus(job.jobId, 'printing');
 
+      await assertPrinterReady(PRINTER_NAME);
+      console.log(`   ✅ Printer ready: ${PRINTER_NAME}`);
+
       const html = buildPrintHtml(job.printData);
       const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
       await generatePdf(html, pdfPath);
       console.log(`   ✅ PDF generated: ${pdfPath}`);
 
+      const beforeJobs = await listSpoolerJobs(PRINTER_NAME);
+      const beforeIds = new Set(beforeJobs.map((j) => String(j.id)));
+
       await printPdf(pdfPath);
-      console.log(`   🖨️  Printed successfully on [${PRINTER_NAME}]`);
+      console.log(`   📤 Sent to Windows spooler [${PRINTER_NAME}] — waiting for confirmation...`);
+
+      const confirm = await waitForPrintConfirmation(PRINTER_NAME, beforeIds);
+      console.log(`   🖨️  Print confirmed (${confirm.mode}) on [${PRINTER_NAME}]`);
 
       reportStatus(job.jobId, 'done');
       fs.unlink(pdfPath, () => {});

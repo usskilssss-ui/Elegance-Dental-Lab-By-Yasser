@@ -26,6 +26,18 @@ router.patch('/job/:id/status', (req, res, next) => {
   next();
 }, printController.updateJobStatus);
 
+// Entry screen: human confirm whether paper actually printed
+router.patch('/job/:id/confirm', (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = verifyToken(token);
+      if (decoded) req.user = { userId: decoded.userId, role: decoded.role };
+    } catch (e) {}
+  }
+  next();
+}, printController.confirmPaper);
+
 // List recent jobs — admin only
 router.get('/jobs', authenticate, printController.listJobs);
 

@@ -90,7 +90,11 @@
       </div>
       <div class="stat-pill stat-done">
         <span class="stat-num">{{ doneJobsCount() }}</span>
-        <span class="stat-text">تمت الطباعة</span>
+        <span class="stat-text">تم التأكيد</span>
+      </div>
+      <div class="stat-pill stat-awaiting">
+        <span class="stat-num">{{ awaitingConfirmCount() }}</span>
+        <span class="stat-text">بانتظار التأكيد</span>
       </div>
       <div class="stat-pill stat-pending">
         <span class="stat-num">{{ pendingJobsCount() }}</span>
@@ -139,8 +143,8 @@
             <div class="case-main">
               <div class="case-head">
                 <span class="case-id">{{ formatTime(job.createdAt) }}</span>
-                <span class="case-phase-badge" [ngClass]="getStatusColor(job.status)">
-                  {{ getStatusLabel(job.status) }}
+                <span class="case-phase-badge" [ngClass]="getStatusColor(job)">
+                  {{ getStatusLabel(job) }}
                 </span>
               </div>
 
@@ -176,6 +180,24 @@
             </div>
 
             <div class="case-actions">
+              @if (needsPaperConfirm(job)) {
+                <button
+                  type="button"
+                  class="action-btn action-btn--confirm"
+                  (click)="confirmPaper(job, true)"
+                  title="تأكيد إن الورقة طلعت"
+                >
+                  ✅ الورقة طلعت
+                </button>
+                <button
+                  type="button"
+                  class="action-btn action-btn--reject"
+                  (click)="confirmPaper(job, false)"
+                  title="الورقة ما اتطبعتش"
+                >
+                  ❌ ما اتطبعتش
+                </button>
+              }
               <button
                 type="button"
                 class="action-btn action-btn--reprint"

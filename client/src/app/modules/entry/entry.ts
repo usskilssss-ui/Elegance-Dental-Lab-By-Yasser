@@ -50,6 +50,8 @@ export interface PrintJobCard {
     printDate: string;
   };
   status: 'pending' | 'printing' | 'done' | 'failed';
+  paperConfirmed?: 'pending' | 'yes' | 'no';
+  errorMessage?: string;
   createdAt: string;
 }
 
@@ -97,8 +99,15 @@ export class EntryComponent implements OnInit, OnDestroy {
     );
   });
 
-  readonly doneJobsCount = computed(() => this.printJobs().filter(j => j.status === 'done').length);
-  readonly pendingJobsCount = computed(() => this.printJobs().filter(j => j.status === 'pending' || j.status === 'printing').length);
+  readonly doneJobsCount = computed(() =>
+    this.printJobs().filter(j => j.status === 'done' && j.paperConfirmed === 'yes').length
+  );
+  readonly awaitingConfirmCount = computed(() =>
+    this.printJobs().filter(j => j.status === 'done' && (j.paperConfirmed || 'pending') !== 'yes').length
+  );
+  readonly pendingJobsCount = computed(() =>
+    this.printJobs().filter(j => j.status === 'pending' || j.status === 'printing').length
+  );
   readonly failedJobsCount = computed(() => this.printJobs().filter(j => j.status === 'failed').length);
 
   formDraft = emptyDraft();
@@ -280,11 +289,17 @@ export class EntryComponent implements OnInit, OnDestroy {
   }
 
   private sortJobs(jobs: PrintJobCard[]): PrintJobCard[] {
-    const failedJobs   = jobs.filter(j => j.status === 'failed')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const otherJobs    = jobs.filter(j => j.status !== 'failed')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return [...failedJobs, ...otherJobs];
+    const rank = (j: PrintJobCard) => {
+      if (j.status === 'failed') return 0;
+      if (j.status === 'done' && (j.paperConfirmed || 'pending') !== 'yes') return 1;
+      if (j.status === 'printing' || j.status === 'pending') return 2;
+      return 3;
+    };
+    return [...jobs].sort((a, b) => {
+      const r = rank(a) - rank(b);
+      if (r !== 0) return r;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
   }
 
   private loadTodayJobs(opts?: { silent?: boolean }): void {
@@ -336,9 +351,25 @@ export class EntryComponent implements OnInit, OnDestroy {
           return this.sortJobs([...jobs, normalized]);
         });
       };
-      const onUpdate = (data: { jobId: string; status: string }) => {
+      const onUpdate = (data: {
+        jobId: string;
+        status: string;
+        paperConfirmed?: PrintJobCard['paperConfirmed'];
+        errorMessage?: string;
+      }) => {
         this.printJobs.update(jobs =>
-          this.sortJobs(jobs.map(j => j._id === data.jobId ? { ...j, status: data.status as any } : j))
+          this.sortJobs(
+            jobs.map(j =>
+              j._id === data.jobId
+                ? {
+                    ...j,
+                    status: data.status as PrintJobCard['status'],
+                    paperConfirmed: data.paperConfirmed ?? j.paperConfirmed,
+                    errorMessage: data.errorMessage ?? j.errorMessage,
+                  }
+                : j
+            )
+          )
         );
       };
       const onDelete = (data: { jobId: string }) => {
@@ -411,7 +442,7 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.saveInProgress.set(true);
 
     const now = new Date();
-    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
     // Send to remote Print Agent API
     this.http.post(`${this.apiBase}/print/job`, {
@@ -461,7 +492,11 @@ export class EntryComponent implements OnInit, OnDestroy {
   formatTime(dateStr: string): string {
     if (!dateStr) return '';
     const d = new Date(dateStr);
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   }
 
   formatDate(dateStr: string): string {
@@ -470,24 +505,76 @@ export class EntryComponent implements OnInit, OnDestroy {
     return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
   }
 
-  getStatusLabel(status: string): string {
-    switch (status) {
+  needsPaperConfirm(job: PrintJobCard): boolean {
+    return job.status === 'done' && (job.paperConfirmed || 'pending') !== 'yes';
+  }
+
+  getStatusLabel(jobOrStatus: PrintJobCard | string): string {
+    if (typeof jobOrStatus === 'string') {
+      switch (jobOrStatus) {
+        case 'pending': return 'انتظار';
+        case 'printing': return 'جاري الطباعة';
+        case 'done': return 'تمت الطباعة';
+        case 'failed': return 'فشل';
+        default: return jobOrStatus;
+      }
+    }
+    const job = jobOrStatus;
+    if (job.status === 'done' && job.paperConfirmed === 'yes') return 'تم التأكيد';
+    if (job.status === 'done') return 'بانتظار تأكيد الورقة';
+    if (job.status === 'failed' && job.paperConfirmed === 'no') return 'لم تُطبع';
+    switch (job.status) {
       case 'pending': return 'انتظار';
       case 'printing': return 'جاري الطباعة';
-      case 'done': return 'تمت الطباعة';
       case 'failed': return 'فشل';
-      default: return status;
+      default: return job.status;
     }
   }
 
-  getStatusColor(status: string): string {
-    switch (status) {
-      case 'pending': return 'status-pending';
-      case 'printing': return 'status-printing';
-      case 'done': return 'status-done';
-      case 'failed': return 'status-failed';
-      default: return '';
+  getStatusColor(jobOrStatus: PrintJobCard | string): string {
+    if (typeof jobOrStatus === 'string') {
+      switch (jobOrStatus) {
+        case 'pending': return 'status-pending';
+        case 'printing': return 'status-printing';
+        case 'done': return 'status-done';
+        case 'failed': return 'status-failed';
+        default: return '';
+      }
     }
+    const job = jobOrStatus;
+    if (job.status === 'done' && job.paperConfirmed === 'yes') return 'status-done';
+    if (job.status === 'done') return 'status-awaiting';
+    if (job.status === 'failed') return 'status-failed';
+    if (job.status === 'printing') return 'status-printing';
+    return 'status-pending';
+  }
+
+  confirmPaper(job: PrintJobCard, confirmed: boolean): void {
+    const msg = confirmed
+      ? `تأكيد إن ورقة ${job.printData.patient} طلعت؟`
+      : `تأكيد إن ورقة ${job.printData.patient} ما اتطبعتش؟`;
+    if (!confirm(msg)) return;
+
+    this.http
+      .patch<{ success: boolean; job?: PrintJobCard; message?: string }>(
+        `${this.apiBase}/print/job/${job._id}/confirm`,
+        { confirmed }
+      )
+      .subscribe({
+        next: (res) => {
+          if (res.job) {
+            this.printJobs.update((jobs) =>
+              this.sortJobs(jobs.map((j) => (j._id === job._id ? { ...j, ...res.job } : j)))
+            );
+          } else {
+            this.loadTodayJobs({ silent: true });
+          }
+          this.flash(
+            confirmed ? '✅ تم تأكيد خروج الورقة' : '❌ تم تسجيل أن الورقة لم تُطبع — يمكن إعادة الطباعة'
+          );
+        },
+        error: () => this.flash('❌ تعذر حفظ التأكيد'),
+      });
   }
 
   reprintJob(job: PrintJobCard): void {

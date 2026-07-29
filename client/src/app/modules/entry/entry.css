@@ -145,6 +145,7 @@ body.dark-theme .case-card,
 .status-pending  { background: #fef3c7; color: #92400e; }
 .status-printing { background: #dbeafe; color: #1e40af; }
 .status-done     { background: #d1fae5; color: #065f46; }
+.status-awaiting { background: #fef3c7; color: #92400e; }
 .status-failed   { background: #fee2e2; color: #991b1b; }
 
 /* people */
@@ -214,6 +215,16 @@ body.dark-theme .doctor,
 
 .action-btn--reprint {
   background: linear-gradient(135deg, #2563eb, #0d9488);
+  color: #fff;
+}
+
+.action-btn--confirm {
+  background: #059669;
+  color: #fff;
+}
+
+.action-btn--reject {
+  background: #dc2626;
   color: #fff;
 }
 
@@ -381,5 +392,6 @@ body.dark-theme .stat-pill,
 
 .stat-total .stat-num { color: #2563eb; }
 .stat-done .stat-num { color: #10b981; }
+.stat-awaiting .stat-num { color: #d97706; }
 .stat-pending .stat-num { color: #f59e0b; }
 .stat-failed .stat-num { color: #ef4444; }

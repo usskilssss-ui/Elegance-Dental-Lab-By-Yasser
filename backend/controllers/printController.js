@@ -54,11 +54,13 @@ exports.updateJobStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: 'status غير صحيح' });
     }
 
-    const job = await PrintJob.findByIdAndUpdate(
-      req.params.id,
-      { status, errorMessage: errorMessage || '' },
-      { new: true }
-    );
+    const update = { status, errorMessage: errorMessage || '' };
+    // Fresh agent result resets human confirmation
+    if (status === 'done') update.paperConfirmed = 'pending';
+    if (status === 'failed') update.paperConfirmed = 'no';
+    if (status === 'printing' || status === 'pending') update.paperConfirmed = 'pending';
+
+    const job = await PrintJob.findByIdAndUpdate(req.params.id, update, { new: true });
 
     if (!job) {
       return res.status(404).json({ success: false, message: 'الجوب مش موجود' });
@@ -67,12 +69,69 @@ exports.updateJobStatus = async (req, res) => {
     // Broadcast status update to entry screens
     const io = getIO();
     if (io) {
-      io.emit('print:job-status-updated', { jobId: job._id, status: job.status });
+      io.emit('print:job-status-updated', {
+        jobId: job._id,
+        status: job.status,
+        paperConfirmed: job.paperConfirmed,
+        errorMessage: job.errorMessage,
+      });
     }
 
     return res.json({ success: true, job });
   } catch (err) {
     console.error('updateJobStatus error:', err);
+    return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+  }
+};
+
+// PATCH /api/print/job/:id/confirm — human confirm paper actually came out
+exports.confirmPaper = async (req, res) => {
+  try {
+    const confirmed = req.body?.confirmed;
+    if (typeof confirmed !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'confirmed يجب أن يكون true أو false' });
+    }
+
+    const job = await PrintJob.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'الجوب مش موجود' });
+    }
+
+    if (confirmed) {
+      if (job.status !== 'done' && job.status !== 'printing') {
+        return res.status(400).json({
+          success: false,
+          message: 'التأكيد متاح فقط بعد ما النظام يبلّغ إن الطباعة اكتملت',
+        });
+      }
+      job.status = 'done';
+      job.paperConfirmed = 'yes';
+      job.errorMessage = '';
+    } else {
+      job.status = 'failed';
+      job.paperConfirmed = 'no';
+      job.errorMessage = 'تم التأكيد يدويًا أن الورقة لم تُطبع';
+    }
+
+    await job.save();
+
+    const io = getIO();
+    if (io) {
+      io.emit('print:job-status-updated', {
+        jobId: job._id,
+        status: job.status,
+        paperConfirmed: job.paperConfirmed,
+        errorMessage: job.errorMessage,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: confirmed ? 'تم تأكيد خروج الورقة' : 'تم تسجيل أن الورقة لم تُطبع',
+      job,
+    });
+  } catch (err) {
+    console.error('confirmPaper error:', err);
     return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
   }
 };

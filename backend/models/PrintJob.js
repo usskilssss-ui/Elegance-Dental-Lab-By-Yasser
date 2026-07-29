@@ -19,6 +19,12 @@ const printJobSchema = new mongoose.Schema(
       enum: ['pending', 'printing', 'done', 'failed'],
       default: 'pending',
     },
+    /** Human paper confirmation on entry screen: pending | yes | no */
+    paperConfirmed: {
+      type: String,
+      enum: ['pending', 'yes', 'no'],
+      default: 'pending',
+    },
     errorMessage: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },

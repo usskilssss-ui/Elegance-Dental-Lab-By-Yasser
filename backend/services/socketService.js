@@ -82,15 +82,22 @@ const setupSocket = (server) => {
       socket.on('print:job-status', async (data) => {
         try {
           const PrintJob = require('../models/PrintJob');
-          const job = await PrintJob.findByIdAndUpdate(
-            data.jobId,
-            { status: data.status, errorMessage: data.error || '' },
-            { new: true }
-          );
+          const status = data.status;
+          const update = { status, errorMessage: data.error || '' };
+          if (status === 'done') update.paperConfirmed = 'pending';
+          if (status === 'failed') update.paperConfirmed = 'no';
+          if (status === 'printing' || status === 'pending') update.paperConfirmed = 'pending';
+
+          const job = await PrintJob.findByIdAndUpdate(data.jobId, update, { new: true });
           console.log(`🖨️  Print Job ${data.jobId} status updated to: ${data.status}`);
           // Keep entry screens in sync when agent reports status
           if (job) {
-            io.emit('print:job-status-updated', { jobId: job._id, status: job.status });
+            io.emit('print:job-status-updated', {
+              jobId: job._id,
+              status: job.status,
+              paperConfirmed: job.paperConfirmed,
+              errorMessage: job.errorMessage,
+            });
           }
         } catch (err) {
           console.error('Error updating print job status via socket:', err);
