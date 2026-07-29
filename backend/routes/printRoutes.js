@@ -29,6 +29,15 @@ router.patch('/job/:id/status', (req, res, next) => {
 // List recent jobs — admin only
 router.get('/jobs', authenticate, printController.listJobs);
 
+// Pending jobs for Print Agent catch-up (agent secret required)
+router.get('/jobs/pending', (req, res, next) => {
+  const secret = req.headers['x-agent-secret'];
+  if (!secret || secret !== process.env.PRINT_AGENT_SECRET) {
+    return res.status(401).json({ success: false, message: 'غير مصرح' });
+  }
+  next();
+}, printController.listPendingJobs);
+
 // List today's jobs for entry screen (finisher/admin — public token optional)
 router.get('/jobs/today', (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];

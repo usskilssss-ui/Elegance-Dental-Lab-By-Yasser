@@ -25,6 +25,7 @@ exports.createPrintJob = async (req, res) => {
       });
       // Also broadcast to entry screens so they see the new job in real-time
       io.emit('print:job-created', {
+        _id: job._id,
         jobId: job._id,
         printData: job.printData,
         status: job.status,
@@ -91,11 +92,57 @@ exports.listJobs = async (req, res) => {
   }
 };
 
-// GET /api/print/jobs/today — list today's jobs for entry screen
+/** Start of "today" in Africa/Cairo (Egypt), as a UTC Date for Mongo queries. */
+function startOfCairoDay() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find(p => p.type === 'year').value;
+  const m = parts.find(p => p.type === 'month').value;
+  const d = parts.find(p => p.type === 'day').value;
+  // Cairo is UTC+2 or UTC+3 (DST). Resolve exact offset via the same calendar day.
+  const probe = new Date(`${y}-${m}-${d}T12:00:00Z`);
+  const cairoHourAtUtcNoon = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Africa/Cairo',
+      hour: 'numeric',
+      hour12: false,
+    }).format(probe)
+  );
+  const offsetHours = cairoHourAtUtcNoon - 12;
+  return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), -offsetHours, 0, 0, 0));
+}
+
+// GET /api/print/jobs/pending — Print Agent catch-up (agent secret required)
+exports.listPendingJobs = async (req, res) => {
+  try {
+    // Include failed + stuck "printing" so catch-up works after sleep / kill
+    const jobs = await PrintJob.find({ status: { $in: ['pending', 'failed', 'printing'] } })
+      .sort({ createdAt: 1 })
+      .limit(100);
+
+    return res.json({
+      success: true,
+      jobs: jobs.map(j => ({
+        jobId: j._id,
+        printData: j.printData,
+        status: j.status,
+        createdAt: j.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('listPendingJobs error:', err);
+    return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
+  }
+};
+
+// GET /api/print/jobs/today — list today's jobs for entry screen (Cairo day)
 exports.listTodayJobs = async (req, res) => {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const startOfDay = startOfCairoDay();
 
     const jobs = await PrintJob.find({
       createdAt: { $gte: startOfDay }

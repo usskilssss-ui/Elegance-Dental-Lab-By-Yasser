@@ -71,6 +71,8 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
+  private jobsPollTimer: ReturnType<typeof setInterval> | null = null;
+  private onVisibilityChange: (() => void) | null = null;
 
   readonly dialogOpen = signal(false);
   readonly saveInProgress = signal(false);
@@ -285,8 +287,8 @@ export class EntryComponent implements OnInit, OnDestroy {
     return [...failedJobs, ...otherJobs];
   }
 
-  private loadTodayJobs(): void {
-    this.jobsLoading.set(true);
+  private loadTodayJobs(opts?: { silent?: boolean }): void {
+    if (!opts?.silent) this.jobsLoading.set(true);
     this.http.get<{ success: boolean; jobs: PrintJobCard[] }>(`${this.apiBase}/print/jobs/today`).subscribe({
       next: res => {
         if (res.success) this.printJobs.set(this.sortJobs(res.jobs));
@@ -311,12 +313,28 @@ export class EntryComponent implements OnInit, OnDestroy {
     // Load today's print jobs
     this.loadTodayJobs();
 
+    // Poll so jobs still appear if the agent PC slept or the socket missed events
+    this.jobsPollTimer = setInterval(() => this.loadTodayJobs({ silent: true }), 15000);
+
+    this.onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') this.loadTodayJobs({ silent: true });
+    };
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+
     // Real-time: listen for new jobs
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
     if (socket) {
-      const onNew = (job: PrintJobCard) => {
-        this.printJobs.update(jobs => this.sortJobs([...jobs, job]));
+      const onNew = (job: PrintJobCard & { jobId?: string }) => {
+        const normalized: PrintJobCard = {
+          ...job,
+          _id: job._id || job.jobId || '',
+        };
+        if (!normalized._id) return;
+        this.printJobs.update(jobs => {
+          if (jobs.some(j => j._id === normalized._id)) return jobs;
+          return this.sortJobs([...jobs, normalized]);
+        });
       };
       const onUpdate = (data: { jobId: string; status: string }) => {
         this.printJobs.update(jobs =>
@@ -344,6 +362,14 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.socketSubs.forEach(s => s.unsubscribe());
+    if (this.jobsPollTimer) {
+      clearInterval(this.jobsPollTimer);
+      this.jobsPollTimer = null;
+    }
+    if (this.onVisibilityChange) {
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      this.onVisibilityChange = null;
+    }
   }
 
   openDialog(): void {

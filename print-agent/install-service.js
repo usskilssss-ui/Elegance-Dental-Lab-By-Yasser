@@ -10,10 +10,11 @@ const svc = new Service({
   description: 'Elegance Dental Lab — Remote Print Agent',
   script: path.join(__dirname, 'agent.js'),
   nodeOptions: [],
-  // Restart automatically if crashed
+  // Restart automatically if crashed / process killed
   grow: 0.25,
   wait: 2,
-  maxRestarts: 10,
+  maxRestarts: 100,
+  maxRetries: 100,
 });
 
 svc.on('install', () => {

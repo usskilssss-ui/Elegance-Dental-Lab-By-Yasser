@@ -58,11 +58,13 @@ const setupSocket = (server) => {
       socket.join('print-agents');
       console.log('🖨️  Print Agent connected and joined print-agents room');
 
-      // Fetch and send accumulated pending print jobs
+      // Fetch and send accumulated pending / failed print jobs for catch-up
       (async () => {
         try {
           const PrintJob = require('../models/PrintJob');
-          const pendingJobs = await PrintJob.find({ status: 'pending' }).sort({ createdAt: 1 });
+          const pendingJobs = await PrintJob.find({
+            status: { $in: ['pending', 'failed', 'printing'] },
+          }).sort({ createdAt: 1 });
           if (pendingJobs.length > 0) {
             console.log(`🖨️  Sending ${pendingJobs.length} pending print jobs to connected agent`);
             pendingJobs.forEach(job => {
@@ -80,11 +82,16 @@ const setupSocket = (server) => {
       socket.on('print:job-status', async (data) => {
         try {
           const PrintJob = require('../models/PrintJob');
-          await PrintJob.findByIdAndUpdate(data.jobId, {
-            status: data.status,
-            errorMessage: data.error || ''
-          });
+          const job = await PrintJob.findByIdAndUpdate(
+            data.jobId,
+            { status: data.status, errorMessage: data.error || '' },
+            { new: true }
+          );
           console.log(`🖨️  Print Job ${data.jobId} status updated to: ${data.status}`);
+          // Keep entry screens in sync when agent reports status
+          if (job) {
+            io.emit('print:job-status-updated', { jobId: job._id, status: job.status });
+          }
         } catch (err) {
           console.error('Error updating print job status via socket:', err);
         }
