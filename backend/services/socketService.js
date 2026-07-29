@@ -64,6 +64,7 @@ const setupSocket = (server) => {
           const PrintJob = require('../models/PrintJob');
           const pendingJobs = await PrintJob.find({
             status: { $in: ['pending', 'failed', 'printing'] },
+            paperConfirmed: { $ne: 'yes' },
           }).sort({ createdAt: 1 });
           if (pendingJobs.length > 0) {
             console.log(`🖨️  Sending ${pendingJobs.length} pending print jobs to connected agent`);
@@ -81,24 +82,24 @@ const setupSocket = (server) => {
 
       socket.on('print:job-status', async (data) => {
         try {
-          const PrintJob = require('../models/PrintJob');
-          const status = data.status;
-          const update = { status, errorMessage: data.error || '' };
-          if (status === 'done') update.paperConfirmed = 'pending';
-          if (status === 'failed') update.paperConfirmed = 'no';
-          if (status === 'printing' || status === 'pending') update.paperConfirmed = 'pending';
-
-          const job = await PrintJob.findByIdAndUpdate(data.jobId, update, { new: true });
-          console.log(`🖨️  Print Job ${data.jobId} status updated to: ${data.status}`);
-          // Keep entry screens in sync when agent reports status
-          if (job) {
-            io.emit('print:job-status-updated', {
-              jobId: job._id,
-              status: job.status,
-              paperConfirmed: job.paperConfirmed,
-              errorMessage: job.errorMessage,
-            });
+          const { applyAgentJobStatus } = require('../controllers/printController');
+          const result = await applyAgentJobStatus(data.jobId, data.status, data.error || '');
+          if (!result.ok) {
+            console.warn(`🖨️  Print Job ${data.jobId} status rejected: ${result.message}`);
+            return;
           }
+          if (result.skipped) {
+            console.log(`🖨️  Print Job ${data.jobId} status ignored (${result.reason})`);
+            return;
+          }
+          const job = result.job;
+          console.log(`🖨️  Print Job ${data.jobId} status updated to: ${job.status}`);
+          io.emit('print:job-status-updated', {
+            jobId: job._id,
+            status: job.status,
+            paperConfirmed: job.paperConfirmed,
+            errorMessage: job.errorMessage,
+          });
         } catch (err) {
           console.error('Error updating print job status via socket:', err);
         }

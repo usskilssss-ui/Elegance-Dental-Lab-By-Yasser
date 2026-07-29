@@ -44,40 +44,70 @@ exports.createPrintJob = async (req, res) => {
   }
 };
 
+/** Apply agent status update with anti-downgrade / anti-double-print guards */
+async function applyAgentJobStatus(jobId, status, errorMessage = '') {
+  const validStatuses = ['pending', 'printing', 'done', 'failed'];
+  if (!validStatuses.includes(status)) {
+    return { ok: false, code: 400, message: 'status غير صحيح' };
+  }
+
+  const job = await PrintJob.findById(jobId);
+  if (!job) {
+    return { ok: false, code: 404, message: 'الجوب مش موجود' };
+  }
+
+  // Human already confirmed paper — never let agent reopen/reprint via status churn
+  if (job.status === 'done' && job.paperConfirmed === 'yes') {
+    return { ok: true, skipped: true, job, reason: 'already-confirmed' };
+  }
+
+  // Never downgrade a successful print back to pending/printing/failed (stale catch-up reports)
+  if (job.status === 'done' && status !== 'done') {
+    return { ok: true, skipped: true, job, reason: 'refuse-downgrade-from-done' };
+  }
+
+  job.status = status;
+  job.errorMessage = errorMessage || '';
+
+  if (status === 'done') {
+    // Keep human confirmation if already yes; otherwise await confirmation
+    if (job.paperConfirmed !== 'yes') job.paperConfirmed = 'pending';
+  } else if (status === 'failed') {
+    job.paperConfirmed = 'no';
+  } else if (status === 'printing' || status === 'pending') {
+    if (job.paperConfirmed !== 'yes') job.paperConfirmed = 'pending';
+  }
+
+  await job.save();
+  return { ok: true, skipped: false, job };
+}
+
+exports.applyAgentJobStatus = applyAgentJobStatus;
+
 // PATCH /api/print/job/:id/status  — called by Print Agent to update status
 exports.updateJobStatus = async (req, res) => {
   try {
     const { status, errorMessage } = req.body;
-    const validStatuses = ['printing', 'done', 'failed'];
+    const result = await applyAgentJobStatus(req.params.id, status, errorMessage || '');
 
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ success: false, message: 'status غير صحيح' });
+    if (!result.ok) {
+      return res.status(result.code).json({ success: false, message: result.message });
     }
 
-    const update = { status, errorMessage: errorMessage || '' };
-    // Fresh agent result resets human confirmation
-    if (status === 'done') update.paperConfirmed = 'pending';
-    if (status === 'failed') update.paperConfirmed = 'no';
-    if (status === 'printing' || status === 'pending') update.paperConfirmed = 'pending';
-
-    const job = await PrintJob.findByIdAndUpdate(req.params.id, update, { new: true });
-
-    if (!job) {
-      return res.status(404).json({ success: false, message: 'الجوب مش موجود' });
+    const job = result.job;
+    if (!result.skipped) {
+      const io = getIO();
+      if (io) {
+        io.emit('print:job-status-updated', {
+          jobId: job._id,
+          status: job.status,
+          paperConfirmed: job.paperConfirmed,
+          errorMessage: job.errorMessage,
+        });
+      }
     }
 
-    // Broadcast status update to entry screens
-    const io = getIO();
-    if (io) {
-      io.emit('print:job-status-updated', {
-        jobId: job._id,
-        status: job.status,
-        paperConfirmed: job.paperConfirmed,
-        errorMessage: job.errorMessage,
-      });
-    }
-
-    return res.json({ success: true, job });
+    return res.json({ success: true, skipped: Boolean(result.skipped), job });
   } catch (err) {
     console.error('updateJobStatus error:', err);
     return res.status(500).json({ success: false, message: 'خطأ في السيرفر' });
@@ -178,8 +208,12 @@ function startOfCairoDay() {
 // GET /api/print/jobs/pending — Print Agent catch-up (agent secret required)
 exports.listPendingJobs = async (req, res) => {
   try {
-    // Include failed + stuck "printing" so catch-up works after sleep / kill
-    const jobs = await PrintJob.find({ status: { $in: ['pending', 'failed', 'printing'] } })
+    // Include failed + stuck "printing" so catch-up works after sleep / kill.
+    // Never include human-confirmed prints (prevents accidental reprints).
+    const jobs = await PrintJob.find({
+      status: { $in: ['pending', 'failed', 'printing'] },
+      paperConfirmed: { $ne: 'yes' },
+    })
       .sort({ createdAt: 1 })
       .limit(100);
 

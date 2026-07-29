@@ -32,12 +32,14 @@ const PRINTER_NAME    = config.PRINTER_NAME;
 const RECONNECT_DELAY = 3000; // ms
 const POLL_INTERVAL_MS = Number(config.POLL_INTERVAL_MS) || 20000;
 const PRINT_CONFIRM_TIMEOUT_MS = Number(config.PRINT_CONFIRM_TIMEOUT_MS) || 90000;
+const PRINTER_CHECK_MS = Number(config.PRINTER_CHECK_MS) || 10000;
 
 console.log('🖨️  Elegance Print Agent starting...');
 console.log(`   Server  : ${SERVER_URL}`);
 console.log(`   Printer : ${PRINTER_NAME}`);
 console.log(`   Poll    : every ${POLL_INTERVAL_MS / 1000}s`);
 console.log(`   Confirm : ${PRINT_CONFIRM_TIMEOUT_MS / 1000}s spooler timeout`);
+console.log(`   Printer check: every ${PRINTER_CHECK_MS / 1000}s`);
 
 // ── Keep Windows from sleeping while agent runs ───────────
 function enableKeepAwake() {
@@ -83,40 +85,72 @@ const socket = io(SERVER_URL, {
 
 socket.on('connect', () => {
   console.log('✅ Connected to server. Waiting for print jobs...');
-  // Immediate catch-up in case socket push raced or was missed while asleep
-  fetchAndEnqueuePending('connect');
+  // Burst catch-up: network often stabilizes a few seconds after socket reconnect
+  catchUpBurst('connect');
 });
 
 socket.on('connect_error', (err) => {
+  networkDown = true;
   console.error('❌ Connection error:', err.message);
 });
 
 socket.on('disconnect', (reason) => {
+  networkDown = true;
   console.warn('⚠️  Disconnected:', reason, '— will reconnect automatically...');
 });
 
 // ── Print Queue Management ────────────────────────────────
 const jobQueue = [];
-const queuedOrDone = new Set(); // dedupe across socket push + HTTP poll
+/** IDs currently waiting in the local queue */
+const queuedIds = new Set();
+/** IDs finished successfully this process lifetime (may still be pending on server if status sync failed) */
+const completedIds = new Set();
+let currentJobId = null;
 let isProcessingQueue = false;
+let networkDown = false;
+let printerDown = false;
+let lastPrinterOk = null;
 
 function normalizeJobId(jobId) {
   return String(jobId);
 }
 
-function enqueueJob(job, source) {
+function isPrinterIssueError(message) {
+  return /printer|offline|not ready|not found|spooler/i.test(String(message || ''));
+}
+
+function isInPipeline(id) {
+  return queuedIds.has(id) || currentJobId === id;
+}
+
+/**
+ * @param {object} job
+ * @param {string} source
+ * @param {{ fromServerCatchUp?: boolean }} [opts]
+ */
+function enqueueJob(job, source, opts = {}) {
   const id = normalizeJobId(job.jobId);
   if (!id || id === 'undefined' || id === 'null') {
     console.warn('⚠️  Ignoring job without jobId from', source);
-    return;
+    return false;
   }
-  if (queuedOrDone.has(id)) {
-    return; // already queued / printed / failed this session
+
+  if (isInPipeline(id)) {
+    return false;
   }
-  queuedOrDone.add(id);
+
+  // Critical: once printed successfully this session, NEVER reprint —
+  // even if a catch-up poll still sees the job as pending/printing (race before done sync).
+  if (completedIds.has(id)) {
+    console.log(`⏭️  Skip ${id} (already printed this session, via ${source})`);
+    return false;
+  }
+
+  queuedIds.add(id);
   jobQueue.push({ jobId: id, printData: job.printData || {} });
   console.log(`📥 Queued job ${id} (via ${source})`);
   processQueue();
+  return true;
 }
 
 function sleep(ms) {
@@ -314,11 +348,20 @@ async function processQueue() {
 
   while (jobQueue.length > 0) {
     const job = jobQueue.shift();
+    queuedIds.delete(job.jobId);
+    currentJobId = job.jobId;
+
+    if (completedIds.has(job.jobId)) {
+      console.log(`⏭️  Skip processing ${job.jobId} — already printed this session`);
+      currentJobId = null;
+      continue;
+    }
+
     console.log(`\n📄 Processing print job: ${job.jobId}`);
     console.log(`   Patient: ${job.printData.patient} | Doctor: ${job.printData.doctor}`);
 
     try {
-      reportStatus(job.jobId, 'printing');
+      await reportStatus(job.jobId, 'printing');
 
       await assertPrinterReady(PRINTER_NAME);
       console.log(`   ✅ Printer ready: ${PRINTER_NAME}`);
@@ -337,29 +380,47 @@ async function processQueue() {
       const confirm = await waitForPrintConfirmation(PRINTER_NAME, beforeIds);
       console.log(`   🖨️  Print confirmed (${confirm.mode}) on [${PRINTER_NAME}]`);
 
-      reportStatus(job.jobId, 'done');
+      // Mark done locally FIRST so overlapping catch-up cannot re-queue this job
+      completedIds.add(job.jobId);
+      await reportStatus(job.jobId, 'done');
       fs.unlink(pdfPath, () => {});
     } catch (err) {
       console.error(`   ❌ Print failed:`, err.message);
-      // Allow retry on next poll/reconnect for transient failures
-      queuedOrDone.delete(job.jobId);
-      reportStatus(job.jobId, 'failed', err.message);
+      if (completedIds.has(job.jobId)) {
+        // Shouldn't happen, but never downgrade a completed print
+        console.warn('   ⚠️  Ignoring failure after local completion');
+      } else if (isPrinterIssueError(err.message)) {
+        printerDown = true;
+        await reportStatus(job.jobId, 'pending', `Waiting for printer: ${err.message}`);
+        console.log('   ⏳ Job held as pending — will print when printer/agent is back');
+      } else {
+        await reportStatus(job.jobId, 'failed', err.message);
+      }
+    } finally {
+      currentJobId = null;
     }
   }
 
   isProcessingQueue = false;
 }
 
-function reportStatus(jobId, status, error) {
+async function reportStatus(jobId, status, error) {
+  // Never send a downgrade if we already completed this job locally
+  if (completedIds.has(normalizeJobId(jobId)) && status !== 'done') {
+    console.log(`   ⏭️  Skip status "${status}" for ${jobId} (already completed locally)`);
+    return;
+  }
+
   const payload = { jobId, status, error: error || '' };
   if (socket.connected) {
     socket.emit('print:job-status', payload);
   }
-  // Also PATCH over HTTP so status is saved even if socket drops mid-print
   const url = `${SERVER_URL}/api/print/job/${encodeURIComponent(jobId)}/status`;
-  httpJson('PATCH', url, { status, errorMessage: error || '' }).catch((err) => {
+  try {
+    await httpJson('PATCH', url, { status, errorMessage: error || '' });
+  } catch (err) {
     console.warn(`   ⚠️  Status HTTP update failed (${status}):`, err.message);
-  });
+  }
 }
 
 // ── Receive print job (realtime) ──────────────────────────
@@ -422,30 +483,98 @@ async function fetchAndEnqueuePending(reason) {
   try {
     const res = await httpJson('GET', `${SERVER_URL}/api/print/jobs/pending`);
     const jobs = res.jobs || [];
+
+    const wasDown = networkDown;
+    if (wasDown) {
+      console.log('🌐 Network restored — catching up missed print jobs...');
+      networkDown = false;
+    }
+
     if (jobs.length === 0) {
-      if (reason === 'connect') {
+      if (reason === 'connect' || String(reason).startsWith('connect') || wasDown) {
         console.log('   No pending jobs to catch up.');
       }
-      return;
+      if (wasDown && reason === 'interval') {
+        catchUpBurst('net-restore');
+      }
+      return true;
     }
-    console.log(`🔁 Catch-up (${reason}): ${jobs.length} pending job(s)`);
+
+    // If printer is down, hold jobs on server as pending — don't burn them as failed
+    const health = await getPrinterHealth(PRINTER_NAME);
+    if (!health.ok) {
+      printerDown = true;
+      lastPrinterOk = false;
+      console.warn(
+        `⏳ Printer not ready (${health.error || 'unknown'}) — holding ${jobs.length} unfinished job(s) until printer is back`
+      );
+      return true;
+    }
+
+    if (printerDown || lastPrinterOk === false) {
+      console.log('🖨️  Printer ready — releasing held print jobs...');
+      printerDown = false;
+    }
+    lastPrinterOk = true;
+
+    let added = 0;
     for (const job of jobs) {
-      enqueueJob(job, `poll:${reason}`);
+      const ok = enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true });
+      if (ok) added += 1;
     }
+    console.log(
+      `🔁 Catch-up (${reason}): server has ${jobs.length} unfinished job(s), queued ${added} new`
+    );
+    if (wasDown && reason === 'interval') {
+      catchUpBurst('net-restore');
+    }
+    return true;
   } catch (err) {
+    networkDown = true;
     console.warn(`⚠️  Pending poll failed (${reason}):`, err.message);
+    return false;
   }
+}
+
+/** Several catch-up attempts after reconnect — covers slow DNS / flaky Wi‑Fi / PC boot */
+function catchUpBurst(reason) {
+  fetchAndEnqueuePending(reason);
+  setTimeout(() => fetchAndEnqueuePending(`${reason}+2s`), 2000);
+  setTimeout(() => fetchAndEnqueuePending(`${reason}+5s`), 5000);
+  setTimeout(() => fetchAndEnqueuePending(`${reason}+15s`), 15000);
+  setTimeout(() => fetchAndEnqueuePending(`${reason}+30s`), 30000);
 }
 
 // Poll forever — covers sleep wake, missed socket events, and PC restarts
 setInterval(() => fetchAndEnqueuePending('interval'), POLL_INTERVAL_MS);
 
-// Extra catch-up when the OS resumes (network often comes back a few seconds later)
-if (typeof process.on === 'function') {
-  // Node has no native "resume" event; poll shortly after process signals / focus via interval is enough.
-  // Also run once shortly after start in case connect is slow.
-  setTimeout(() => fetchAndEnqueuePending('startup'), 5000);
-}
+// Watch printer USB/power — when it comes back, print everything waiting
+setInterval(async () => {
+  try {
+    const health = await getPrinterHealth(PRINTER_NAME);
+    const ok = Boolean(health.ok);
+    if (lastPrinterOk === false && ok) {
+      console.log('🖨️  Printer came back online — catching up held jobs...');
+      printerDown = false;
+      lastPrinterOk = true;
+      catchUpBurst('printer-restore');
+    } else if (lastPrinterOk === true && !ok) {
+      printerDown = true;
+      lastPrinterOk = false;
+      console.warn(`⚠️  Printer went offline: ${health.error || 'not ready'}`);
+    } else if (lastPrinterOk === null) {
+      lastPrinterOk = ok;
+      printerDown = !ok;
+      console.log(ok ? `   Printer status: ready` : `   Printer status: NOT ready (${health.error || ''})`);
+    }
+  } catch (err) {
+    console.warn('⚠️  Printer health check failed:', err.message);
+  }
+}, PRINTER_CHECK_MS);
+
+// Catch-up on boot / agent restart (laptop was off, service just started)
+catchUpBurst('startup');
+setTimeout(() => catchUpBurst('startup-late'), 8000);
 
 // Find local Chrome/Edge executable path to avoid downloading Chromium
 function getLocalBrowserPath() {
