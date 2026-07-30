@@ -459,9 +459,6 @@ export class EntryComponent implements OnInit, OnDestroy {
         this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
       }
     });
-
-    // Also trigger local popup print as fallback
-    setTimeout(() => this.printCaseCard(createdCase), 100);
   }
 
   logout(): void {
