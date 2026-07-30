@@ -59,6 +59,108 @@ const sanitizeNotesMetaString = (notes) => {
   }
 };
 
+function normalizeArabicQuestion(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function monthNameAr(monthNumber) {
+  const names = [
+    '',
+    'يناير',
+    'فبراير',
+    'مارس',
+    'أبريل',
+    'مايو',
+    'يونيو',
+    'يوليو',
+    'أغسطس',
+    'سبتمبر',
+    'أكتوبر',
+    'نوفمبر',
+    'ديسمبر',
+  ];
+  return names[monthNumber] || '';
+}
+
+function monthNumberFromQuestion(question) {
+  const q = normalizeArabicQuestion(question);
+  const monthMap = {
+    يناير: 1,
+    فبراير: 2,
+    مارس: 3,
+    ابريل: 4,
+    أبريل: 4,
+    مايو: 5,
+    يونيو: 6,
+    يوليو: 7,
+    اغسطس: 8,
+    أغسطس: 8,
+    سبتمبر: 9,
+    اكتوبر: 10,
+    أكتوبر: 10,
+    نوفمبر: 11,
+    ديسمبر: 12,
+  };
+  for (const [name, number] of Object.entries(monthMap)) {
+    if (q.includes(normalizeArabicQuestion(name))) return number;
+  }
+  return null;
+}
+
+function doctorNameFromCase(doc) {
+  const notesMeta = parseNotesMeta(doc.notes || '');
+  return String(
+    notesMeta.doctor ||
+      notesMeta.doctorName ||
+      (doc.assignedTo && doc.assignedTo.fullName) ||
+      'غير محدد'
+  )
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function caseExitedDate(doc) {
+  return doc?.stageTimestamps?.exited
+    ? new Date(doc.stageTimestamps.exited)
+    : doc?.updatedAt
+      ? new Date(doc.updatedAt)
+      : doc?.createdAt
+        ? new Date(doc.createdAt)
+        : new Date();
+}
+
+async function getExitedFinancialRows() {
+  const cases = await DentalCase.find({ currentStage: 'exited' })
+    .populate('assignedTo', 'fullName')
+    .populate('createdBy', 'fullName')
+    .sort({ createdAt: -1 });
+
+  return cases.map((doc) => {
+    const exitedAt = caseExitedDate(doc);
+    return {
+      id: String(doc._id),
+      caseNumber: String(doc.caseNumber || ''),
+      patientName: String(doc.patientName || ''),
+      caseType: String(doc.caseType || ''),
+      doctorName: doctorNameFromCase(doc),
+      salaryAmount: Number(doc.salaryAmount || 0),
+      paymentStatus: String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid',
+      exitedAt,
+      month: exitedAt.getMonth() + 1,
+      year: exitedAt.getFullYear(),
+    };
+  });
+}
+
+function monthRange(rows, year, month) {
+  return rows.filter((row) => row.year === year && row.month === month);
+}
+
 // Create a new case
 exports.createCase = async (req, res) => {
   try {
@@ -298,6 +400,139 @@ exports.getFinancialReport = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch financial report',
+      error: error.message,
+    });
+  }
+};
+
+// Financial chat assistant (admin only)
+exports.getFinancialAssistantAnswer = async (req, res) => {
+  try {
+    const question = String(req.query.question || '').trim();
+    if (!question) {
+      return res.status(400).json({ success: false, message: 'question is required' });
+    }
+
+    const q = normalizeArabicQuestion(question);
+    const rows = await getExitedFinancialRows();
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    let answer = '';
+    let data = null;
+
+    if (q.includes('كام ارباح الشهر') || q.includes('ارباح الشهر ده') || q.includes('اجمالي الشهر ده')) {
+      const thisMonthRows = monthRange(rows, currentYear, currentMonth);
+      const total = thisMonthRows.reduce((sum, row) => sum + row.salaryAmount, 0);
+      const paid = thisMonthRows
+        .filter((row) => row.paymentStatus === 'paid')
+        .reduce((sum, row) => sum + row.salaryAmount, 0);
+      const unpaid = total - paid;
+      answer =
+        `إجمالي شهر ${monthNameAr(currentMonth)} ${currentYear} هو ${total.toLocaleString('en-US')} EGP. ` +
+        `المدفوع ${paid.toLocaleString('en-US')} EGP والمتبقي ${unpaid.toLocaleString('en-US')} EGP ` +
+        `على ${thisMonthRows.length} حالة خارجة.`;
+      data = { type: 'monthly-profit', month: currentMonth, year: currentYear, total, paid, unpaid, cases: thisMonthRows.length };
+    } else if (q.includes('قارن') && q.includes('يونيو') && q.includes('يوليو')) {
+      const juneRows = monthRange(rows, currentYear, 6);
+      const julyRows = monthRange(rows, currentYear, 7);
+      const juneTotal = juneRows.reduce((sum, row) => sum + row.salaryAmount, 0);
+      const julyTotal = julyRows.reduce((sum, row) => sum + row.salaryAmount, 0);
+      const diff = julyTotal - juneTotal;
+      const direction = diff === 0 ? 'مساوي' : diff > 0 ? 'أعلى' : 'أقل';
+      answer =
+        `يونيو ${currentYear}: ${juneTotal.toLocaleString('en-US')} EGP من ${juneRows.length} حالة. ` +
+        `يوليو ${currentYear}: ${julyTotal.toLocaleString('en-US')} EGP من ${julyRows.length} حالة. ` +
+        `يوليو ${direction} من يونيو بمقدار ${Math.abs(diff).toLocaleString('en-US')} EGP.`;
+      data = {
+        type: 'month-compare',
+        year: currentYear,
+        june: { total: juneTotal, cases: juneRows.length },
+        july: { total: julyTotal, cases: julyRows.length },
+        difference: diff,
+      };
+    } else if (
+      q.includes('اكتر 5') &&
+      (q.includes('دكاتره') || q.includes('اطباء') || q.includes('اطبا'))
+    ) {
+      const topDoctors = Object.values(
+        rows.reduce((acc, row) => {
+          const key = row.doctorName.toLowerCase();
+          if (!acc[key]) {
+            acc[key] = { doctorName: row.doctorName, cases: 0, totalAmount: 0 };
+          }
+          acc[key].cases += 1;
+          acc[key].totalAmount += row.salaryAmount;
+          return acc;
+        }, {})
+      )
+        .sort((a, b) => b.totalAmount - a.totalAmount || b.cases - a.cases)
+        .slice(0, 5);
+      answer =
+        topDoctors.length > 0
+          ? 'أكتر 5 دكاترة حسب إجمالي الشغل: ' +
+            topDoctors
+              .map(
+                (doctor, index) =>
+                  `${index + 1}) ${doctor.doctorName} — ${doctor.totalAmount.toLocaleString('en-US')} EGP (${doctor.cases} حالة)`
+              )
+              .join(' | ')
+          : 'لا توجد بيانات كافية لحساب أعلى الدكاترة.';
+      data = { type: 'top-doctors', rows: topDoctors };
+    } else if (
+      q.includes('الحالات الخارجه') &&
+      (q.includes('غير المدفوعه') || q.includes('غير مدفوعه') || q.includes('unpaid'))
+    ) {
+      const unpaidRows = rows
+        .filter((row) => row.paymentStatus === 'unpaid')
+        .slice(0, 20)
+        .map((row) => ({
+          caseNumber: row.caseNumber,
+          patientName: row.patientName,
+          doctorName: row.doctorName,
+          salaryAmount: row.salaryAmount,
+        }));
+      const totalUnpaid = rows
+        .filter((row) => row.paymentStatus === 'unpaid')
+        .reduce((sum, row) => sum + row.salaryAmount, 0);
+      answer =
+        unpaidRows.length > 0
+          ? `يوجد ${rows.filter((row) => row.paymentStatus === 'unpaid').length} حالة خارجة غير مدفوعة بإجمالي ${totalUnpaid.toLocaleString('en-US')} EGP.`
+          : 'لا توجد حالات خارجة غير مدفوعة.';
+      data = { type: 'unpaid-exited', totalUnpaid, rows: unpaidRows };
+    } else if (
+      q.includes('متوسط سعر') &&
+      (q.includes('zircon') || q.includes('زيركون'))
+    ) {
+      const targetMonth = monthNumberFromQuestion(q) || currentMonth;
+      const zirconRows = monthRange(rows, currentYear, targetMonth).filter((row) =>
+        String(row.caseType || '').toLowerCase().includes('zircon')
+      );
+      const avg = zirconRows.length
+        ? zirconRows.reduce((sum, row) => sum + row.salaryAmount, 0) / zirconRows.length
+        : 0;
+      answer =
+        zirconRows.length > 0
+          ? `متوسط سعر الـ Zircon في ${monthNameAr(targetMonth)} ${currentYear} هو ${avg.toFixed(2)} EGP على ${zirconRows.length} حالة.`
+          : `لا توجد حالات Zircon في ${monthNameAr(targetMonth)} ${currentYear}.`;
+      data = { type: 'avg-zircon', month: targetMonth, year: currentYear, average: avg, cases: zirconRows.length };
+    } else {
+      answer =
+        'أقدر أجاوب حاليًا على: أرباح الشهر ده، مقارنة يونيو ويوليو، أعلى 5 دكاترة، الحالات الخارجة غير المدفوعة، ومتوسط سعر Zircon للشهر.';
+      data = { type: 'unsupported' };
+    }
+
+    return res.status(200).json({
+      success: true,
+      question,
+      answer,
+      data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to answer financial question',
       error: error.message,
     });
   }

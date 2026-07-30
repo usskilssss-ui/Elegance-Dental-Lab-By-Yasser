@@ -37,6 +37,11 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/financial-report${query}`);
   }
 
+  askFinancialAssistant(question: string): Observable<any> {
+    const query = `?question=${encodeURIComponent(question)}`;
+    return this.http.get(`${this.apiUrl}/financial-assistant${query}`);
+  }
+
   // Get case by ID
   getCaseById(id: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/${id}`);

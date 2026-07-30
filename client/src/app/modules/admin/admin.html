@@ -585,6 +585,64 @@
           </div>
         </div>
 
+        <section class="financial-assistant-card" aria-label="شات الحسابات الذكي">
+          <div class="financial-assistant-head">
+            <div>
+              <div class="financial-assistant-label">مساعد مالي ذكي</div>
+              <h3 class="financial-assistant-title">اسأل عن الحسابات بالعربي</h3>
+            </div>
+          </div>
+
+          <div class="financial-assistant-suggestions">
+            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('كام أرباح الشهر ده؟')">
+              أرباح الشهر ده
+            </button>
+            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('قارن بين يونيو ويوليو')">
+              مقارنة يونيو ويوليو
+            </button>
+            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('مين أكتر 5 دكاترة جابوا شغل؟')">
+              أعلى 5 دكاترة
+            </button>
+            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('هات الحالات الخارجة غير المدفوعة')">
+              خارجة غير مدفوعة
+            </button>
+            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('كام متوسط سعر الـ Zircon الشهر ده؟')">
+              متوسط Zircon
+            </button>
+          </div>
+
+          <div class="financial-assistant-messages">
+            @for (msg of financialAssistantMessages; track $index) {
+              <div class="assistant-message" [class.assistant-message--user]="msg.role === 'user'">
+                <span class="assistant-message-role">{{ msg.role === 'user' ? 'أنت' : 'المساعد' }}</span>
+                <p>{{ msg.text }}</p>
+              </div>
+            }
+            @if (financialAssistantLoading) {
+              <div class="assistant-message assistant-message--assistant">
+                <span class="assistant-message-role">المساعد</span>
+                <p>جاري تحليل السؤال...</p>
+              </div>
+            }
+          </div>
+
+          <form class="financial-assistant-form" (ngSubmit)="askFinancialAssistant()">
+            <input
+              type="text"
+              name="financialAssistantQuestion"
+              [(ngModel)]="financialAssistantQuestion"
+              placeholder="اكتب سؤالك المالي هنا..."
+              [disabled]="financialAssistantLoading"
+            />
+            <button type="submit" class="assistant-send-btn" [disabled]="financialAssistantLoading || !financialAssistantQuestion.trim()">
+              {{ financialAssistantLoading ? 'جاري الإرسال...' : 'اسأل' }}
+            </button>
+          </form>
+          @if (financialAssistantError) {
+            <p class="financial-assistant-error">{{ financialAssistantError }}</p>
+          }
+        </section>
+
         <div class="finance-year-list" *ngIf="groupedFinancialSummary.length; else noFinanceData">
           <div class="finance-year-card" *ngFor="let yearGroup of groupedFinancialSummary">
             <div class="finance-year-head">

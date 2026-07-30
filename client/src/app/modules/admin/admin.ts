@@ -122,6 +122,12 @@ export interface AdminPatient {
   address: string;
 }
 
+export interface FinancialChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: Date;
+}
+
 @Component({
   selector: 'app-admin',
   imports: [CommonModule, FormsModule, RouterModule],
@@ -182,6 +188,17 @@ export class Admin implements OnInit, OnDestroy {
   showDoctorDetailsModal = false;
   financialSaveError = '';
   studentReportSearch = '';
+  financialAssistantQuestion = '';
+  financialAssistantLoading = false;
+  financialAssistantError = '';
+  financialAssistantMessages: FinancialChatMessage[] = [
+    {
+      role: 'assistant',
+      text:
+        'اسألني مثل: كام أرباح الشهر ده؟ قارن بين يونيو ويوليو. مين أكتر 5 دكاترة جابوا شغل؟ هات الحالات الخارجة غير المدفوعة. كام متوسط سعر الـ Zircon الشهر ده؟',
+      createdAt: new Date(),
+    },
+  ];
 
   patientCases: PatientCase[] = [];
   patients: AdminPatient[] = [];
@@ -1541,6 +1558,49 @@ export class Admin implements OnInit, OnDestroy {
     } else if (nav === 'reports') {
       this.loadFinancialReportFromApi();
     }
+  }
+
+  askFinancialAssistant(presetQuestion?: string): void {
+    const question = (presetQuestion ?? this.financialAssistantQuestion).trim();
+    if (!question || this.financialAssistantLoading) return;
+
+    this.financialAssistantError = '';
+    this.financialAssistantMessages = [
+      ...this.financialAssistantMessages,
+      { role: 'user', text: question, createdAt: new Date() },
+    ];
+    this.financialAssistantQuestion = '';
+    this.financialAssistantLoading = true;
+
+    this.caseApi.askFinancialAssistant(question).subscribe({
+      next: (res) => {
+        this.financialAssistantLoading = false;
+        this.financialAssistantMessages = [
+          ...this.financialAssistantMessages,
+          {
+            role: 'assistant',
+            text: String(res?.answer || 'تعذر توليد الإجابة'),
+            createdAt: new Date(),
+          },
+        ];
+      },
+      error: (err: unknown) => {
+        this.financialAssistantLoading = false;
+        const message =
+          err instanceof HttpErrorResponse
+            ? String(err.error?.message || err.message || 'تعذر تحليل السؤال')
+            : 'تعذر تحليل السؤال';
+        this.financialAssistantError = message;
+        this.financialAssistantMessages = [
+          ...this.financialAssistantMessages,
+          {
+            role: 'assistant',
+            text: `تعذر الرد الآن: ${message}`,
+            createdAt: new Date(),
+          },
+        ];
+      },
+    });
   }
 
   openAddStaffModal() {
