@@ -72,7 +72,6 @@ router.post(
 );
 
 router.get('/financial-report', authorize('admin'), caseController.getFinancialReport);
-router.get('/financial-assistant', authorize('admin'), caseController.getFinancialAssistantAnswer);
 
 // Get case by ID
 router.get('/:id', caseController.getCaseById);

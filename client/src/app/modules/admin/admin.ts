@@ -8,6 +8,7 @@ import { AdminDashboardService } from '../../core/services/admin-dashboard.servi
 import { AuthService } from '../../core/services/auth.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import { CaseApiService } from '../../core/services/case-api.service';
+import { AiApiService } from '../../core/services/ai-api.service';
 import { Subject, merge } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
@@ -122,7 +123,7 @@ export interface AdminPatient {
   address: string;
 }
 
-export interface FinancialChatMessage {
+export interface AiChatMessage {
   role: 'user' | 'assistant';
   text: string;
   createdAt: Date;
@@ -188,14 +189,18 @@ export class Admin implements OnInit, OnDestroy {
   showDoctorDetailsModal = false;
   financialSaveError = '';
   studentReportSearch = '';
-  financialAssistantQuestion = '';
-  financialAssistantLoading = false;
-  financialAssistantError = '';
-  financialAssistantMessages: FinancialChatMessage[] = [
+  aiQuestion = '';
+  aiLoading = false;
+  aiError = '';
+  aiMessages: AiChatMessage[] = [
     {
       role: 'assistant',
       text:
-        'اسألني مثل: كام أرباح الشهر ده؟ قارن بين يونيو ويوليو. مين أكتر 5 دكاترة جابوا شغل؟ هات الحالات الخارجة غير المدفوعة. كام متوسط سعر الـ Zircon الشهر ده؟',
+        'أنا مساعد المعمل الذكي. اسألني عن أي شيء:\n' +
+        '• ملخص المعمل • كام حالة في التصميم؟ • حالات متأخرة • حالات محتاجة تعديل\n' +
+        '• كام أرباح الشهر ده؟ • أعلى 5 دكاترة • غير المدفوعة\n' +
+        '• ابحث برقم الحالة أو اسم المريض أو الدكتور\n' +
+        '• الموظفين • الطباعة • اكتب "مساعدة" لكل الأوامر',
       createdAt: new Date(),
     },
   ];
@@ -226,6 +231,7 @@ export class Admin implements OnInit, OnDestroy {
 
   constructor(
     private caseApi: CaseApiService,
+    private aiApi: AiApiService,
     private adminDashboardService: AdminDashboardService,
     private auth: AuthService,
     private userApi: UserApiService,
@@ -1560,23 +1566,23 @@ export class Admin implements OnInit, OnDestroy {
     }
   }
 
-  askFinancialAssistant(presetQuestion?: string): void {
-    const question = (presetQuestion ?? this.financialAssistantQuestion).trim();
-    if (!question || this.financialAssistantLoading) return;
+  askAi(presetQuestion?: string): void {
+    const question = (presetQuestion ?? this.aiQuestion).trim();
+    if (!question || this.aiLoading) return;
 
-    this.financialAssistantError = '';
-    this.financialAssistantMessages = [
-      ...this.financialAssistantMessages,
+    this.aiError = '';
+    this.aiMessages = [
+      ...this.aiMessages,
       { role: 'user', text: question, createdAt: new Date() },
     ];
-    this.financialAssistantQuestion = '';
-    this.financialAssistantLoading = true;
+    this.aiQuestion = '';
+    this.aiLoading = true;
 
-    this.caseApi.askFinancialAssistant(question).subscribe({
+    this.aiApi.askAssistant(question).subscribe({
       next: (res) => {
-        this.financialAssistantLoading = false;
-        this.financialAssistantMessages = [
-          ...this.financialAssistantMessages,
+        this.aiLoading = false;
+        this.aiMessages = [
+          ...this.aiMessages,
           {
             role: 'assistant',
             text: String(res?.answer || 'تعذر توليد الإجابة'),
@@ -1585,14 +1591,14 @@ export class Admin implements OnInit, OnDestroy {
         ];
       },
       error: (err: unknown) => {
-        this.financialAssistantLoading = false;
+        this.aiLoading = false;
         const message =
           err instanceof HttpErrorResponse
             ? String(err.error?.message || err.message || 'تعذر تحليل السؤال')
             : 'تعذر تحليل السؤال';
-        this.financialAssistantError = message;
-        this.financialAssistantMessages = [
-          ...this.financialAssistantMessages,
+        this.aiError = message;
+        this.aiMessages = [
+          ...this.aiMessages,
           {
             role: 'assistant',
             text: `تعذر الرد الآن: ${message}`,

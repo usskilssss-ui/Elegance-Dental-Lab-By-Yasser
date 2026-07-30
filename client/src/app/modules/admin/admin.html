@@ -20,7 +20,10 @@
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
       التقارير
     </div>
-
+    <div class="nav-item" [class.active]="activeNav === 'ai'" (click)="setNav('ai')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M9 14h6"/></svg>
+      AI
+    </div>
 
     <div class="sidebar-bottom">
       <div class="nav-item" (click)="logout()" role="button" tabindex="0" (keydown.enter)="logout()" (keydown.space)="$event.preventDefault(); logout()">
@@ -585,64 +588,6 @@
           </div>
         </div>
 
-        <section class="financial-assistant-card" aria-label="شات الحسابات الذكي">
-          <div class="financial-assistant-head">
-            <div>
-              <div class="financial-assistant-label">مساعد مالي ذكي</div>
-              <h3 class="financial-assistant-title">اسأل عن الحسابات بالعربي</h3>
-            </div>
-          </div>
-
-          <div class="financial-assistant-suggestions">
-            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('كام أرباح الشهر ده؟')">
-              أرباح الشهر ده
-            </button>
-            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('قارن بين يونيو ويوليو')">
-              مقارنة يونيو ويوليو
-            </button>
-            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('مين أكتر 5 دكاترة جابوا شغل؟')">
-              أعلى 5 دكاترة
-            </button>
-            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('هات الحالات الخارجة غير المدفوعة')">
-              خارجة غير مدفوعة
-            </button>
-            <button type="button" class="assistant-chip" (click)="askFinancialAssistant('كام متوسط سعر الـ Zircon الشهر ده؟')">
-              متوسط Zircon
-            </button>
-          </div>
-
-          <div class="financial-assistant-messages">
-            @for (msg of financialAssistantMessages; track $index) {
-              <div class="assistant-message" [class.assistant-message--user]="msg.role === 'user'">
-                <span class="assistant-message-role">{{ msg.role === 'user' ? 'أنت' : 'المساعد' }}</span>
-                <p>{{ msg.text }}</p>
-              </div>
-            }
-            @if (financialAssistantLoading) {
-              <div class="assistant-message assistant-message--assistant">
-                <span class="assistant-message-role">المساعد</span>
-                <p>جاري تحليل السؤال...</p>
-              </div>
-            }
-          </div>
-
-          <form class="financial-assistant-form" (ngSubmit)="askFinancialAssistant()">
-            <input
-              type="text"
-              name="financialAssistantQuestion"
-              [(ngModel)]="financialAssistantQuestion"
-              placeholder="اكتب سؤالك المالي هنا..."
-              [disabled]="financialAssistantLoading"
-            />
-            <button type="submit" class="assistant-send-btn" [disabled]="financialAssistantLoading || !financialAssistantQuestion.trim()">
-              {{ financialAssistantLoading ? 'جاري الإرسال...' : 'اسأل' }}
-            </button>
-          </form>
-          @if (financialAssistantError) {
-            <p class="financial-assistant-error">{{ financialAssistantError }}</p>
-          }
-        </section>
-
         <div class="finance-year-list" *ngIf="groupedFinancialSummary.length; else noFinanceData">
           <div class="finance-year-card" *ngFor="let yearGroup of groupedFinancialSummary">
             <div class="finance-year-head">
@@ -1141,6 +1086,69 @@
             </div>
           </div>
         </div>
+      </ng-container>
+
+      <!-- AI VIEW -->
+      <ng-container *ngIf="activeNav === 'ai'">
+        <div class="page-header">
+          <div>
+            <div class="page-label">مساعد ذكي</div>
+            <div class="page-title">AI</div>
+          </div>
+        </div>
+
+        <section class="financial-assistant-card" aria-label="مساعد المعمل الذكي">
+          <div class="financial-assistant-head">
+            <div>
+              <div class="financial-assistant-label">مساعد المعمل</div>
+              <h3 class="financial-assistant-title">اسأل عن أي شيء في النظام</h3>
+            </div>
+          </div>
+
+          <div class="financial-assistant-suggestions">
+            <button type="button" class="assistant-chip" (click)="askAi('ملخص المعمل')">ملخص المعمل</button>
+            <button type="button" class="assistant-chip" (click)="askAi('كام حالة في التصميم؟')">حالات التصميم</button>
+            <button type="button" class="assistant-chip" (click)="askAi('حالات متأخرة')">متأخرة</button>
+            <button type="button" class="assistant-chip" (click)="askAi('حالات محتاجة تعديل')">محتاجة تعديل</button>
+            <button type="button" class="assistant-chip" (click)="askAi('كام أرباح الشهر ده؟')">أرباح الشهر</button>
+            <button type="button" class="assistant-chip" (click)="askAi('مين أكتر 5 دكاترة جابوا شغل؟')">أعلى 5 دكاترة</button>
+            <button type="button" class="assistant-chip" (click)="askAi('هات الحالات الخارجة غير المدفوعة')">غير مدفوعة</button>
+            <button type="button" class="assistant-chip" (click)="askAi('كام موظف عندنا؟')">الموظفون</button>
+            <button type="button" class="assistant-chip" (click)="askAi('حالة الطباعة')">الطباعة</button>
+            <button type="button" class="assistant-chip" (click)="askAi('مساعدة')">مساعدة</button>
+          </div>
+
+          <div class="financial-assistant-messages">
+            @for (msg of aiMessages; track $index) {
+              <div class="assistant-message" [class.assistant-message--user]="msg.role === 'user'">
+                <span class="assistant-message-role">{{ msg.role === 'user' ? 'أنت' : 'AI' }}</span>
+                <p>{{ msg.text }}</p>
+              </div>
+            }
+            @if (aiLoading) {
+              <div class="assistant-message">
+                <span class="assistant-message-role">AI</span>
+                <p>جاري التحليل...</p>
+              </div>
+            }
+          </div>
+
+          <form class="financial-assistant-form" (ngSubmit)="askAi()">
+            <input
+              type="text"
+              name="aiQuestion"
+              [(ngModel)]="aiQuestion"
+              placeholder="اسأل عن الحالات، المالية، الموظفين، الطباعة..."
+              [disabled]="aiLoading"
+            />
+            <button type="submit" class="assistant-send-btn" [disabled]="aiLoading || !aiQuestion.trim()">
+              {{ aiLoading ? 'جاري الإرسال...' : 'اسأل' }}
+            </button>
+          </form>
+          @if (aiError) {
+            <p class="financial-assistant-error">{{ aiError }}</p>
+          }
+        </section>
       </ng-container>
 
 
