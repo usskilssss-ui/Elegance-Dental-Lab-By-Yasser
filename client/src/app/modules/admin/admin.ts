@@ -158,6 +158,9 @@ export class Admin implements OnInit, OnDestroy {
   set reportDoctorFilter(val: string) {
     this._reportDoctorFilter = val;
     if (val) {
+      this.reportYearFilter = '';
+      this.reportMonthFilter = '';
+      this.reportSearch = '';
       this.loadCustomPricesForDoctor(val);
     }
   }
@@ -1582,6 +1585,9 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   setNav(nav: string) {
+    if (nav === 'ai') {
+      nav = 'dashboard';
+    }
     this.activeNav = nav;
     this.persistActiveNav();
     if (nav === 'staff') {
