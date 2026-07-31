@@ -106,67 +106,14 @@ export class Secretary implements OnInit, OnDestroy {
   readonly activeFilter = signal<
     'all' | 'pending' | 'in-progress' | 'under-khart' | 'finished' | 'exited'
   >('all');
-  readonly exitYearFilter = signal<string>('');
-  readonly exitMonthFilter = signal<string>('');
   readonly casesLoading = signal(false);
   readonly saveInProgress = signal(false);
-
-  readonly exitYears = computed(() => {
-    const years = new Set<number>();
-    this.sharedCases.cases().forEach((c) => {
-      if (c.status !== 'exited') return;
-      const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
-      if (!raw) return;
-      const d = new Date(raw);
-      if (!Number.isNaN(d.getTime())) years.add(d.getFullYear());
-    });
-    years.add(new Date().getFullYear());
-    return Array.from(years).sort((a, b) => b - a);
-  });
-
-  readonly exitMonthsForYear = computed(() => {
-    const year = Number(this.exitYearFilter());
-    if (!year) return [] as number[];
-    const months = new Set<number>();
-    this.sharedCases.cases().forEach((c) => {
-      if (c.status !== 'exited') return;
-      const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
-      if (!raw) return;
-      const d = new Date(raw);
-      if (!Number.isNaN(d.getTime()) && d.getFullYear() === year) months.add(d.getMonth() + 1);
-    });
-    return Array.from(months).sort((a, b) => a - b);
-  });
-
-  get exitYearFilterValue(): string {
-    return this.exitYearFilter();
-  }
-  set exitYearFilterValue(value: string) {
-    this.exitYearFilter.set(value);
-    if (!value) this.exitMonthFilter.set('');
-    else if (!this.exitMonthsForYear().includes(Number(this.exitMonthFilter()))) {
-      this.exitMonthFilter.set('');
-    }
-  }
-  get exitMonthFilterValue(): string {
-    return this.exitMonthFilter();
-  }
-  set exitMonthFilterValue(value: string) {
-    this.exitMonthFilter.set(value);
-  }
-
-  monthName(monthNumber: number): string {
-    const names = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    return names[monthNumber] || String(monthNumber);
-  }
 
   // عرض الحالات من SharedCasesService مباشرة لتحديث فوري
   readonly cases = computed(() => {
     const allCases = this.sharedCases.cases();
     const selectedFilter = this.activeFilter();
     const q = this.normalizeSearchText(this.searchQuery());
-    const year = Number(this.exitYearFilter());
-    const month = Number(this.exitMonthFilter());
 
     let baseCases =
       selectedFilter === 'all'
@@ -174,17 +121,6 @@ export class Secretary implements OnInit, OnDestroy {
         : allCases.filter(c => c.status === selectedFilter);
 
     if (selectedFilter === 'exited') {
-      if (year || month) {
-        baseCases = baseCases.filter((c) => {
-          const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
-          if (!raw) return false;
-          const d = new Date(raw);
-          if (Number.isNaN(d.getTime())) return false;
-          if (year && d.getFullYear() !== year) return false;
-          if (month && d.getMonth() + 1 !== month) return false;
-          return true;
-        });
-      }
       baseCases = [...baseCases].sort((a, b) => {
         const timeA = a.exitedAtRaw ? new Date(a.exitedAtRaw).getTime() : 0;
         const timeB = b.exitedAtRaw ? new Date(b.exitedAtRaw).getTime() : 0;
@@ -201,6 +137,51 @@ export class Secretary implements OnInit, OnDestroy {
 
     return scored.map(item => item.caseItem);
   });
+
+  /** حالات لم تخرج خلال 4 أيام من تاريخ الدخول */
+  readonly overdueCases = computed(() => {
+    const now = Date.now();
+    const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
+    return this.sharedCases
+      .cases()
+      .filter((c) => c.status !== 'exited')
+      .map((c) => {
+        const receivedAt = this.parseCaseReceivedDate(c);
+        return { id: c.id, doctor: c.doctor || 'غير محدد', patient: c.patient || '—', receivedAt };
+      })
+      .filter((item) => item.receivedAt != null && now - item.receivedAt! >= fourDaysMs)
+      .sort((a, b) => (a.receivedAt || 0) - (b.receivedAt || 0));
+  });
+
+  private parseCaseReceivedDate(c: { receivedDateRaw?: string; receivedDate?: string; date?: string }): number | null {
+    const raw = c.receivedDateRaw || '';
+    if (raw) {
+      const iso = Date.parse(raw);
+      if (!Number.isNaN(iso)) return iso;
+      const ymd = raw.split(' ')[0].split('T')[0];
+      const parts = ymd.split(/[/-]/);
+      if (parts.length >= 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) {
+          return new Date(y, m, d).getTime();
+        }
+      }
+    }
+    const display = c.receivedDate || '';
+    if (display) {
+      const ymdMatch = display.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+      if (ymdMatch) {
+        return new Date(
+          parseInt(ymdMatch[1], 10),
+          parseInt(ymdMatch[2], 10) - 1,
+          parseInt(ymdMatch[3], 10)
+        ).getTime();
+      }
+    }
+    return null;
+  }
 
   readonly stats = computed(() => {
     const allCases = this.sharedCases.cases();
@@ -383,6 +364,7 @@ export class Secretary implements OnInit, OnDestroy {
       this.workTypeQuantities = {};
       this.nightGuardType = '';
       this.formDraft.workType = 'Empty';
+      this.formDraft.quantity = 0;
     } else {
       this.updateWorkTypeString();
     }
@@ -513,6 +495,7 @@ export class Secretary implements OnInit, OnDestroy {
   updateWorkTypeString(): void {
     if (this.formDraft.caseType === 'Empty') {
       this.formDraft.workType = 'Empty';
+      this.formDraft.quantity = 0;
       return;
     }
     let total = 0;
@@ -855,7 +838,12 @@ export class Secretary implements OnInit, OnDestroy {
       workDetail: (d.workDetail || '').trim(),
       color: (d.color || '').trim(),
       size: '',
-      quantity: d.quantity !== '' && d.quantity !== null && !isNaN(Number(d.quantity)) ? Number(d.quantity) : 1,
+      quantity:
+        d.caseType === 'Empty'
+          ? 0
+          : d.quantity !== '' && d.quantity !== null && !isNaN(Number(d.quantity))
+            ? Number(d.quantity)
+            : 1,
       date: (() => {
         const raw = existing?.receivedDateRaw;
         if (raw) {
