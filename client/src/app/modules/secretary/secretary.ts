@@ -780,10 +780,6 @@ export class Secretary implements OnInit, OnDestroy {
       this.flash('يرجى اختيار نوع العمل');
       return;
     }
-    if (isStudentCase && !d.patientPhone?.trim()) {
-      this.flash('رقم هاتف المريض مطلوب في حالات الطلبة');
-      return;
-    }
     if (isStudentCase && (!Number.isFinite(Number(d.studentPrice)) || Number(d.studentPrice) <= 0)) {
       this.flash('يرجى إدخال سعر حالة الطالب بشكل صحيح');
       return;
