@@ -405,6 +405,131 @@ exports.exportMonthData = async (req, res) => {
       { name: 'summary.json' }
     );
 
+    // ——— Extra: dashboard-style snapshot (active cases that stay after reset) ———
+    const allForDash = await DentalCase.find({}).select('currentStage status').lean();
+    const dashRows = [
+      { metric: 'إجمالي الحالات النشطة (غير خارجة)', value: allForDash.filter((c) => c.currentStage !== 'exited').length },
+      { metric: 'الحالات الجديدة (انتظار) — فلتر الجديدة', value: allForDash.filter((c) => c.currentStage === 'waiting').length },
+      { metric: 'الحالات المنتهية (قبل الخروج) — فلتر المنتهية', value: allForDash.filter((c) => c.currentStage === 'completed').length },
+      { metric: 'في التصميم', value: allForDash.filter((c) => c.currentStage === 'design').length },
+      { metric: 'في الخارج/الخراطة', value: allForDash.filter((c) => c.currentStage === 'khart').length },
+      { metric: 'في التشطيب', value: allForDash.filter((c) => c.currentStage === 'finishing').length },
+      { metric: 'سكرتارية', value: allForDash.filter((c) => c.currentStage === 'secretary').length },
+      { metric: 'الحالات الخارجة (هتتمسح عند التصفير)', value: allForDash.filter((c) => c.currentStage === 'exited').length },
+    ];
+    archive.append(
+      toCsv(dashRows, [
+        { label: 'البند', key: 'metric' },
+        { label: 'العدد', key: 'value' },
+      ]),
+      { name: 'dashboard_snapshot.csv' }
+    );
+
+    // ——— Reports-style doctor summary (exited only in export scope) ———
+    const exitedRows = payload.caseRows.filter((r) => r.currentStage === 'exited');
+    const reportByDoctor = Object.values(
+      exitedRows.reduce((acc, row) => {
+        const key = row.doctorName || 'غير محدد';
+        if (!acc[key]) {
+          acc[key] = {
+            doctorName: key,
+            cases: 0,
+            totalAmount: 0,
+            paidAmount: 0,
+            unpaidAmount: 0,
+          };
+        }
+        acc[key].cases += 1;
+        const amount = Number(row.salaryAmount || 0);
+        acc[key].totalAmount += amount;
+        if (row.paymentStatus === 'paid') acc[key].paidAmount += amount;
+        else acc[key].unpaidAmount += amount;
+        return acc;
+      }, {})
+    ).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    archive.append(
+      toCsv(reportByDoctor, [
+        { label: 'اسم الطبيب', key: 'doctorName' },
+        { label: 'عدد الحالات الخارجة', key: 'cases' },
+        { label: 'إجمالي الحساب', key: 'totalAmount' },
+        { label: 'المدفوع', key: 'paidAmount' },
+        { label: 'المتبقي', key: 'unpaidAmount' },
+      ]),
+      { name: 'reports_by_doctor.csv' }
+    );
+
+    archive.append(
+      toCsv(exitedRows, [
+        { label: 'caseNumber', key: 'caseNumber' },
+        { label: 'patientName', key: 'patientName' },
+        { label: 'doctorName', key: 'doctorName' },
+        { label: 'clinic', key: 'clinic' },
+        { label: 'caseType', key: 'caseType' },
+        { label: 'quantity', key: 'quantity' },
+        { label: 'color', key: 'color' },
+        { label: 'workType', key: 'workType' },
+        { label: 'paymentStatus', key: 'paymentStatus' },
+        { label: 'salaryAmount', key: 'salaryAmount' },
+        { label: 'createdAt', key: 'createdAt' },
+        { label: 'exitedAt', key: 'exitedAt' },
+        { label: 'paidAt', key: 'paidAt' },
+        { label: 'createdBy', key: 'createdBy' },
+      ]),
+      { name: 'exited_cases_all.csv' }
+    );
+
+    // ——— One Excel-friendly CSV per doctor (exited cases only) ———
+    const byDoctorCases = exitedRows.reduce((acc, row) => {
+      const key = row.doctorName || 'غير محدد';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+
+    const safeName = (name) =>
+      String(name || 'unknown')
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+        .replace(/\s+/g, '_')
+        .slice(0, 80);
+
+    for (const [doctorName, rows] of Object.entries(byDoctorCases)) {
+      const total = rows.reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
+      const paid = rows
+        .filter((r) => r.paymentStatus === 'paid')
+        .reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
+      archive.append(
+        toCsv(rows, [
+          { label: 'رقم الحالة', key: 'caseNumber' },
+          { label: 'المريض', key: 'patientName' },
+          { label: 'النوع', key: 'caseType' },
+          { label: 'الكمية', key: 'quantity' },
+          { label: 'اللون', key: 'color' },
+          { label: 'نوع العمل', key: 'workType' },
+          { label: 'المبلغ', key: 'salaryAmount' },
+          { label: 'حالة الدفع', key: 'paymentStatus' },
+          { label: 'تاريخ الدخول', key: 'createdAt' },
+          { label: 'تاريخ الخروج', key: 'exitedAt' },
+          { label: 'الفرع', key: 'clinic' },
+        ]),
+        { name: `doctors/${safeName(doctorName)}.csv` }
+      );
+      archive.append(
+        JSON.stringify(
+          {
+            doctorName,
+            exitedCases: rows.length,
+            totalAmount: total,
+            paidAmount: paid,
+            unpaidAmount: total - paid,
+          },
+          null,
+          2
+        ),
+        { name: `doctors/${safeName(doctorName)}_summary.json` }
+      );
+    }
+
     if (hasMonth) {
       await MonthArchive.findOneAndUpdate(
         { year, month },

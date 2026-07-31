@@ -1035,9 +1035,12 @@
         </div>
 
         <section class="financial-assistant-card" style="margin-top:14px;">
-          <h3 class="financial-assistant-title">تحميل بيانات الشهر</h3>
+          <h3 class="financial-assistant-title">1) حفظ كل البيانات</h3>
           <p style="margin:0;color:var(--color-text-secondary);font-size:13px;line-height:1.6;">
-            يحمّل ZIP فيه كل الحالات والدفعات والأسعار والموظفين والطباعة والملخص. لازم تحمّل قبل إغلاق الشهر.
+            يحمّل ملف ZIP يفتح على Excel وفيه:
+            كل الحالات الخارجة بتفاصيلها، شيت منفصل لكل دكتور بحالاته الخارجة،
+            ملخص التقارير، لقطة لوحة التحكم، الدفعات، الأسعار، الموظفين، والطباعة.
+            اختَر السنة/الشهر فوق عشان شيتات الدكاترة تكون لنفس الشهر.
           </p>
           <button
             type="button"
@@ -1046,14 +1049,16 @@
             (click)="downloadMonthArchive()"
             [disabled]="archiveLoading"
           >
-            {{ archiveLoading ? 'جاري التحميل...' : 'تحميل بيانات الشهر (ZIP)' }}
+            {{ archiveLoading ? 'جاري الحفظ...' : 'حفظ / تحميل كل البيانات (ZIP)' }}
           </button>
         </section>
 
         <section class="financial-assistant-card" style="margin-top:14px;">
-          <h3 class="financial-assistant-title">إغلاق الشهر وتصفير الحالات الخارجة</h3>
+          <h3 class="financial-assistant-title">2) تصفير النظام</h3>
           <p style="margin:0;color:#b42318;font-size:13px;line-height:1.6;">
-            سيتم حذف كل الحالات الخارجة (مدفوع وغير مدفوع) وتصفير الدفعات. الحالات اللي لسه ما خرجتش + الموظفين + أسعار الدكاترة هتفضل.
+            هيتمسح: كل الحالات <strong>الخارجة</strong> + الدفعات + مهام الطباعة المرتبطة.
+            <br />
+            هيفضل: الحالات اللي لسه ما خرجتش (لوحة السكرتارية: إجمالي / الجديدة / المنتهية + فلاتر الكل والجديدة والمنتهية) + الموظفين + أسعار الدكاترة.
           </p>
           <div class="control-card">
             <label>اكتب للتأكيد: {{ archiveYearFilter }}-{{ archiveMonthFilter | number:'2.0-0' }}</label>
@@ -1066,7 +1071,7 @@
             (click)="closeSelectedMonth()"
             [disabled]="archiveClosing"
           >
-            {{ archiveClosing ? 'جاري الإغلاق...' : 'إغلاق الشهر الآن' }}
+            {{ archiveClosing ? 'جاري التصفير...' : 'تصفير وحذف البيانات الخارجة' }}
           </button>
           @if (archiveError) {
             <p class="financial-assistant-error">{{ archiveError }}</p>

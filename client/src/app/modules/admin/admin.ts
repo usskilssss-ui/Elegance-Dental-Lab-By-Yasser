@@ -1673,7 +1673,7 @@ export class Admin implements OnInit, OnDestroy {
         a.download = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
         a.click();
         URL.revokeObjectURL(url);
-        this.archiveSuccess = 'تم تحميل بيانات الشهر بنجاح';
+        this.archiveSuccess = 'تم حفظ وتحميل كل البيانات بنجاح (ZIP)';
         this.loadArchiveList();
       },
       error: async (err: unknown) => {
@@ -1707,7 +1707,7 @@ export class Admin implements OnInit, OnDestroy {
     }
     if (
       !confirm(
-        `سيتم حذف كل الحالات الخارجة وتصفير الدفعات. الحالات اللي لسه ما خرجتش هتفضل. متأكد؟`
+        `سيتم حذف كل الحالات الخارجة وتصفير الدفعات. الحالات اللي لسه في الكل/الجديدة/المنتهية هتفضل. متأكد؟`
       )
     ) {
       return;
