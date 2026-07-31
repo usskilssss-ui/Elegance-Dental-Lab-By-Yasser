@@ -249,171 +249,16 @@ exports.exportMonthData = async (req, res) => {
       hasMonth ? month : null
     );
 
-    const stamp = hasMonth
-      ? `${year}-${String(month).padStart(2, '0')}`
-      : new Date().toISOString().slice(0, 10);
-    const filename = `Elegance-Lab-Export-${stamp}.zip`;
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', (err) => {
-      console.error('Archive stream error:', err);
-      try {
-        res.destroy(err);
-      } catch (_) {
-        /* ignore */
-      }
-    });
-    archive.pipe(res);
-
-    archive.append(
-      toCsv(payload.caseRows, [
-        { label: 'caseNumber', key: 'caseNumber' },
-        { label: 'patientName', key: 'patientName' },
-        { label: 'doctorName', key: 'doctorName' },
-        { label: 'clinic', key: 'clinic' },
-        { label: 'caseType', key: 'caseType' },
-        { label: 'quantity', key: 'quantity' },
-        { label: 'color', key: 'color' },
-        { label: 'workType', key: 'workType' },
-        { label: 'currentStage', key: 'currentStage' },
-        { label: 'paymentStatus', key: 'paymentStatus' },
-        { label: 'salaryAmount', key: 'salaryAmount' },
-        { label: 'patientPhone', key: 'patientPhone' },
-        { label: 'requesterType', key: 'requesterType' },
-        { label: 'priority', key: 'priority' },
-        { label: 'createdAt', key: 'createdAt' },
-        { label: 'exitedAt', key: 'exitedAt' },
-        { label: 'paidAt', key: 'paidAt' },
-        { label: 'assignedTo', key: 'assignedTo' },
-        { label: 'createdBy', key: 'createdBy' },
-      ]),
-      { name: 'cases.csv' }
-    );
-
-    archive.append(
-      toCsv(payload.payments, [
-        { label: 'doctorName', key: 'doctorName' },
-        { label: 'amount', key: 'amount' },
-        { label: 'paymentDate', key: 'paymentDate' },
-        { label: 'notes', key: 'notes' },
-      ]),
-      { name: 'doctor_payments.csv' }
-    );
-
-    archive.append(
-      toCsv(
-        payload.pricings.map((p) => ({
-          doctorName: p.doctorName,
-          ...(p.prices || {}),
-        })),
-        [
-          { label: 'doctorName', key: 'doctorName' },
-          { label: 'emax', key: 'emax' },
-          { label: 'zircon', key: 'zircon' },
-          { label: 'germanZircon', key: 'germanZircon' },
-          { label: 'titanium', key: 'titanium' },
-          { label: 'peek', key: 'peek' },
-          { label: 'pmma', key: 'pmma' },
-          { label: 'nightGuard', key: 'nightGuard' },
-          { label: 'mockup', key: 'mockup' },
-          { label: 'wax', key: 'wax' },
-          { label: 'ring', key: 'ring' },
-          { label: 'tryIn', key: 'tryIn' },
-        ]
-      ),
-      { name: 'doctor_pricing.csv' }
-    );
-
-    archive.append(
-      toCsv(payload.users, [
-        { label: 'fullName', key: 'fullName' },
-        { label: 'email', key: 'email' },
-        { label: 'phone', key: 'phone' },
-        { label: 'role', key: 'role' },
-        { label: 'isActive', key: 'isActive' },
-        { label: 'department', key: 'department' },
-      ]),
-      { name: 'users.csv' }
-    );
-
-    // print jobs only (skip huge audit/notification dumps)
-
-    archive.append(
-      toCsv(
-        payload.printJobs.map((j) => ({
-          status: j.status,
-          paperConfirmed: j.paperConfirmed,
-          doctor: j.printData?.doctor,
-          patient: j.printData?.patient,
-          caseType: j.printData?.caseType,
-          workType: j.printData?.workType,
-          quantity: j.printData?.quantity,
-          caseNumber: j.printData?.caseNumber,
-          createdAt: j.createdAt,
-        })),
-        [
-          { label: 'status', key: 'status' },
-          { label: 'paperConfirmed', key: 'paperConfirmed' },
-          { label: 'doctor', key: 'doctor' },
-          { label: 'patient', key: 'patient' },
-          { label: 'caseType', key: 'caseType' },
-          { label: 'workType', key: 'workType' },
-          { label: 'quantity', key: 'quantity' },
-          { label: 'caseNumber', key: 'caseNumber' },
-          { label: 'createdAt', key: 'createdAt' },
-        ]
-      ),
-      { name: 'print_jobs.csv' }
-    );
-
-    archive.append(
-      JSON.stringify(
-        {
-          year: payload.year,
-          month: payload.month,
-          exportedAt: new Date().toISOString(),
-          ...payload.summary,
-        },
-        null,
-        2
-      ),
-      { name: 'summary.json' }
-    );
-
-    // Extra: dashboard snapshot from live stage counts (fast)
-    const liveCounts = await DentalCase.aggregate([
-      { $group: { _id: '$currentStage', count: { $sum: 1 } } },
-    ]);
+    let liveCounts = [];
+    try {
+      liveCounts = await DentalCase.aggregate([
+        { $group: { _id: '$currentStage', count: { $sum: 1 } } },
+      ]);
+    } catch (aggErr) {
+      console.warn('dashboard aggregate skipped:', aggErr.message);
+    }
     const countMap = Object.fromEntries(liveCounts.map((r) => [r._id || 'unknown', r.count]));
-    const dashRows = [
-      {
-        metric: 'إجمالي الحالات النشطة (غير خارجة)',
-        value: Object.entries(countMap)
-          .filter(([k]) => k !== 'exited')
-          .reduce((s, [, n]) => s + n, 0),
-      },
-      { metric: 'الحالات الجديدة (انتظار)', value: countMap.waiting || 0 },
-      { metric: 'الحالات المنتهية (قبل الخروج)', value: countMap.completed || 0 },
-      { metric: 'في التصميم', value: countMap.design || 0 },
-      { metric: 'في الخارج/الخراطة', value: countMap.khart || 0 },
-      { metric: 'في التشطيب', value: countMap.finishing || 0 },
-      { metric: 'سكرتارية', value: countMap.secretary || 0 },
-      { metric: 'الحالات الخارجة', value: countMap.exited || 0 },
-    ];
-    archive.append(
-      toCsv(dashRows, [
-        { label: 'البند', key: 'metric' },
-        { label: 'العدد', key: 'value' },
-      ]),
-      { name: 'dashboard_snapshot.csv' }
-    );
 
-    // ——— Reports-style doctor summary (exited only in export scope) ———
     const exitedRows = payload.caseRows.filter((r) => r.currentStage === 'exited');
     const reportByDoctor = Object.values(
       exitedRows.reduce((acc, row) => {
@@ -436,94 +281,239 @@ exports.exportMonthData = async (req, res) => {
       }, {})
     ).sort((a, b) => b.totalAmount - a.totalAmount);
 
-    archive.append(
-      toCsv(reportByDoctor, [
-        { label: 'اسم الطبيب', key: 'doctorName' },
-        { label: 'عدد الحالات الخارجة', key: 'cases' },
-        { label: 'إجمالي الحساب', key: 'totalAmount' },
-        { label: 'المدفوع', key: 'paidAmount' },
-        { label: 'المتبقي', key: 'unpaidAmount' },
-      ]),
-      { name: 'reports_by_doctor.csv' }
-    );
-
-    archive.append(
-      toCsv(exitedRows, [
-        { label: 'caseNumber', key: 'caseNumber' },
-        { label: 'patientName', key: 'patientName' },
-        { label: 'doctorName', key: 'doctorName' },
-        { label: 'clinic', key: 'clinic' },
-        { label: 'caseType', key: 'caseType' },
-        { label: 'quantity', key: 'quantity' },
-        { label: 'color', key: 'color' },
-        { label: 'workType', key: 'workType' },
-        { label: 'paymentStatus', key: 'paymentStatus' },
-        { label: 'salaryAmount', key: 'salaryAmount' },
-        { label: 'createdAt', key: 'createdAt' },
-        { label: 'exitedAt', key: 'exitedAt' },
-        { label: 'paidAt', key: 'paidAt' },
-        { label: 'createdBy', key: 'createdBy' },
-      ]),
-      { name: 'exited_cases_all.csv' }
-    );
-
-    // ——— One Excel-friendly CSV per doctor (exited cases only) ———
-    const byDoctorCases = exitedRows.reduce((acc, row) => {
-      const key = row.doctorName || 'غير محدد';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-      return acc;
-    }, {});
+    const dashRows = [
+      {
+        metric: 'إجمالي الحالات النشطة (غير خارجة)',
+        value: Object.entries(countMap)
+          .filter(([k]) => k !== 'exited')
+          .reduce((s, [, n]) => s + n, 0),
+      },
+      { metric: 'الحالات الجديدة (انتظار)', value: countMap.waiting || 0 },
+      { metric: 'الحالات المنتهية (قبل الخروج)', value: countMap.completed || 0 },
+      { metric: 'في التصميم', value: countMap.design || 0 },
+      { metric: 'في الخارج/الخراطة', value: countMap.khart || 0 },
+      { metric: 'في التشطيب', value: countMap.finishing || 0 },
+      { metric: 'سكرتارية', value: countMap.secretary || 0 },
+      { metric: 'الحالات الخارجة', value: countMap.exited || 0 },
+    ];
 
     const safeName = (name) =>
       String(name || 'unknown')
         .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
         .replace(/\s+/g, '_')
-        .slice(0, 80);
+        .slice(0, 80) || 'doctor';
 
-    for (const [doctorName, rows] of Object.entries(byDoctorCases)) {
+    // Build the entire ZIP in memory first (avoids broken streams on Railway)
+    const zipBuffer = await new Promise((resolve, reject) => {
+      const archive = archiver('zip', { zlib: { level: 5 } });
+      const chunks = [];
+      archive.on('data', (chunk) => chunks.push(chunk));
+      archive.on('error', reject);
+      archive.on('end', () => resolve(Buffer.concat(chunks)));
+
       archive.append(
-        toCsv(rows, [
-          { label: 'رقم الحالة', key: 'caseNumber' },
-          { label: 'المريض', key: 'patientName' },
-          { label: 'النوع', key: 'caseType' },
-          { label: 'الكمية', key: 'quantity' },
-          { label: 'اللون', key: 'color' },
-          { label: 'نوع العمل', key: 'workType' },
-          { label: 'المبلغ', key: 'salaryAmount' },
-          { label: 'حالة الدفع', key: 'paymentStatus' },
-          { label: 'تاريخ الدخول', key: 'createdAt' },
-          { label: 'تاريخ الخروج', key: 'exitedAt' },
-          { label: 'الفرع', key: 'clinic' },
+        toCsv(payload.caseRows, [
+          { label: 'caseNumber', key: 'caseNumber' },
+          { label: 'patientName', key: 'patientName' },
+          { label: 'doctorName', key: 'doctorName' },
+          { label: 'clinic', key: 'clinic' },
+          { label: 'caseType', key: 'caseType' },
+          { label: 'quantity', key: 'quantity' },
+          { label: 'color', key: 'color' },
+          { label: 'workType', key: 'workType' },
+          { label: 'currentStage', key: 'currentStage' },
+          { label: 'paymentStatus', key: 'paymentStatus' },
+          { label: 'salaryAmount', key: 'salaryAmount' },
+          { label: 'createdAt', key: 'createdAt' },
+          { label: 'exitedAt', key: 'exitedAt' },
+          { label: 'paidAt', key: 'paidAt' },
+          { label: 'createdBy', key: 'createdBy' },
         ]),
-        { name: `doctors/${safeName(doctorName)}.csv` }
+        { name: 'cases.csv' }
       );
-    }
+
+      archive.append(
+        toCsv(payload.payments, [
+          { label: 'doctorName', key: 'doctorName' },
+          { label: 'amount', key: 'amount' },
+          { label: 'paymentDate', key: 'paymentDate' },
+          { label: 'notes', key: 'notes' },
+        ]),
+        { name: 'doctor_payments.csv' }
+      );
+
+      archive.append(
+        toCsv(
+          payload.pricings.map((p) => ({
+            doctorName: p.doctorName,
+            ...(p.prices || {}),
+          })),
+          [
+            { label: 'doctorName', key: 'doctorName' },
+            { label: 'emax', key: 'emax' },
+            { label: 'zircon', key: 'zircon' },
+            { label: 'germanZircon', key: 'germanZircon' },
+            { label: 'titanium', key: 'titanium' },
+            { label: 'peek', key: 'peek' },
+            { label: 'pmma', key: 'pmma' },
+            { label: 'nightGuard', key: 'nightGuard' },
+            { label: 'mockup', key: 'mockup' },
+            { label: 'wax', key: 'wax' },
+            { label: 'ring', key: 'ring' },
+            { label: 'tryIn', key: 'tryIn' },
+          ]
+        ),
+        { name: 'doctor_pricing.csv' }
+      );
+
+      archive.append(
+        toCsv(payload.users, [
+          { label: 'fullName', key: 'fullName' },
+          { label: 'email', key: 'email' },
+          { label: 'phone', key: 'phone' },
+          { label: 'role', key: 'role' },
+          { label: 'isActive', key: 'isActive' },
+        ]),
+        { name: 'users.csv' }
+      );
+
+      archive.append(
+        toCsv(
+          (payload.printJobs || []).map((j) => ({
+            status: j.status,
+            doctor: j.printData?.doctor,
+            patient: j.printData?.patient,
+            caseType: j.printData?.caseType,
+            caseNumber: j.printData?.caseNumber,
+            createdAt: j.createdAt,
+          })),
+          [
+            { label: 'status', key: 'status' },
+            { label: 'doctor', key: 'doctor' },
+            { label: 'patient', key: 'patient' },
+            { label: 'caseType', key: 'caseType' },
+            { label: 'caseNumber', key: 'caseNumber' },
+            { label: 'createdAt', key: 'createdAt' },
+          ]
+        ),
+        { name: 'print_jobs.csv' }
+      );
+
+      archive.append(
+        JSON.stringify(
+          {
+            year: payload.year,
+            month: payload.month,
+            exportedAt: new Date().toISOString(),
+            ...payload.summary,
+          },
+          null,
+          2
+        ),
+        { name: 'summary.json' }
+      );
+
+      archive.append(
+        toCsv(dashRows, [
+          { label: 'البند', key: 'metric' },
+          { label: 'العدد', key: 'value' },
+        ]),
+        { name: 'dashboard_snapshot.csv' }
+      );
+
+      archive.append(
+        toCsv(reportByDoctor, [
+          { label: 'اسم الطبيب', key: 'doctorName' },
+          { label: 'عدد الحالات الخارجة', key: 'cases' },
+          { label: 'إجمالي الحساب', key: 'totalAmount' },
+          { label: 'المدفوع', key: 'paidAmount' },
+          { label: 'المتبقي', key: 'unpaidAmount' },
+        ]),
+        { name: 'reports_by_doctor.csv' }
+      );
+
+      archive.append(
+        toCsv(exitedRows, [
+          { label: 'caseNumber', key: 'caseNumber' },
+          { label: 'patientName', key: 'patientName' },
+          { label: 'doctorName', key: 'doctorName' },
+          { label: 'caseType', key: 'caseType' },
+          { label: 'quantity', key: 'quantity' },
+          { label: 'salaryAmount', key: 'salaryAmount' },
+          { label: 'paymentStatus', key: 'paymentStatus' },
+          { label: 'createdAt', key: 'createdAt' },
+          { label: 'exitedAt', key: 'exitedAt' },
+        ]),
+        { name: 'exited_cases_all.csv' }
+      );
+
+      const byDoctorCases = exitedRows.reduce((acc, row) => {
+        const key = row.doctorName || 'غير محدد';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(row);
+        return acc;
+      }, {});
+
+      // Cap doctor sheets to avoid huge zips / timeouts
+      const doctorEntries = Object.entries(byDoctorCases).slice(0, 200);
+      for (const [doctorName, rows] of doctorEntries) {
+        archive.append(
+          toCsv(rows, [
+            { label: 'رقم الحالة', key: 'caseNumber' },
+            { label: 'المريض', key: 'patientName' },
+            { label: 'النوع', key: 'caseType' },
+            { label: 'الكمية', key: 'quantity' },
+            { label: 'المبلغ', key: 'salaryAmount' },
+            { label: 'حالة الدفع', key: 'paymentStatus' },
+            { label: 'تاريخ الدخول', key: 'createdAt' },
+            { label: 'تاريخ الخروج', key: 'exitedAt' },
+          ]),
+          { name: `doctors/${safeName(doctorName)}.csv` }
+        );
+      }
+
+      archive.finalize();
+    });
 
     if (hasMonth) {
-      await MonthArchive.findOneAndUpdate(
-        { year, month },
-        {
-          $set: {
-            exportedAt: new Date(),
-            summary: {
-              ...payload.summary,
-              activeCasesKept: 0,
-              deletedExitedCases: 0,
-              deletedPayments: 0,
+      try {
+        await MonthArchive.findOneAndUpdate(
+          { year, month },
+          {
+            $set: {
+              exportedAt: new Date(),
+              summary: {
+                ...payload.summary,
+                activeCasesKept: 0,
+                deletedExitedCases: 0,
+                deletedPayments: 0,
+              },
             },
           },
-        },
-        { upsert: true, new: true }
-      );
+          { upsert: true, new: true }
+        );
+      } catch (metaErr) {
+        console.warn('MonthArchive meta update skipped:', metaErr.message);
+      }
     }
 
-    await archive.finalize();
+    const stamp = hasMonth
+      ? `${year}-${String(month).padStart(2, '0')}`
+      : new Date().toISOString().slice(0, 10);
+    const filename = `Elegance-Lab-Export-${stamp}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+    return res.status(200).end(zipBuffer);
   } catch (error) {
+    console.error('exportMonthData failed:', error);
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to export data',
+        message: `Failed to export data: ${error.message || 'unknown error'}`,
         error: error.message,
       });
     }
