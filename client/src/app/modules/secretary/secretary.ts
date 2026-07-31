@@ -106,14 +106,67 @@ export class Secretary implements OnInit, OnDestroy {
   readonly activeFilter = signal<
     'all' | 'pending' | 'in-progress' | 'under-khart' | 'finished' | 'exited'
   >('all');
+  readonly exitYearFilter = signal<string>('');
+  readonly exitMonthFilter = signal<string>('');
   readonly casesLoading = signal(false);
   readonly saveInProgress = signal(false);
+
+  readonly exitYears = computed(() => {
+    const years = new Set<number>();
+    this.sharedCases.cases().forEach((c) => {
+      if (c.status !== 'exited') return;
+      const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    years.add(new Date().getFullYear());
+    return Array.from(years).sort((a, b) => b - a);
+  });
+
+  readonly exitMonthsForYear = computed(() => {
+    const year = Number(this.exitYearFilter());
+    if (!year) return [] as number[];
+    const months = new Set<number>();
+    this.sharedCases.cases().forEach((c) => {
+      if (c.status !== 'exited') return;
+      const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime()) && d.getFullYear() === year) months.add(d.getMonth() + 1);
+    });
+    return Array.from(months).sort((a, b) => a - b);
+  });
+
+  get exitYearFilterValue(): string {
+    return this.exitYearFilter();
+  }
+  set exitYearFilterValue(value: string) {
+    this.exitYearFilter.set(value);
+    if (!value) this.exitMonthFilter.set('');
+    else if (!this.exitMonthsForYear().includes(Number(this.exitMonthFilter()))) {
+      this.exitMonthFilter.set('');
+    }
+  }
+  get exitMonthFilterValue(): string {
+    return this.exitMonthFilter();
+  }
+  set exitMonthFilterValue(value: string) {
+    this.exitMonthFilter.set(value);
+  }
+
+  monthName(monthNumber: number): string {
+    const names = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    return names[monthNumber] || String(monthNumber);
+  }
 
   // عرض الحالات من SharedCasesService مباشرة لتحديث فوري
   readonly cases = computed(() => {
     const allCases = this.sharedCases.cases();
     const selectedFilter = this.activeFilter();
     const q = this.normalizeSearchText(this.searchQuery());
+    const year = Number(this.exitYearFilter());
+    const month = Number(this.exitMonthFilter());
 
     let baseCases =
       selectedFilter === 'all'
@@ -121,6 +174,17 @@ export class Secretary implements OnInit, OnDestroy {
         : allCases.filter(c => c.status === selectedFilter);
 
     if (selectedFilter === 'exited') {
+      if (year || month) {
+        baseCases = baseCases.filter((c) => {
+          const raw = c.exitedAtRaw || c.exitedAt || c.deliveryDate || c.receivedDate;
+          if (!raw) return false;
+          const d = new Date(raw);
+          if (Number.isNaN(d.getTime())) return false;
+          if (year && d.getFullYear() !== year) return false;
+          if (month && d.getMonth() + 1 !== month) return false;
+          return true;
+        });
+      }
       baseCases = [...baseCases].sort((a, b) => {
         const timeA = a.exitedAtRaw ? new Date(a.exitedAtRaw).getTime() : 0;
         const timeB = b.exitedAtRaw ? new Date(b.exitedAtRaw).getTime() : 0;

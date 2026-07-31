@@ -11,8 +11,10 @@ export class AiApiService {
 
   constructor(private http: HttpClient) {}
 
-  askAssistant(question: string): Observable<any> {
-    const query = `?question=${encodeURIComponent(question)}`;
-    return this.http.get(`${this.apiUrl}/assistant${query}`);
+  askAssistant(question: string, year?: number | null, month?: number | null): Observable<any> {
+    const params = [`question=${encodeURIComponent(question)}`];
+    if (year) params.push(`year=${year}`);
+    if (month) params.push(`month=${month}`);
+    return this.http.get(`${this.apiUrl}/assistant?${params.join('&')}`);
   }
 }

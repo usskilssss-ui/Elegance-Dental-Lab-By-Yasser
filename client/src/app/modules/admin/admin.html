@@ -24,6 +24,10 @@
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M9 14h6"/></svg>
       AI
     </div>
+    <div class="nav-item" [class.active]="activeNav === 'archive'" (click)="setNav('archive')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+      الأرشيف
+    </div>
 
     <div class="sidebar-bottom">
       <div class="nav-item" (click)="logout()" role="button" tabindex="0" (keydown.enter)="logout()" (keydown.space)="$event.preventDefault(); logout()">
@@ -706,6 +710,20 @@
         <!-- أزرار التصفية والتحكم -->
         <div class="report-controls student-report-controls">
           <div class="control-card">
+            <label>السنة</label>
+            <select [ngModel]="reportYearFilter" (ngModelChange)="onReportYearChange($event)">
+              <option value="">كل السنوات</option>
+              <option *ngFor="let year of reportYears" [value]="year">{{ year }}</option>
+            </select>
+          </div>
+          <div class="control-card">
+            <label>الشهر</label>
+            <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
+              <option value="">كل الشهور</option>
+              <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
+            </select>
+          </div>
+          <div class="control-card">
             <label>بحث</label>
             <input 
               type="text" 
@@ -1105,6 +1123,23 @@
             </div>
           </div>
 
+          <div class="financial-controls" style="margin-bottom: 4px;">
+            <div class="control-card">
+              <label>السنة</label>
+              <select [(ngModel)]="aiYearFilter" (ngModelChange)="aiMonthFilter = aiYearFilter ? aiMonthFilter : ''">
+                <option value="">كل السنوات</option>
+                <option *ngFor="let year of archiveYears" [value]="year">{{ year }}</option>
+              </select>
+            </div>
+            <div class="control-card">
+              <label>الشهر</label>
+              <select [(ngModel)]="aiMonthFilter" [disabled]="!aiYearFilter">
+                <option value="">كل الشهور</option>
+                <option *ngFor="let month of archiveMonths" [value]="month">{{ monthName(month) }}</option>
+              </select>
+            </div>
+          </div>
+
           <div class="financial-assistant-suggestions">
             <button type="button" class="assistant-chip" (click)="askAi('ملخص المعمل')">ملخص المعمل</button>
             <button type="button" class="assistant-chip" (click)="askAi('كام حالة في التصميم؟')">حالات التصميم</button>
@@ -1148,6 +1183,90 @@
           @if (aiError) {
             <p class="financial-assistant-error">{{ aiError }}</p>
           }
+        </section>
+      </ng-container>
+
+      <!-- ARCHIVE / MONTH CLOSE VIEW -->
+      <ng-container *ngIf="activeNav === 'archive'">
+        <div class="page-header">
+          <div>
+            <div class="page-label">نهاية الشهر</div>
+            <div class="page-title">الأرشيف والإغلاق</div>
+          </div>
+        </div>
+
+        <div class="financial-controls">
+          <div class="control-card">
+            <label>السنة</label>
+            <select [(ngModel)]="archiveYearFilter">
+              <option *ngFor="let year of archiveYears" [value]="year">{{ year }}</option>
+            </select>
+          </div>
+          <div class="control-card">
+            <label>الشهر</label>
+            <select [(ngModel)]="archiveMonthFilter">
+              <option *ngFor="let month of archiveMonths" [value]="month">{{ monthName(month) }}</option>
+            </select>
+          </div>
+        </div>
+
+        <section class="financial-assistant-card" style="margin-top:14px;">
+          <h3 class="financial-assistant-title">تحميل بيانات الشهر</h3>
+          <p style="margin:0;color:var(--color-text-secondary);font-size:13px;line-height:1.6;">
+            يحمّل ZIP فيه كل الحالات والدفعات والأسعار والموظفين والطباعة والملخص. لازم تحمّل قبل إغلاق الشهر.
+          </p>
+          <button
+            type="button"
+            class="assistant-send-btn"
+            style="justify-self:start;width:auto;"
+            (click)="downloadMonthArchive()"
+            [disabled]="archiveLoading"
+          >
+            {{ archiveLoading ? 'جاري التحميل...' : 'تحميل بيانات الشهر (ZIP)' }}
+          </button>
+        </section>
+
+        <section class="financial-assistant-card" style="margin-top:14px;">
+          <h3 class="financial-assistant-title">إغلاق الشهر وتصفير الحالات الخارجة</h3>
+          <p style="margin:0;color:#b42318;font-size:13px;line-height:1.6;">
+            سيتم حذف كل الحالات الخارجة (مدفوع وغير مدفوع) وتصفير الدفعات. الحالات اللي لسه ما خرجتش + الموظفين + أسعار الدكاترة هتفضل.
+          </p>
+          <div class="control-card">
+            <label>اكتب للتأكيد: {{ archiveYearFilter }}-{{ archiveMonthFilter | number:'2.0-0' }}</label>
+            <input type="text" [(ngModel)]="archiveConfirm" [placeholder]="archiveYearFilter + '-' + (archiveMonthFilter | number:'2.0-0')" />
+          </div>
+          <button
+            type="button"
+            class="assistant-send-btn"
+            style="justify-self:start;width:auto;background:#b42318;"
+            (click)="closeSelectedMonth()"
+            [disabled]="archiveClosing"
+          >
+            {{ archiveClosing ? 'جاري الإغلاق...' : 'إغلاق الشهر الآن' }}
+          </button>
+          @if (archiveError) {
+            <p class="financial-assistant-error">{{ archiveError }}</p>
+          }
+          @if (archiveSuccess) {
+            <p style="margin:0;color:#027a48;font-size:13px;font-weight:600;">{{ archiveSuccess }}</p>
+          }
+        </section>
+
+        <section class="financial-assistant-card" style="margin-top:14px;" *ngIf="archiveList.length">
+          <h3 class="financial-assistant-title">سجل الشهور</h3>
+          <div class="finance-year-list">
+            <div class="finance-year-card" *ngFor="let row of archiveList">
+              <div class="finance-year-head">
+                <div class="finance-year-title">{{ monthName(row.month) }} {{ row.year }}</div>
+                <span class="summary-pill" *ngIf="row.closedAt">مقفل</span>
+                <span class="summary-pill" *ngIf="!row.closedAt && row.exportedAt">تم التحميل</span>
+              </div>
+              <div class="finance-row"><span>حالات الشهر</span><strong>{{ row.summary?.totalCases || 0 }}</strong></div>
+              <div class="finance-row"><span>خارجة محذوفة</span><strong>{{ row.summary?.deletedExitedCases || 0 }}</strong></div>
+              <div class="finance-row"><span>شغّال متبقي</span><strong>{{ row.summary?.activeCasesKept || 0 }}</strong></div>
+              <div class="finance-row"><span>إجمالي مبالغ</span><strong>{{ row.summary?.totalAmount || 0 | number:'1.0-0' }} EGP</strong></div>
+            </div>
+          </div>
         </section>
       </ng-container>
 

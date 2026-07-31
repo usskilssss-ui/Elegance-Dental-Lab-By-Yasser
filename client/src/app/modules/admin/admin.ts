@@ -9,6 +9,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { AiApiService } from '../../core/services/ai-api.service';
+import { MonthArchiveApiService } from '../../core/services/month-archive-api.service';
 import { Subject, merge } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
@@ -185,6 +186,18 @@ export class Admin implements OnInit, OnDestroy {
   financialYearFilter = '';
   financialMonthFilter = '';
   financialDoctorSearch = '';
+  reportYearFilter = '';
+  reportMonthFilter = '';
+  aiYearFilter = '';
+  aiMonthFilter = '';
+  archiveYearFilter = String(new Date().getFullYear());
+  archiveMonthFilter = String(new Date().getMonth() + 1);
+  archiveConfirm = '';
+  archiveLoading = false;
+  archiveClosing = false;
+  archiveError = '';
+  archiveSuccess = '';
+  archiveList: any[] = [];
   selectedDoctorName = '';
   showDoctorDetailsModal = false;
   financialSaveError = '';
@@ -232,6 +245,7 @@ export class Admin implements OnInit, OnDestroy {
   constructor(
     private caseApi: CaseApiService,
     private aiApi: AiApiService,
+    private monthArchiveApi: MonthArchiveApiService,
     private adminDashboardService: AdminDashboardService,
     private auth: AuthService,
     private userApi: UserApiService,
@@ -377,12 +391,22 @@ export class Admin implements OnInit, OnDestroy {
     );
   }
 
+  private matchesReportPeriod(c: AdminCaseRow): boolean {
+    if (!this.reportYearFilter && !this.reportMonthFilter) return true;
+    const d = c.exitedAt || c.receivedAt;
+    if (!d) return false;
+    const dt = d instanceof Date ? d : new Date(d);
+    if (this.reportYearFilter && dt.getFullYear() !== Number(this.reportYearFilter)) return false;
+    if (this.reportMonthFilter && dt.getMonth() + 1 !== Number(this.reportMonthFilter)) return false;
+    return true;
+  }
+
   get reportFilteredCases(): AdminCaseRow[] {
     const search = this.reportSearch.toLowerCase().trim();
     return this.reportCases.filter(c => {
-      let match = true;
+      let match = this.matchesReportPeriod(c);
       if (search) {
-        match = [c.caseNumber, c.patientName, c.doctorName || c.assignedTo || '', c.currentStage]
+        match = match && [c.caseNumber, c.patientName, c.doctorName || c.assignedTo || '', c.currentStage]
           .some(value => value?.toLowerCase().includes(search));
       }
       if (this.reportDoctorFilter) {
@@ -424,6 +448,7 @@ export class Admin implements OnInit, OnDestroy {
 
     this.reportCases.forEach(c => {
       if (String(c.currentStage) !== 'exited') return;
+      if (!this.matchesReportPeriod(c)) return;
 
       const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
       const key = this.doctorGroupKey(name);
@@ -1561,9 +1586,150 @@ export class Admin implements OnInit, OnDestroy {
     this.persistActiveNav();
     if (nav === 'staff') {
       this.loadStaffFromApi();
-    } else if (nav === 'reports') {
+    } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
+    } else if (nav === 'archive') {
+      this.loadArchiveList();
     }
+  }
+
+  get archiveYears(): number[] {
+    const y = new Date().getFullYear();
+    return [y, y - 1, y - 2, y - 3];
+  }
+
+  get archiveMonths(): number[] {
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  }
+
+  get reportYears(): number[] {
+    const years = new Set<number>();
+    this.reportCases.forEach((c) => {
+      const d = c.exitedAt || c.receivedAt;
+      if (d) years.add((d instanceof Date ? d : new Date(d)).getFullYear());
+    });
+    const current = new Date().getFullYear();
+    years.add(current);
+    return Array.from(years).sort((a, b) => b - a);
+  }
+
+  get reportMonthsForSelectedYear(): number[] {
+    if (!this.reportYearFilter) return [];
+    const year = Number(this.reportYearFilter);
+    const months = new Set<number>();
+    this.reportCases.forEach((c) => {
+      const d = c.exitedAt || c.receivedAt;
+      if (!d) return;
+      const dt = d instanceof Date ? d : new Date(d);
+      if (dt.getFullYear() === year) months.add(dt.getMonth() + 1);
+    });
+    return Array.from(months).sort((a, b) => a - b);
+  }
+
+  onReportYearChange(value: string): void {
+    this.reportYearFilter = value;
+    if (!value) {
+      this.reportMonthFilter = '';
+      return;
+    }
+    if (!this.reportMonthsForSelectedYear.includes(Number(this.reportMonthFilter))) {
+      this.reportMonthFilter = '';
+    }
+  }
+
+  loadArchiveList(): void {
+    this.monthArchiveApi.listArchives().subscribe({
+      next: (res) => {
+        this.archiveList = res?.data || [];
+      },
+      error: () => {
+        this.archiveList = [];
+      },
+    });
+  }
+
+  downloadMonthArchive(): void {
+    const year = Number(this.archiveYearFilter);
+    const month = Number(this.archiveMonthFilter);
+    if (!year || !month) {
+      this.archiveError = 'اختر السنة والشهر أولاً';
+      return;
+    }
+    this.archiveError = '';
+    this.archiveSuccess = '';
+    this.archiveLoading = true;
+    this.monthArchiveApi.exportZip(year, month).subscribe({
+      next: (blob) => {
+        this.archiveLoading = false;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.archiveSuccess = 'تم تحميل بيانات الشهر بنجاح';
+        this.loadArchiveList();
+      },
+      error: async (err: unknown) => {
+        this.archiveLoading = false;
+        let message = 'فشل التحميل';
+        if (err instanceof HttpErrorResponse) {
+          if (err.error instanceof Blob) {
+            try {
+              const text = await err.error.text();
+              const parsed = JSON.parse(text);
+              message = String(parsed?.message || message);
+            } catch {
+              message = err.message || message;
+            }
+          } else {
+            message = String(err.error?.message || err.message || message);
+          }
+        }
+        this.archiveError = message;
+      },
+    });
+  }
+
+  closeSelectedMonth(): void {
+    const year = Number(this.archiveYearFilter);
+    const month = Number(this.archiveMonthFilter);
+    const expected = `${year}-${String(month).padStart(2, '0')}`;
+    if (this.archiveConfirm.trim() !== expected) {
+      this.archiveError = `للتأكيد اكتب: ${expected}`;
+      return;
+    }
+    if (
+      !confirm(
+        `سيتم حذف كل الحالات الخارجة وتصفير الدفعات. الحالات اللي لسه ما خرجتش هتفضل. متأكد؟`
+      )
+    ) {
+      return;
+    }
+    this.archiveError = '';
+    this.archiveSuccess = '';
+    this.archiveClosing = true;
+    this.monthArchiveApi
+      .closeMonth({ year, month, confirm: expected })
+      .subscribe({
+        next: (res) => {
+          this.archiveClosing = false;
+          this.archiveConfirm = '';
+          this.archiveSuccess =
+            res?.message ||
+            `تم الإغلاق. محذوف ${res?.data?.deletedExitedCases || 0} حالة خارجة. متبقي شغّال: ${res?.data?.activeCasesKept || 0}`;
+          this.loadArchiveList();
+          this.loadFinancialReportFromApi();
+          this.loadCasesFromApi();
+        },
+        error: (err: unknown) => {
+          this.archiveClosing = false;
+          this.archiveError =
+            err instanceof HttpErrorResponse
+              ? String(err.error?.message || err.message || 'فشل إغلاق الشهر')
+              : 'فشل إغلاق الشهر';
+        },
+      });
   }
 
   askAi(presetQuestion?: string): void {
@@ -1578,7 +1744,9 @@ export class Admin implements OnInit, OnDestroy {
     this.aiQuestion = '';
     this.aiLoading = true;
 
-    this.aiApi.askAssistant(question).subscribe({
+    const year = this.aiYearFilter ? Number(this.aiYearFilter) : null;
+    const month = this.aiMonthFilter ? Number(this.aiMonthFilter) : null;
+    this.aiApi.askAssistant(question, year, month).subscribe({
       next: (res) => {
         this.aiLoading = false;
         this.aiMessages = [

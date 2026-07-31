@@ -23,6 +23,7 @@ const doctorPricingRoutes = require('./routes/doctorPricingRoutes');
 const doctorPaymentRoutes = require('./routes/doctorPaymentRoutes');
 const printRoutes = require('./routes/printRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const monthArchiveRoutes = require('./routes/monthArchiveRoutes');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -123,6 +124,7 @@ app.use('/api/doctor-pricing', doctorPricingRoutes);
 app.use('/api/doctor-payments', doctorPaymentRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/month-archive', monthArchiveRoutes);
 
 // Static files with proper CORS headers
 app.use('/uploads', (req, res, next) => {

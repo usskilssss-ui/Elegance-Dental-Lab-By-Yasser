@@ -558,8 +558,30 @@ exports.getAiAssistantAnswer = async (req, res) => {
 
     const q = normalizeArabicQuestion(question);
     const now = new Date();
+    const yearParam = req.query.year ? Number(req.query.year) : null;
+    const monthParam = req.query.month ? Number(req.query.month) : null;
+    const hasPeriod =
+      Number.isFinite(yearParam) &&
+      Number.isFinite(monthParam) &&
+      monthParam >= 1 &&
+      monthParam <= 12;
+
+    // When year/month selected in UI, treat that as "current" for monthly questions
+    if (hasPeriod) {
+      now.setFullYear(yearParam, monthParam - 1, 15);
+    }
+
     const docs = await loadCaseDocs();
-    const rows = docs.map(mapCaseRow);
+    let rows = docs.map(mapCaseRow);
+
+    if (hasPeriod) {
+      rows = rows.filter((r) => {
+        if (r.currentStage === 'exited') {
+          return r.exitedAt.getFullYear() === yearParam && r.exitedAt.getMonth() + 1 === monthParam;
+        }
+        return r.createdAt.getFullYear() === yearParam && r.createdAt.getMonth() + 1 === monthParam;
+      });
+    }
 
     let result = answerFromCases(question, q, rows, now);
     if (!result) result = await answerFromPrint(q);
@@ -573,11 +595,16 @@ exports.getAiAssistantAnswer = async (req, res) => {
       };
     }
 
+    if (hasPeriod && result?.answer) {
+      result.answer = `[${monthNameAr(monthParam)} ${yearParam}] ${result.answer}`;
+    }
+
     return res.status(200).json({
       success: true,
       question,
       answer: result.answer,
       data: result.data,
+      period: hasPeriod ? { year: yearParam, month: monthParam } : null,
     });
   } catch (error) {
     return res.status(500).json({
