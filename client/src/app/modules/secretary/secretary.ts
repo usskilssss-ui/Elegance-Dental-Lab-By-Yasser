@@ -552,6 +552,8 @@ export class Secretary implements OnInit, OnDestroy {
   readonly menuOpenId = signal<string | null>(null);
   readonly notificationsOpen = signal(false);
   readonly toast = signal<string | null>(null);
+  readonly highlightedCaseId = signal<string | null>(null);
+  private highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   onSearchInput(value: string): void {
     this.searchQuery.set(value);
@@ -621,6 +623,42 @@ export class Secretary implements OnInit, OnDestroy {
     filter: 'all' | 'pending' | 'in-progress' | 'under-khart' | 'finished' | 'exited'
   ): void {
     this.activeFilter.set(filter);
+  }
+
+  goToOverdueCase(caseId: string): void {
+    const target = this.sharedCases.cases().find((c) => c.id === caseId);
+    if (!target) {
+      this.flash('الحالة غير موجودة');
+      return;
+    }
+
+    this.notificationsOpen.set(false);
+    this.searchQuery.set('');
+
+    if (target.status === 'pending' || target.status === 'finished') {
+      this.activeFilter.set(target.status);
+    } else {
+      this.activeFilter.set('all');
+    }
+
+    this.highlightedCaseId.set(caseId);
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => this.highlightedCaseId.set(null), 4000);
+
+    setTimeout(() => {
+      const el = document.querySelector(`[data-case-id="${caseId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      this.activeFilter.set('all');
+      this.searchQuery.set(target.caseNumber || target.patient || '');
+      setTimeout(() => {
+        document
+          .querySelector(`[data-case-id="${caseId}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
+    }, 50);
   }
 
   openCreateDialog(): void {
