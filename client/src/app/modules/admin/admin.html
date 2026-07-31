@@ -628,6 +628,14 @@
             />
           </div>
           <div class="control-card" *ngIf="reportDoctorFilter">
+            <label>بحث عن مريض</label>
+            <input
+              type="text"
+              [(ngModel)]="reportSearch"
+              placeholder="ابحث باسم المريض أو رقم الحالة..."
+            />
+          </div>
+          <div class="control-card" *ngIf="reportDoctorFilter">
             <label>حالة الدفع</label>
             <select [(ngModel)]="paymentFilter">
               <option value="all">كل الحالات</option>
