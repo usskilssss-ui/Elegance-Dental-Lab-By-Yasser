@@ -181,30 +181,6 @@ exports.listJobs = async (req, res) => {
   }
 };
 
-/** Start of "today" in Africa/Cairo (Egypt), as a UTC Date for Mongo queries. */
-function startOfCairoDay() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Cairo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const y = parts.find(p => p.type === 'year').value;
-  const m = parts.find(p => p.type === 'month').value;
-  const d = parts.find(p => p.type === 'day').value;
-  // Cairo is UTC+2 or UTC+3 (DST). Resolve exact offset via the same calendar day.
-  const probe = new Date(`${y}-${m}-${d}T12:00:00Z`);
-  const cairoHourAtUtcNoon = Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Africa/Cairo',
-      hour: 'numeric',
-      hour12: false,
-    }).format(probe)
-  );
-  const offsetHours = cairoHourAtUtcNoon - 12;
-  return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), -offsetHours, 0, 0, 0));
-}
-
 // GET /api/print/jobs/pending — Print Agent catch-up (agent secret required)
 exports.listPendingJobs = async (req, res) => {
   try {
