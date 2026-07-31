@@ -159,6 +159,12 @@ const startServer = async () => {
     // Connect to MongoDB
     await connectDB();
 
+    // Ensure print jobs TTL is 7 days (fixes stale 24h Mongo index if present)
+    const PrintJob = require('./models/PrintJob');
+    if (typeof PrintJob.ensurePrintJobTtlIndex === 'function') {
+      await PrintJob.ensurePrintJobTtlIndex();
+    }
+
     // Start server
     server.listen(PORT, () => {
       console.log(`

@@ -232,13 +232,16 @@ exports.listPendingJobs = async (req, res) => {
   }
 };
 
-// GET /api/print/jobs/today — list today's jobs for entry screen (Cairo day)
+const PRINT_JOB_RETENTION_DAYS = 7;
+const PRINT_JOB_RETENTION_MS = PRINT_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+// GET /api/print/jobs/today — entry screen: jobs from the last 7 days (then TTL deletes)
 exports.listTodayJobs = async (req, res) => {
   try {
-    const startOfDay = startOfCairoDay();
+    const since = new Date(Date.now() - PRINT_JOB_RETENTION_MS);
 
     const jobs = await PrintJob.find({
-      createdAt: { $gte: startOfDay }
+      createdAt: { $gte: since },
     }).sort({ createdAt: 1 });
 
     return res.json({ success: true, jobs });
