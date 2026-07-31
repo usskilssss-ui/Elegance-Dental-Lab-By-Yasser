@@ -158,7 +158,7 @@ function buildSummary(cases) {
 async function loadExportPayload(year, month) {
   const filterMonth = Number.isFinite(year) && Number.isFinite(month);
 
-  const [allCases, payments, pricings, users, printJobs, auditLogs, notifications] =
+  const [allCases, payments, pricings, users, printJobs] =
     await Promise.all([
       DentalCase.find({})
         .populate('assignedTo', 'fullName role')
@@ -168,19 +168,14 @@ async function loadExportPayload(year, month) {
       DoctorPayment.find({}).sort({ paymentDate: -1 }).lean(),
       DoctorPricing.find({}).sort({ doctorName: 1 }).lean(),
       User.find({}).select('-password').sort({ fullName: 1 }).lean(),
-      PrintJob.find({}).sort({ createdAt: -1 }).limit(5000).lean(),
-      AuditLog.find({}).sort({ createdAt: -1 }).limit(10000).lean(),
-      Notification.find({}).sort({ createdAt: -1 }).limit(5000).lean(),
+      PrintJob.find({}).sort({ createdAt: -1 }).limit(2000).lean(),
     ]);
 
   let cases = allCases;
   let filteredPayments = payments;
   let filteredPrint = printJobs;
-  let filteredAudit = auditLogs;
-  let filteredNotif = notifications;
 
   if (filterMonth) {
-    const { start, end } = monthBounds(year, month);
     cases = allCases.filter((doc) => {
       if (doc.currentStage === 'exited') {
         return inMonth(caseExitedDate(doc), year, month);
@@ -189,9 +184,6 @@ async function loadExportPayload(year, month) {
     });
     filteredPayments = payments.filter((p) => inMonth(p.paymentDate || p.createdAt, year, month));
     filteredPrint = printJobs.filter((j) => inMonth(j.createdAt, year, month));
-    filteredAudit = auditLogs.filter((a) => inMonth(a.createdAt, year, month));
-    filteredNotif = notifications.filter((n) => inMonth(n.createdAt, year, month));
-    // Always include full pricing + users as system settings snapshot
   }
 
   const caseRows = cases.map((doc) => {
@@ -234,8 +226,8 @@ async function loadExportPayload(year, month) {
     pricings,
     users,
     printJobs: filteredPrint,
-    auditLogs: filteredAudit,
-    notifications: filteredNotif,
+    auditLogs: [],
+    notifications: [],
     summary,
     start: filterMonth ? monthBounds(year, month).start : null,
     end: filterMonth ? monthBounds(year, month).end : null,
@@ -264,10 +256,17 @@ exports.exportMonthData = async (req, res) => {
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', (err) => {
-      throw err;
+      console.error('Archive stream error:', err);
+      try {
+        res.destroy(err);
+      } catch (_) {
+        /* ignore */
+      }
     });
     archive.pipe(res);
 
@@ -342,6 +341,8 @@ exports.exportMonthData = async (req, res) => {
       { name: 'users.csv' }
     );
 
+    // print jobs only (skip huge audit/notification dumps)
+
     archive.append(
       toCsv(
         payload.printJobs.map((j) => ({
@@ -371,27 +372,6 @@ exports.exportMonthData = async (req, res) => {
     );
 
     archive.append(
-      toCsv(payload.auditLogs, [
-        { label: 'caseNumber', key: 'caseNumber' },
-        { label: 'action', key: 'action' },
-        { label: 'performedByName', key: 'performedByName' },
-        { label: 'createdAt', key: 'createdAt' },
-      ]),
-      { name: 'audit_logs.csv' }
-    );
-
-    archive.append(
-      toCsv(payload.notifications, [
-        { label: 'type', key: 'type' },
-        { label: 'title', key: 'title' },
-        { label: 'message', key: 'message' },
-        { label: 'caseNumber', key: 'caseNumber' },
-        { label: 'createdAt', key: 'createdAt' },
-      ]),
-      { name: 'notifications.csv' }
-    );
-
-    archive.append(
       JSON.stringify(
         {
           year: payload.year,
@@ -405,17 +385,25 @@ exports.exportMonthData = async (req, res) => {
       { name: 'summary.json' }
     );
 
-    // ——— Extra: dashboard-style snapshot (active cases that stay after reset) ———
-    const allForDash = await DentalCase.find({}).select('currentStage status').lean();
+    // Extra: dashboard snapshot from live stage counts (fast)
+    const liveCounts = await DentalCase.aggregate([
+      { $group: { _id: '$currentStage', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(liveCounts.map((r) => [r._id || 'unknown', r.count]));
     const dashRows = [
-      { metric: 'إجمالي الحالات النشطة (غير خارجة)', value: allForDash.filter((c) => c.currentStage !== 'exited').length },
-      { metric: 'الحالات الجديدة (انتظار) — فلتر الجديدة', value: allForDash.filter((c) => c.currentStage === 'waiting').length },
-      { metric: 'الحالات المنتهية (قبل الخروج) — فلتر المنتهية', value: allForDash.filter((c) => c.currentStage === 'completed').length },
-      { metric: 'في التصميم', value: allForDash.filter((c) => c.currentStage === 'design').length },
-      { metric: 'في الخارج/الخراطة', value: allForDash.filter((c) => c.currentStage === 'khart').length },
-      { metric: 'في التشطيب', value: allForDash.filter((c) => c.currentStage === 'finishing').length },
-      { metric: 'سكرتارية', value: allForDash.filter((c) => c.currentStage === 'secretary').length },
-      { metric: 'الحالات الخارجة (هتتمسح عند التصفير)', value: allForDash.filter((c) => c.currentStage === 'exited').length },
+      {
+        metric: 'إجمالي الحالات النشطة (غير خارجة)',
+        value: Object.entries(countMap)
+          .filter(([k]) => k !== 'exited')
+          .reduce((s, [, n]) => s + n, 0),
+      },
+      { metric: 'الحالات الجديدة (انتظار)', value: countMap.waiting || 0 },
+      { metric: 'الحالات المنتهية (قبل الخروج)', value: countMap.completed || 0 },
+      { metric: 'في التصميم', value: countMap.design || 0 },
+      { metric: 'في الخارج/الخراطة', value: countMap.khart || 0 },
+      { metric: 'في التشطيب', value: countMap.finishing || 0 },
+      { metric: 'سكرتارية', value: countMap.secretary || 0 },
+      { metric: 'الحالات الخارجة', value: countMap.exited || 0 },
     ];
     archive.append(
       toCsv(dashRows, [
@@ -494,10 +482,6 @@ exports.exportMonthData = async (req, res) => {
         .slice(0, 80);
 
     for (const [doctorName, rows] of Object.entries(byDoctorCases)) {
-      const total = rows.reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
-      const paid = rows
-        .filter((r) => r.paymentStatus === 'paid')
-        .reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
       archive.append(
         toCsv(rows, [
           { label: 'رقم الحالة', key: 'caseNumber' },
@@ -513,20 +497,6 @@ exports.exportMonthData = async (req, res) => {
           { label: 'الفرع', key: 'clinic' },
         ]),
         { name: `doctors/${safeName(doctorName)}.csv` }
-      );
-      archive.append(
-        JSON.stringify(
-          {
-            doctorName,
-            exitedCases: rows.length,
-            totalAmount: total,
-            paidAmount: paid,
-            unpaidAmount: total - paid,
-          },
-          null,
-          2
-        ),
-        { name: `doctors/${safeName(doctorName)}_summary.json` }
       );
     }
 

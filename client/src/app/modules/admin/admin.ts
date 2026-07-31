@@ -1667,31 +1667,28 @@ export class Admin implements OnInit, OnDestroy {
     this.monthArchiveApi.exportZip(year, month).subscribe({
       next: (blob) => {
         this.archiveLoading = false;
+        const filename = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
+        a.download = filename;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
-        this.archiveSuccess = 'تم حفظ وتحميل كل البيانات بنجاح (ZIP)';
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        this.archiveSuccess = `تم التحميل: ${filename} — لو الملف مش ظاهر، شوف مجلد Downloads`;
         this.loadArchiveList();
       },
-      error: async (err: unknown) => {
+      error: (err: unknown) => {
         this.archiveLoading = false;
-        let message = 'فشل التحميل';
-        if (err instanceof HttpErrorResponse) {
-          if (err.error instanceof Blob) {
-            try {
-              const text = await err.error.text();
-              const parsed = JSON.parse(text);
-              message = String(parsed?.message || message);
-            } catch {
-              message = err.message || message;
-            }
-          } else {
-            message = String(err.error?.message || err.message || message);
-          }
-        }
+        const message =
+          err instanceof Error
+            ? err.message
+            : err instanceof HttpErrorResponse
+              ? String(err.error?.message || err.message || 'فشل التحميل')
+              : 'فشل التحميل';
         this.archiveError = message;
       },
     });
