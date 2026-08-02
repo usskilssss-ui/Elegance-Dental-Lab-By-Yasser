@@ -48,7 +48,7 @@ type DoctorFilter =
   standalone: true,
   imports: [CommonModule, FormsModule, PatientLabelPipe],
   templateUrl: './doctor.html',
-  styleUrls: ['../secretary/secretary.css'],
+  styleUrls: ['../secretary/secretary.css', './doctor.css'],
 })
 export class DoctorComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
@@ -97,6 +97,18 @@ export class DoctorComponent implements OnInit, OnDestroy {
   workTypeQuantities: Record<string, number> = {};
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   workTypeError = '';
+
+  /** Color required only for these work types */
+  readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
+
+  /** True when at least one selected type requires color */
+  get isColorRequired(): boolean {
+    if (this.formDraft.caseType === 'Empty') return false;
+    for (const wt of this.selectedWorkTypes) {
+      if (this.colorRequiredTypes.has(wt)) return true;
+    }
+    return false;
+  }
 
   get searchQueryValue(): string {
     return this.searchQuery();
@@ -338,7 +350,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.flash('يرجى اختيار نوع العمل');
       return;
     }
-    if (d.caseType !== 'Empty' && !d.color?.trim()) {
+    if (this.isColorRequired && !d.color?.trim()) {
       this.flash('يرجى إدخال اللون');
       return;
     }
@@ -435,11 +447,24 @@ export class DoctorComponent implements OnInit, OnDestroy {
   formatDateTime(value: string): { date: string; time: string } {
     if (!value) return { date: '—', time: '' };
     try {
-      const d = new Date(value);
+      const raw = String(value).trim();
+      // Date-only (YYYY-MM-DD) → no fake UTC midnight time
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const [y, m, d] = raw.split('-').map(Number);
+        const local = new Date(y, m - 1, d);
+        return {
+          date: local.toLocaleDateString('ar-EG-u-nu-latn', {
+            day: 'numeric',
+            month: 'numeric',
+            year: 'numeric',
+          }),
+          time: '',
+        };
+      }
+      const d = new Date(raw);
       if (Number.isNaN(d.getTime())) {
-        // already formatted display string
-        const parts = String(value).split(/\s+/);
-        return { date: parts[0] || value, time: parts.slice(1).join(' ') };
+        const parts = raw.split(/\s+/);
+        return { date: parts[0] || raw, time: parts.slice(1).join(' ') };
       }
       return {
         date: d.toLocaleDateString('ar-EG-u-nu-latn', {
@@ -447,10 +472,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
           month: 'numeric',
           year: 'numeric',
         }),
-        time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        time: d.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }),
       };
     } catch {
       return { date: value, time: '' };
     }
+  }
+
+  /** Prefer server createdAt so the clock matches when the request was saved */
+  caseReceivedStamp(c: DentalCase): string {
+    return c.createdAt || c.receivedDateRaw || c.receivedDate || '';
   }
 }

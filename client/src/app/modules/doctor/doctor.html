@@ -138,8 +138,6 @@
               </span>
             </div>
             <div class="case-people">
-              <div class="doctor">{{ c.doctor }}</div>
-              <span class="requester-badge">دكتور</span>
               <div class="patient">{{ c.patient | patientLabel }}</div>
             </div>
             <div class="case-work">
@@ -158,21 +156,21 @@
               @if (c.status === 'exited') {
                 <div class="date-block">
                   <span class="date-label">تاريخ الدخول</span>
-                  <span class="date-value">{{ formatDateTime(c.receivedDate).date }}</span>
-                  @if (formatDateTime(c.receivedDate).time) {
-                    <span class="time-value">{{ formatDateTime(c.receivedDate).time }}</span>
+                  <span class="date-value">{{ formatDateTime(caseReceivedStamp(c)).date }}</span>
+                  @if (formatDateTime(caseReceivedStamp(c)).time) {
+                    <span class="time-value">{{ formatDateTime(caseReceivedStamp(c)).time }}</span>
                   }
                 </div>
                 <div class="date-block">
                   <span class="date-label">تاريخ الخروج</span>
-                  <span class="date-value">{{ formatDateTime(c.exitedAt || c.deliveryDate || c.receivedDate).date }}</span>
+                  <span class="date-value">{{ formatDateTime(c.exitedAt || c.deliveryDate || caseReceivedStamp(c)).date }}</span>
                 </div>
               } @else {
                 <div class="date-block">
                   <span class="date-label">تاريخ الاستلام</span>
-                  <span class="date-value">{{ formatDateTime(c.receivedDate).date }}</span>
-                  @if (formatDateTime(c.receivedDate).time) {
-                    <span class="time-value">{{ formatDateTime(c.receivedDate).time }}</span>
+                  <span class="date-value">{{ formatDateTime(caseReceivedStamp(c)).date }}</span>
+                  @if (formatDateTime(caseReceivedStamp(c)).time) {
+                    <span class="time-value">{{ formatDateTime(caseReceivedStamp(c)).time }}</span>
                   }
                 </div>
               }
@@ -287,8 +285,18 @@
           </label>
 
           <label class="form-field">
-            <span>اللون <abbr title="مطلوب">*</abbr></span>
-            <input type="text" name="color" [(ngModel)]="formDraft.color" placeholder="مثال: A2" autocomplete="off" />
+            @if (isColorRequired) {
+              <span>اللون <abbr title="مطلوب">*</abbr></span>
+            } @else {
+              <span>اللون <span class="label-optional">(اختياري)</span></span>
+            }
+            <input
+              type="text"
+              name="color"
+              [(ngModel)]="formDraft.color"
+              [placeholder]="isColorRequired ? 'مثال: A2' : 'اختياري'"
+              autocomplete="off"
+            />
           </label>
 
           <label class="form-field">

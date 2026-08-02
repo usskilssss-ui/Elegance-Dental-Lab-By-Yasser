@@ -44,6 +44,8 @@ export interface DentalCase {
   exitedAtRaw?: string;
   /** القيمة الخام لتاريخ الاستلام من قاعدة البيانات (لضمان عدم تغييره عند التعديل) */
   receivedDateRaw?: string;
+  /** وقت إنشاء الحالة من الخادم (ISO) لعرض الساعة بشكل صحيح */
+  createdAt?: string;
 }
 
 @Injectable({
