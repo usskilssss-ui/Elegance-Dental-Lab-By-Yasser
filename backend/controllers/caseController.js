@@ -59,6 +59,38 @@ const sanitizeNotesMetaString = (notes) => {
   }
 };
 
+/** Force referring-doctor name inside __META__ notes (doctor portal cannot spoof). */
+function forceDoctorNameInNotes(notes, doctorFullName) {
+  const prefix = '__META__\n';
+  const name = String(doctorFullName || '').trim();
+  let meta = {};
+  if (notes && typeof notes === 'string' && notes.startsWith(prefix)) {
+    try {
+      meta = JSON.parse(notes.slice(prefix.length)) || {};
+    } catch {
+      meta = {};
+    }
+  }
+  meta.doctor = name;
+  meta.requesterType = 'doctor';
+  return `${prefix}${JSON.stringify(meta)}`;
+}
+
+function normalizeDoctorKey(name) {
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function caseBelongsToDoctor(doc, doctorFullName) {
+  const want = normalizeDoctorKey(doctorFullName);
+  if (!want) return false;
+  const meta = parseNotesMeta(doc.notes || '');
+  const got = normalizeDoctorKey(meta.doctor || meta.doctorName || '');
+  return got === want;
+}
+
 // Create a new case
 exports.createCase = async (req, res) => {
   try {
@@ -67,7 +99,7 @@ exports.createCase = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const {
+    let {
       patientName,
       patientEmail,
       patientPhone,
@@ -79,6 +111,12 @@ exports.createCase = async (req, res) => {
       dueDate,
     } =
       req.body;
+
+    // Doctor accounts: lock referring doctor name to the logged-in user
+    if (req.user?.role === 'doctor') {
+      notes = forceDoctorNameInNotes(notes, req.user.fullName);
+      requesterType = 'doctor';
+    }
 
     const normalizedRequesterType = requesterType === 'student' ? 'student' : 'doctor';
     const isStudentCase = normalizedRequesterType === 'student';
@@ -186,13 +224,56 @@ exports.getAllCases = async (req, res) => {
       ];
     }
 
+    // Resolve doctor identity when JWT is present (optional auth on GET /)
+    let doctorFullName = '';
+    let isDoctor = req.user?.role === 'doctor';
+    if (req.user?.userId || req.user?.id) {
+      const uid = req.user.id || req.user.userId;
+      if (!req.user.fullName || !req.user.role) {
+        const u = await User.findById(uid).select('fullName role');
+        if (u) {
+          req.user.fullName = u.fullName;
+          req.user.role = u.role;
+          isDoctor = u.role === 'doctor';
+        }
+      }
+      if (isDoctor) doctorFullName = String(req.user.fullName || '').trim();
+    }
+
     const skip = (page - 1) * limit;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+
+    // Doctors: load a wide window then filter by referring-doctor meta (notes JSON)
+    if (isDoctor && doctorFullName) {
+      const all = await DentalCase.find(filter)
+        .populate('assignedTo', 'fullName email role')
+        .populate('createdBy', 'fullName email')
+        .sort({ createdAt: -1 })
+        .limit(5000);
+      const mine = all.filter((c) => caseBelongsToDoctor(c, doctorFullName));
+      mine.forEach((c) => {
+        c.notes = sanitizeNotesMetaString(c.notes);
+      });
+      const total = mine.length;
+      const paged = mine.slice(skip, skip + limitNum);
+      return res.status(200).json({
+        success: true,
+        data: paged,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          pages: Math.ceil(total / limitNum) || 1,
+        },
+      });
+    }
 
     const cases = await DentalCase.find(filter)
       .populate('assignedTo', 'fullName email role')
       .populate('createdBy', 'fullName email')
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limitNum)
       .sort({ createdAt: -1 });
     cases.forEach((c) => {
       c.notes = sanitizeNotesMetaString(c.notes);
@@ -205,9 +286,9 @@ exports.getAllCases = async (req, res) => {
       data: cases,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / limit),
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum),
       },
     });
   } catch (error) {

@@ -1,0 +1,307 @@
+<div class="secretary" dir="rtl">
+  @if (toast(); as message) {
+    <div class="toast" role="status">{{ message }}</div>
+  }
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="avatar" aria-label="Elegance Precision Labs Logo">
+        <div class="elegance-logo-container">
+          <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">
+            <path d="M 32,25 C 20,25 15,45 25,68 C 32,82 46,85 48,72 C 44,64 36,48 40,36 C 44,24 52,28 58,26" stroke="url(#logo-grad-d)" stroke-width="5.5" stroke-linecap="round" />
+            <path d="M 68,25 C 80,25 85,45 75,68 C 68,82 54,85 52,72 C 56,64 64,48 60,36 C 56,24 48,28 42,26" stroke="url(#logo-grad-d)" stroke-width="5.5" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="logo-grad-d" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#2563eb" />
+                <stop offset="100%" stop-color="#0d9488" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="elegance-navbar-brand">
+        <span class="elegance-navbar-dot"></span>
+        <span class="elegance-navbar-title">Elegance</span>
+        <span class="elegance-navbar-dot"></span>
+      </div>
+      <p class="elegance-navbar-sub">Precision Labs</p>
+    </div>
+
+    <div class="topbar-right">
+      <button type="button" class="icon-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme()" title="تغيير المظهر">
+        <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg *ngIf="themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" aria-label="تسجيل الخروج" (click)="logout()" title="تسجيل الخروج">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1>لوحة تتبع حالات دكتور {{ doctorName() }}</h1>
+        <p>متابعة حالاتك في المعمل وإضافة ريكويست جديد للطباعة</p>
+      </div>
+      <div class="case-create-actions">
+        <button type="button" class="btn-primary" (click)="openDialog()" [disabled]="saveInProgress()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+          </svg>
+          إضافة ريكويست
+        </button>
+      </div>
+    </div>
+
+    @if (casesLoading()) {
+      <p class="empty-list" style="margin-bottom:12px;">جاري تحميل الحالات من الخادم…</p>
+    }
+
+    <section class="stats-grid" aria-label="ملخص الحالات">
+      @for (stat of stats(); track stat.label) {
+        <article class="stat-card">
+          <div class="stat-label">{{ stat.label }}</div>
+          <div class="stat-value-row">
+            <span class="stat-value stat-value--{{ stat.color }}">{{ stat.value }}</span>
+          </div>
+        </article>
+      }
+    </section>
+
+    <div class="filter-tabs" aria-label="تصفية الحالات">
+      <button class="filter-tab" [class.active]="activeFilter() === 'all'" (click)="setFilter('all')">
+        الكل <span class="tab-count">{{ filterCounts().all }}</span>
+      </button>
+      <button class="filter-tab filter-pending" [class.active]="activeFilter() === 'pending'" (click)="setFilter('pending')">
+        الجديدة <span class="tab-count">{{ filterCounts().pending }}</span>
+      </button>
+      <button class="filter-tab" [class.active]="activeFilter() === 'design'" (click)="setFilter('design')">
+        تحت الديزاين <span class="tab-count">{{ filterCounts().design }}</span>
+      </button>
+      <button class="filter-tab" [class.active]="activeFilter() === 'finishing'" (click)="setFilter('finishing')">
+        تحت الفينيش <span class="tab-count">{{ filterCounts().finishing }}</span>
+      </button>
+      <button class="filter-tab filter-finished" [class.active]="activeFilter() === 'finished'" (click)="setFilter('finished')">
+        منتهية <span class="tab-count">{{ filterCounts().finished }}</span>
+      </button>
+      <button class="filter-tab filter-exited" [class.active]="activeFilter() === 'exited'" (click)="setFilter('exited')">
+        خارجة <span class="tab-count">{{ filterCounts().exited }}</span>
+      </button>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="11" cy="11" r="7" />
+            <path stroke-linecap="round" d="M20 20l-3.3-3.3" />
+          </svg>
+        </span>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="ابحث برقم الحالة أو اسم المريض..."
+          [(ngModel)]="searchQueryValue"
+        />
+      </div>
+    </div>
+
+    <section class="case-list" aria-label="قائمة الحالات">
+      @if (cases().length === 0 && !casesLoading()) {
+        <p class="empty-list">لا توجد حالات للعرض</p>
+      }
+      @for (c of cases(); track c.id) {
+        <article class="case-card" [attr.data-case-id]="c.id">
+          <div class="case-main">
+            <div class="case-head">
+              <span class="case-id">{{ c.caseNumber }}</span>
+              <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">
+                {{ getCasePhase(c).label }}
+              </span>
+            </div>
+            <div class="case-people">
+              <div class="doctor">{{ c.doctor }}</div>
+              <span class="requester-badge">دكتور</span>
+              <div class="patient">{{ c.patient | patientLabel }}</div>
+            </div>
+            <div class="case-work">
+              <div class="work-type">{{ formatWorkTypeForDisplay(c.workType) }}</div>
+              @if (c.workDetail) {
+                <div class="work-detail">{{ c.workDetail }}</div>
+              }
+              <div class="case-spec">
+                @if (c.color) {
+                  <span class="spec-item">Color: {{ c.color }}</span>
+                }
+                <span class="spec-item">Qty: {{ c.quantity }}</span>
+              </div>
+            </div>
+            <div class="case-meta">
+              @if (c.status === 'exited') {
+                <div class="date-block">
+                  <span class="date-label">تاريخ الدخول</span>
+                  <span class="date-value">{{ formatDateTime(c.receivedDate).date }}</span>
+                  @if (formatDateTime(c.receivedDate).time) {
+                    <span class="time-value">{{ formatDateTime(c.receivedDate).time }}</span>
+                  }
+                </div>
+                <div class="date-block">
+                  <span class="date-label">تاريخ الخروج</span>
+                  <span class="date-value">{{ formatDateTime(c.exitedAt || c.deliveryDate || c.receivedDate).date }}</span>
+                </div>
+              } @else {
+                <div class="date-block">
+                  <span class="date-label">تاريخ الاستلام</span>
+                  <span class="date-value">{{ formatDateTime(c.receivedDate).date }}</span>
+                  @if (formatDateTime(c.receivedDate).time) {
+                    <span class="time-value">{{ formatDateTime(c.receivedDate).time }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+      }
+    </section>
+  </main>
+
+  @if (dialogOpen()) {
+    <div class="modal-backdrop" role="presentation" (click)="closeDialog()">
+      <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <h2 class="modal-title">إضافة ريكويست</h2>
+        <form class="case-form" (ngSubmit)="save()">
+          <label class="form-field">
+            <span>اسم المريض (ثنائي) <abbr title="مطلوب">*</abbr></span>
+            <input
+              type="text"
+              name="patient"
+              [(ngModel)]="formDraft.patient"
+              placeholder="الاسم الأول والأخير"
+              required
+              autocomplete="off"
+            />
+            @if (patientNameError) {
+              <span class="wt-error">{{ patientNameError }}</span>
+            }
+          </label>
+
+          <label class="form-field">
+            <span>الفرع <abbr title="مطلوب">*</abbr></span>
+            <input type="text" name="branch" [(ngModel)]="formDraft.branch" placeholder="اسم الفرع" required autocomplete="off" />
+          </label>
+
+          <label class="form-field">
+            <span>نوع الحالة <abbr title="مطلوب">*</abbr></span>
+            <select name="caseType" [(ngModel)]="formDraft.caseType" (ngModelChange)="onCaseTypeChange()">
+              @for (opt of caseTypeOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </label>
+
+          @if (formDraft.caseType !== 'Empty') {
+            <div class="form-field">
+              <span>نوع العمل <abbr title="مطلوب">*</abbr></span>
+              <div class="work-type-chips" [class.has-error]="workTypeError">
+                @for (wt of workTypeOptions; track wt) {
+                  <button
+                    type="button"
+                    class="wt-chip"
+                    [class.selected]="isWorkTypeSelected(wt)"
+                    (click)="toggleWorkType(wt)"
+                  >
+                    <span class="wt-chip-check">
+                      @if (isWorkTypeSelected(wt)) {
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      } @else {
+                        <span class="wt-chip-empty"></span>
+                      }
+                    </span>
+                    {{ wt }}
+                  </button>
+                }
+              </div>
+              @if (workTypeError) {
+                <span class="wt-error">{{ workTypeError }}</span>
+              }
+
+              @if (isWorkTypeSelected('Night Guard')) {
+                <div class="night-guard-sub-container">
+                  <span class="night-guard-sub-title">نوع الـ Night Guard:</span>
+                  <div class="night-guard-options">
+                    <button type="button" class="ng-sub-chip" [class.selected]="nightGuardType === 'Soft'" (click)="setNightGuardType('Soft')">Soft</button>
+                    <button type="button" class="ng-sub-chip" [class.selected]="nightGuardType === 'Hard'" (click)="setNightGuardType('Hard')">Hard</button>
+                  </div>
+                </div>
+              }
+
+              @if (hasWorkTypesWithQuantity) {
+                <div class="wt-quantities-container">
+                  <div class="wt-quantities-title">العدد لكل نوع:</div>
+                  <div style="display:flex;flex-direction:column;gap:8px;">
+                    @for (wt of selectedWorkTypes; track wt) {
+                      @if (wt !== 'Remake' && wt !== 'Empty') {
+                        <div class="wt-quantity-row">
+                          <span class="wt-quantity-name">{{ wt }}</span>
+                          <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="wt-quantity-label">الكمية:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              class="wt-quantity-input"
+                              [(ngModel)]="workTypeQuantities[wt]"
+                              (ngModelChange)="onWorkTypeQtyChange()"
+                              [ngModelOptions]="{standalone: true}"
+                            />
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <label class="form-field">
+            <span>إجمالي العدد</span>
+            <input type="number" name="quantity" [ngModel]="formDraft.quantity" [readonly]="true" />
+          </label>
+
+          <label class="form-field">
+            <span>اللون <abbr title="مطلوب">*</abbr></span>
+            <input type="text" name="color" [(ngModel)]="formDraft.color" placeholder="مثال: A2" autocomplete="off" />
+          </label>
+
+          <label class="form-field">
+            <span>تفاصيل <span class="label-optional">(اختياري)</span></span>
+            <input type="text" name="workDetail" [(ngModel)]="formDraft.workDetail" autocomplete="off" />
+          </label>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
+            <button type="submit" class="btn-primary">حفظ وطباعة</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

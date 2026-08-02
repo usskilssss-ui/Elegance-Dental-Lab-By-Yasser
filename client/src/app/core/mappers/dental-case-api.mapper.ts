@@ -278,6 +278,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     requesterType,
     instructions: instructionsFromMeta || instructionsLines.join('\n'),
     status: mapUiStatus(doc, uiStatusOverride),
+    currentStage: String(doc['currentStage'] ?? ''),
     designNotes,
     selectedFileName,
     designImages,

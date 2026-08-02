@@ -5,13 +5,13 @@ const printController = require('../controllers/printController');
 
 const { verifyToken } = require('../config/jwt');
 
-// Create print job (requester / public / secretary / admin)
+// Create print job (requester / public / secretary / admin / doctor)
 router.post('/job', (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (token) {
     try {
       const decoded = verifyToken(token);
-      if (decoded) req.user = { userId: decoded.userId };
+      if (decoded) req.user = { userId: decoded.userId, role: decoded.role };
     } catch (e) {}
   }
   next();

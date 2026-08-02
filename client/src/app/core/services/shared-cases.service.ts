@@ -20,6 +20,8 @@ export interface DentalCase {
     | 'under-khart'
     | 'finished'
     | 'exited';
+  /** Backend currentStage when available (waiting|design|khart|finishing|completed|exited|…) */
+  currentStage?: string;
   designNotes: string;
   selectedFileName: string;
   designImages: string[]; // صور التصميم المرفوعة

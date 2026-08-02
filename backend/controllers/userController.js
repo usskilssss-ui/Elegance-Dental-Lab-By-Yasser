@@ -189,7 +189,7 @@ exports.getUsersByRole = async (req, res) => {
   try {
     const { role } = req.params;
 
-    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester'];
+    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor'];
 
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });

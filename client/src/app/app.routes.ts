@@ -10,6 +10,7 @@ import { SecretaryDashboardComponent } from './modules/secretary-dashboard/secre
 import { Finishing } from './modules/finishing/finishing';
 import { RequesterComponent } from './modules/requester/requester';
 import { EntryComponent } from './modules/entry/entry';
+import { DoctorComponent } from './modules/doctor/doctor';
 
 /** Admin may open designer / secretary / finisher workspaces from the admin UI. */
 const WITH_ADMIN: (r: AppRole) => AppRole[] = r => [r, 'admin'];
@@ -64,6 +65,15 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: EntryComponent },
+    ],
+  },
+
+  {
+    path: 'doctor',
+    canActivate: [authGuard, roleGuard(WITH_ADMIN('doctor'))],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+      { path: 'dashboard', component: DoctorComponent },
     ],
   },
 

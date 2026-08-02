@@ -63,10 +63,10 @@ router.get('/', (req, res, next) => {
 // All other case routes require authentication
 router.use(authenticate);
 
-// Create case - Secretary, Admin, and Requester
+// Create case - Secretary, Admin, Requester, Doctor
 router.post(
   '/',
-  authorize('admin', 'secretary', 'requester'),
+  authorize('admin', 'secretary', 'requester', 'doctor'),
   createCaseValidation,
   caseController.createCase
 );

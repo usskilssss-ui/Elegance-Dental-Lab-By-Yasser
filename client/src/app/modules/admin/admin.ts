@@ -301,6 +301,24 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   staffMembers: StaffMember[] = [];
+  doctorMembers: StaffMember[] = [];
+  doctorSearchTerm = '';
+  doctorLoadError = '';
+  showDoctorModal = false;
+  isDoctorEditMode = false;
+  doctorSaving = false;
+  doctorModalError = '';
+  showDoctorPassword = false;
+  currentDoctor: StaffMember = {
+    id: '',
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    position: 'دكتور',
+    status: 'active',
+    joinDate: new Date().toISOString().split('T')[0],
+  };
 
   currentStaff: StaffMember = {
     id: '',
@@ -316,12 +334,25 @@ export class Admin implements OnInit, OnDestroy {
   readonly positions = ['مصمم', 'مسؤول الطباعة', 'سكرتير', 'مدير', 'ريكويست'] as const;
 
   get filteredStaff(): StaffMember[] {
-    if (!this.searchTerm.trim()) return this.staffMembers;
+    const staffOnly = this.staffMembers.filter((s) => s.position !== 'دكتور');
+    if (!this.searchTerm.trim()) return staffOnly;
     const search = this.searchTerm.toLowerCase();
-    return this.staffMembers.filter(staff =>
-      staff.name.toLowerCase().includes(search) ||
-      staff.email.toLowerCase().includes(search) ||
-      staff.phone.includes(search)
+    return staffOnly.filter(
+      (staff) =>
+        staff.name.toLowerCase().includes(search) ||
+        staff.email.toLowerCase().includes(search) ||
+        staff.phone.includes(search)
+    );
+  }
+
+  get filteredDoctors(): StaffMember[] {
+    if (!this.doctorSearchTerm.trim()) return this.doctorMembers;
+    const search = this.doctorSearchTerm.toLowerCase();
+    return this.doctorMembers.filter(
+      (d) =>
+        d.name.toLowerCase().includes(search) ||
+        d.email.toLowerCase().includes(search) ||
+        d.phone.includes(search)
     );
   }
 
@@ -1590,7 +1621,7 @@ export class Admin implements OnInit, OnDestroy {
     }
     this.activeNav = nav;
     this.persistActiveNav();
-    if (nav === 'staff') {
+    if (nav === 'staff' || nav === 'doctors') {
       this.loadStaffFromApi();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
@@ -1814,15 +1845,20 @@ export class Admin implements OnInit, OnDestroy {
 
   loadStaffFromApi(): void {
     this.staffLoadError = '';
+    this.doctorLoadError = '';
     this.userApi.getAllUsers(undefined, undefined, true).subscribe({
-      next: res => {
+      next: (res) => {
         const list = (res?.data ?? res?.users ?? []) as Record<string, unknown>[];
-        this.staffMembers = Array.isArray(list) ? list.map(u => this.mapApiUserToStaff(u)) : [];
+        const mapped = Array.isArray(list) ? list.map((u) => this.mapApiUserToStaff(u)) : [];
+        this.doctorMembers = mapped.filter((m) => m.position === 'دكتور');
+        this.staffMembers = mapped.filter((m) => m.position !== 'دكتور');
       },
-      error: err => {
+      error: (err) => {
         console.error(err);
         this.staffLoadError = 'تعذر تحميل قائمة الموظفين من الخادم';
+        this.doctorLoadError = 'تعذر تحميل قائمة الدكاترة من الخادم';
         this.staffMembers = [];
+        this.doctorMembers = [];
       },
     });
   }
@@ -1885,6 +1921,7 @@ export class Admin implements OnInit, OnDestroy {
     if (r === 'designer') return 'مصمم';
     if (r === 'finisher') return 'مسؤول الطباعة';
     if (r === 'requester') return 'ريكويست';
+    if (r === 'doctor') return 'دكتور';
     return 'سكرتير';
   }
 
@@ -1895,7 +1932,138 @@ export class Admin implements OnInit, OnDestroy {
     if (p === 'designer' || p === 'مصمم') return 'designer';
     if (p === 'finisher' || p === 'مسؤول الطباعة' || p === 'فني تشطيب') return 'finisher';
     if (p === 'requester' || p === 'ريكويست') return 'requester';
+    if (p === 'doctor' || p === 'دكتور') return 'doctor';
     return 'secretary';
+  }
+
+  openAddDoctorModal() {
+    this.isDoctorEditMode = false;
+    this.doctorModalError = '';
+    this.showDoctorPassword = false;
+    this.currentDoctor = {
+      id: '',
+      name: '',
+      email: '',
+      password: '',
+      phone: '',
+      position: 'دكتور',
+      status: 'active',
+      joinDate: new Date().toISOString().split('T')[0],
+    };
+    this.showDoctorModal = true;
+  }
+
+  openEditDoctorModal(doc: StaffMember) {
+    this.isDoctorEditMode = true;
+    this.doctorModalError = '';
+    this.showDoctorPassword = false;
+    this.currentDoctor = { ...doc, password: '', position: 'دكتور' };
+    this.showDoctorModal = true;
+  }
+
+  closeDoctorModal() {
+    this.showDoctorModal = false;
+    this.showDoctorPassword = false;
+    this.doctorModalError = '';
+    this.doctorSaving = false;
+  }
+
+  toggleDoctorActive(doc: StaffMember): void {
+    if (!doc.id) return;
+    const targetActive = doc.status !== 'active';
+    this.userApi.updateUser(doc.id, { isActive: targetActive }).subscribe({
+      next: () => this.loadStaffFromApi(),
+      error: (err) => {
+        console.error(err);
+        this.doctorLoadError = 'تعذر تحديث حالة الحساب';
+      },
+    });
+  }
+
+  deleteDoctor(doc: StaffMember): void {
+    if (!doc.id) return;
+    const ok = confirm(`هل أنت متأكد من حذف حساب دكتور ${doc.name} نهائياً؟`);
+    if (!ok) return;
+    this.userApi.deleteUser(doc.id).subscribe({
+      next: () => this.loadStaffFromApi(),
+      error: (err) => {
+        console.error(err);
+        this.doctorLoadError = 'تعذر حذف الحساب';
+      },
+    });
+  }
+
+  saveDoctor(): void {
+    this.doctorModalError = '';
+    const name = (this.currentDoctor.name || '').trim();
+    const email = (this.currentDoctor.email || '').trim();
+    const phone = (this.currentDoctor.phone || '').trim() || '0000000000';
+    if (!name) {
+      this.doctorModalError = 'يرجى إدخال اسم الدكتور';
+      return;
+    }
+    if (!email) {
+      this.doctorModalError = 'يرجى إدخال البريد الإلكتروني';
+      return;
+    }
+
+    if (this.isDoctorEditMode) {
+      if (!this.currentDoctor.id) return;
+      const patch: Record<string, unknown> = {
+        fullName: name,
+        phone,
+        role: 'doctor',
+        department: 'دكتور',
+        isActive: this.currentDoctor.status === 'active',
+      };
+      if (this.currentDoctor.password?.trim()) {
+        if (this.currentDoctor.password.trim().length < 6) {
+          this.doctorModalError = 'كلمة المرور يجب ألا تقل عن 6 أحرف';
+          return;
+        }
+        patch['password'] = this.currentDoctor.password.trim();
+      }
+      this.doctorSaving = true;
+      this.userApi.updateUser(this.currentDoctor.id, patch).subscribe({
+        next: () => {
+          this.doctorSaving = false;
+          this.closeDoctorModal();
+          this.loadStaffFromApi();
+        },
+        error: (err) => {
+          this.doctorSaving = false;
+          this.doctorModalError = err?.error?.message || 'تعذر تحديث الحساب';
+        },
+      });
+      return;
+    }
+
+    if (!this.currentDoctor.password || this.currentDoctor.password.length < 6) {
+      this.doctorModalError = 'كلمة المرور يجب ألا تقل عن 6 أحرف';
+      return;
+    }
+
+    this.doctorSaving = true;
+    this.auth
+      .registerStaff({
+        fullName: name,
+        email: email.toLowerCase(),
+        phone,
+        password: this.currentDoctor.password,
+        role: 'doctor',
+        department: 'دكتور',
+      })
+      .subscribe({
+        next: () => {
+          this.doctorSaving = false;
+          this.closeDoctorModal();
+          this.loadStaffFromApi();
+        },
+        error: (err) => {
+          this.doctorSaving = false;
+          this.doctorModalError = err?.error?.message || 'تعذر إنشاء الحساب';
+        },
+      });
   }
 
   private formatStaffApiError(err: unknown): string {

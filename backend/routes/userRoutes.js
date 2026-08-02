@@ -10,7 +10,7 @@ const updateUserValidation = [
   body('fullName').optional().trim(),
   body('phone').optional().trim(),
   body('department').optional().trim(),
-  body('role').optional().isIn(['admin', 'secretary', 'designer', 'finisher', 'requester']),
+  body('role').optional().isIn(['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor']),
   body('password').optional().isLength({ min: 6 }),
   body('isActive').optional().isBoolean(),
 ];

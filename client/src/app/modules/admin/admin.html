@@ -12,6 +12,10 @@
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       الموظفون
     </div>
+    <div class="nav-item" [class.active]="activeNav === 'doctors'" (click)="setNav('doctors')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      الدكاترة
+    </div>
     <div class="nav-item" [class.active]="activeNav === 'financials'" (click)="setNav('financials')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
       المالية
@@ -447,6 +451,145 @@
             <button type="button" class="btn-cancel" (click)="closeStaffModal()" [disabled]="staffSaving">إلغاء</button>
             <button type="button" class="btn-save" (click)="saveStaff()" [disabled]="staffSaving">
               {{ staffSaving ? 'جاري الحفظ…' : (isEditMode ? 'تحديث الموظف' : 'إضافة موظف') }}
+            </button>
+          </div>
+        </div>
+      </div>
+      </ng-container>
+
+      <!-- DOCTORS VIEW -->
+      <ng-container *ngIf="activeNav === 'doctors'">
+      <div class="page-header">
+        <div>
+          <div class="page-label">إدارة حسابات الدكاترة</div>
+          <div class="page-title">الدكاترة</div>
+        </div>
+        <button type="button" class="export-btn" (click)="openAddDoctorModal()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          إضافة حساب دكتور
+        </button>
+      </div>
+
+      <p *ngIf="doctorLoadError" style="margin:0 0 12px;color:#dc2626;font-size:14px;">{{ doctorLoadError }}</p>
+
+      <div class="staff-search">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input
+          type="search"
+          name="doctorDirectoryFilter"
+          autocomplete="off"
+          placeholder="ابحث بالاسم أو الإيميل..."
+          [(ngModel)]="doctorSearchTerm"
+        />
+      </div>
+
+      <div class="staff-grid">
+        <div class="staff-card" *ngFor="let doc of filteredDoctors">
+          <div class="staff-header">
+            <div class="staff-avatar" [class]="doc.status">{{ doc.name.charAt(0) }}</div>
+            <div class="staff-status-badge" [class]="doc.status">{{ doc.status }}</div>
+          </div>
+          <div class="staff-body">
+            <h3 class="staff-name">{{ doc.name }}</h3>
+            <p class="staff-position">دكتور</p>
+            <div class="staff-contact">
+              <small>{{ doc.email }}</small><br>
+              <small>{{ doc.phone }}</small>
+            </div>
+            <p class="staff-joined">تاريخ الانضمام: {{ doc.joinDate }}</p>
+          </div>
+          <div class="staff-actions">
+            <button type="button" class="staff-btn edit-btn" (click)="openEditDoctorModal(doc)" title="تعديل">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button
+              type="button"
+              class="staff-btn"
+              [title]="doc.status === 'active' ? 'تحويل إلى غير نشط' : 'تحويل إلى نشط'"
+              (click)="toggleDoctorActive(doc)"
+            >
+              {{ doc.status === 'active' ? 'إيقاف' : 'تفعيل' }}
+            </button>
+            <button
+              type="button"
+              class="staff-btn"
+              style="color:#dc2626;border-color:#fecaca;background:#fff5f5;"
+              title="حذف"
+              (click)="deleteDoctor(doc)"
+            >
+              حذف
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" *ngIf="showDoctorModal" (click)="closeDoctorModal()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h2>{{ isDoctorEditMode ? 'تعديل حساب دكتور' : 'إضافة حساب دكتور' }}</h2>
+            <button type="button" class="modal-close-btn" (click)="closeDoctorModal()">
+              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <form class="modal-body" autocomplete="off" (submit)="$event.preventDefault()">
+            <p class="staff-form-hint" style="font-size:12px;color:#64748b;margin:0 0 12px;">
+              الاسم هنا هو اللي هيظهر في الطباعة ولوحة التتبع (مثال: موسى).
+            </p>
+            <div class="form-group">
+              <label>اسم الدكتور <abbr title="مطلوب">*</abbr></label>
+              <input type="text" name="doctorFullName" [(ngModel)]="currentDoctor.name" placeholder="مثال: موسى" required />
+            </div>
+            <div class="form-group">
+              <label>البريد الإلكتروني <abbr title="مطلوب">*</abbr></label>
+              <input
+                type="email"
+                name="doctorWorkEmail"
+                autocomplete="off"
+                [(ngModel)]="currentDoctor.email"
+                placeholder="مثال: doctor@clinic.com"
+                [attr.readonly]="isDoctorEditMode ? '' : null"
+                [required]="!isDoctorEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>
+                كلمة المرور
+                @if (isDoctorEditMode) {
+                  <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري — اتركه فارغاً للإبقاء على الحالي)</span>
+                } @else {
+                  <abbr title="مطلوب">*</abbr>
+                }
+              </label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input
+                  name="doctorWorkPassword"
+                  autocomplete="new-password"
+                  [type]="showDoctorPassword ? 'text' : 'password'"
+                  [(ngModel)]="currentDoctor.password"
+                  placeholder="6 أحرف على الأقل"
+                  [required]="!isDoctorEditMode"
+                  [attr.minlength]="isDoctorEditMode ? null : 6"
+                />
+                <button
+                  type="button"
+                  class="btn-cancel"
+                  style="padding:8px 10px;min-width:64px;"
+                  (click)="showDoctorPassword = !showDoctorPassword"
+                >
+                  {{ showDoctorPassword ? 'إخفاء' : 'إظهار' }}
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>رقم الهاتف <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري)</span></label>
+              <input type="tel" name="doctorPhone" autocomplete="off" [(ngModel)]="currentDoctor.phone" placeholder="05xxxxxxxx" />
+            </div>
+          </form>
+          <p *ngIf="doctorModalError" style="margin:0 16px 12px;color:#dc2626;font-size:13px;">{{ doctorModalError }}</p>
+          <div class="modal-footer">
+            <button type="button" class="btn-cancel" (click)="closeDoctorModal()" [disabled]="doctorSaving">إلغاء</button>
+            <button type="button" class="btn-save" (click)="saveDoctor()" [disabled]="doctorSaving">
+              {{ doctorSaving ? 'جاري الحفظ…' : (isDoctorEditMode ? 'تحديث الحساب' : 'إضافة الحساب') }}
             </button>
           </div>
         </div>

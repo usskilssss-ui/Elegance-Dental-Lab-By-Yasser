@@ -259,6 +259,8 @@ export class AuthService {
         return '/secretary/dashboard';
       case 'requester':
         return '/requester/dashboard';
+      case 'doctor':
+        return '/doctor/dashboard';
       default:
         return '/admin/dashboard';
     }
@@ -277,7 +279,14 @@ export class AuthService {
   private normalizeRole(value: string | undefined): AppRole {
     const v = (value || '').trim().toLowerCase();
     if (v === 'finishing') return 'finisher';
-    if (v === 'admin' || v === 'secretary' || v === 'designer' || v === 'finisher' || v === 'requester') {
+    if (
+      v === 'admin' ||
+      v === 'secretary' ||
+      v === 'designer' ||
+      v === 'finisher' ||
+      v === 'requester' ||
+      v === 'doctor'
+    ) {
       return v;
     }
     return 'admin';

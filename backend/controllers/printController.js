@@ -10,10 +10,21 @@ exports.createPrintJob = async (req, res) => {
       return res.status(400).json({ success: false, message: 'بيانات ناقصة' });
     }
 
+    // Doctor portal: lock printed doctor name to account fullName
+    let data = { ...printData };
+    if (req.user?.userId || req.user?.id) {
+      const uid = req.user.id || req.user.userId;
+      const User = require('../models/User');
+      const u = await User.findById(uid).select('fullName role');
+      if (u?.role === 'doctor') {
+        data = { ...data, doctor: String(u.fullName || '').trim() };
+      }
+    }
+
     const job = await PrintJob.create({
-      printData,
+      printData: data,
       status: 'pending',
-      createdBy: req.user?.userId || null,
+      createdBy: req.user?.userId || req.user?.id || null,
     });
 
     // Emit to the Print Agent via Socket.IO room 'print-agents'
