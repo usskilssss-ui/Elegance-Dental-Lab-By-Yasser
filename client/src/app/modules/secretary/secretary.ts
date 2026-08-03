@@ -185,15 +185,27 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly stats = computed(() => {
     const allCases = this.sharedCases.cases();
-    const activeCases = allCases.filter(c => c.status !== 'exited');
-    const total = allCases.length;
-    const pending = activeCases.filter(c => c.status === 'pending').length;
-    const finished = activeCases.filter(c => c.status === 'finished').length;
-    const exited = allCases.filter(c => c.status === 'exited').length;
+    const bucket = (c: (typeof allCases)[number]) => {
+      if (c.status === 'exited') return 'exited';
+      const stage = String(c.currentStage || '').toLowerCase();
+      if (stage === 'finishing') return 'finishing';
+      if (c.status === 'finished' || stage === 'completed') return 'finished';
+      if (c.status === 'in-progress' || c.status === 'under-khart' || c.status === 'needs-revision') {
+        return 'design';
+      }
+      return 'pending';
+    };
+    const pending = allCases.filter((c) => bucket(c) === 'pending').length;
+    const design = allCases.filter((c) => bucket(c) === 'design').length;
+    const finishing = allCases.filter((c) => bucket(c) === 'finishing').length;
+    const finished = allCases.filter((c) => bucket(c) === 'finished').length;
+    const exited = allCases.filter((c) => bucket(c) === 'exited').length;
 
     return [
-      { label: 'إجمالي الحالات', value: total, color: 'purple' as const, hint: total > 0 ? '+12%' : undefined },
+      { label: 'إجمالي الحالات', value: allCases.length, color: 'purple' as const },
       { label: 'الحالات الجديدة', value: pending, color: 'amber' as const },
+      { label: 'تحت الديزاين', value: design, color: 'blue' as const },
+      { label: 'تحت الفينيش', value: finishing, color: 'teal' as const },
       { label: 'الحالات المنتهية', value: finished, color: 'emerald' as const },
       { label: 'الحالات الخارجة', value: exited, color: 'rose' as const },
     ];
