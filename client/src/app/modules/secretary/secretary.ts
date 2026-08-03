@@ -103,11 +103,25 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
   private readonly socketSubs: Subscription[] = [];
-  readonly activeFilter = signal<
-    'all' | 'pending' | 'in-progress' | 'under-khart' | 'finished' | 'exited'
-  >('all');
+  readonly activeFilter = signal<'all' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'>(
+    'all'
+  );
   readonly casesLoading = signal(false);
   readonly saveInProgress = signal(false);
+
+  /** Same stage buckets as the doctor portal filters/dashboard */
+  private caseBucket(
+    c: { status: string; currentStage?: string }
+  ): 'pending' | 'design' | 'finishing' | 'finished' | 'exited' {
+    if (c.status === 'exited') return 'exited';
+    const stage = String(c.currentStage || '').toLowerCase();
+    if (stage === 'finishing') return 'finishing';
+    if (c.status === 'finished' || stage === 'completed') return 'finished';
+    if (c.status === 'in-progress' || c.status === 'under-khart' || c.status === 'needs-revision') {
+      return 'design';
+    }
+    return 'pending';
+  }
 
   // عرض الحالات من SharedCasesService مباشرة لتحديث فوري
   readonly cases = computed(() => {
@@ -117,8 +131,8 @@ export class Secretary implements OnInit, OnDestroy {
 
     let baseCases =
       selectedFilter === 'all'
-        ? allCases.filter(c => c.status !== 'exited')
-        : allCases.filter(c => c.status === selectedFilter);
+        ? allCases.filter((c) => c.status !== 'exited')
+        : allCases.filter((c) => this.caseBucket(c) === selectedFilter);
 
     if (selectedFilter === 'exited') {
       baseCases = [...baseCases].sort((a, b) => {
@@ -131,11 +145,11 @@ export class Secretary implements OnInit, OnDestroy {
     if (!q) return baseCases;
 
     const scored = baseCases
-      .map(c => ({ caseItem: c, score: this.searchScore(c, q) }))
-      .filter(item => item.score >= 0)
+      .map((c) => ({ caseItem: c, score: this.searchScore(c, q) }))
+      .filter((item) => item.score >= 0)
       .sort((a, b) => b.score - a.score);
 
-    return scored.map(item => item.caseItem);
+    return scored.map((item) => item.caseItem);
   });
 
   /** حالات لم تخرج خلال 4 أيام من تاريخ الدخول */
@@ -185,21 +199,11 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly stats = computed(() => {
     const allCases = this.sharedCases.cases();
-    const bucket = (c: (typeof allCases)[number]) => {
-      if (c.status === 'exited') return 'exited';
-      const stage = String(c.currentStage || '').toLowerCase();
-      if (stage === 'finishing') return 'finishing';
-      if (c.status === 'finished' || stage === 'completed') return 'finished';
-      if (c.status === 'in-progress' || c.status === 'under-khart' || c.status === 'needs-revision') {
-        return 'design';
-      }
-      return 'pending';
-    };
-    const pending = allCases.filter((c) => bucket(c) === 'pending').length;
-    const design = allCases.filter((c) => bucket(c) === 'design').length;
-    const finishing = allCases.filter((c) => bucket(c) === 'finishing').length;
-    const finished = allCases.filter((c) => bucket(c) === 'finished').length;
-    const exited = allCases.filter((c) => bucket(c) === 'exited').length;
+    const pending = allCases.filter((c) => this.caseBucket(c) === 'pending').length;
+    const design = allCases.filter((c) => this.caseBucket(c) === 'design').length;
+    const finishing = allCases.filter((c) => this.caseBucket(c) === 'finishing').length;
+    const finished = allCases.filter((c) => this.caseBucket(c) === 'finished').length;
+    const exited = allCases.filter((c) => this.caseBucket(c) === 'exited').length;
 
     return [
       { label: 'إجمالي الحالات', value: allCases.length, color: 'purple' as const },
@@ -213,14 +217,14 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly filterCounts = computed(() => {
     const allCases = this.sharedCases.cases();
-    const activeCases = allCases.filter(c => c.status !== 'exited');
+    const activeCases = allCases.filter((c) => c.status !== 'exited');
     return {
       all: activeCases.length,
-      pending: activeCases.filter(c => c.status === 'pending').length,
-      inProgress: activeCases.filter(c => c.status === 'in-progress').length,
-      underKhart: activeCases.filter(c => c.status === 'under-khart').length,
-      finished: activeCases.filter(c => c.status === 'finished').length,
-      exited: allCases.filter(c => c.status === 'exited').length,
+      pending: allCases.filter((c) => this.caseBucket(c) === 'pending').length,
+      design: allCases.filter((c) => this.caseBucket(c) === 'design').length,
+      finishing: allCases.filter((c) => this.caseBucket(c) === 'finishing').length,
+      finished: allCases.filter((c) => this.caseBucket(c) === 'finished').length,
+      exited: allCases.filter((c) => this.caseBucket(c) === 'exited').length,
     };
   });
 
@@ -632,7 +636,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   setFilter(
-    filter: 'all' | 'pending' | 'in-progress' | 'under-khart' | 'finished' | 'exited'
+    filter: 'all' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
   ): void {
     this.activeFilter.set(filter);
   }
@@ -647,10 +651,11 @@ export class Secretary implements OnInit, OnDestroy {
     this.notificationsOpen.set(false);
     this.searchQuery.set('');
 
-    if (target.status === 'pending' || target.status === 'finished') {
-      this.activeFilter.set(target.status);
-    } else {
+    const bucket = this.caseBucket(target);
+    if (bucket === 'exited') {
       this.activeFilter.set('all');
+    } else {
+      this.activeFilter.set(bucket);
     }
 
     this.highlightedCaseId.set(caseId);
