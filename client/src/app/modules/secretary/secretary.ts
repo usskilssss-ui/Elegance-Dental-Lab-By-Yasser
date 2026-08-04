@@ -579,49 +579,64 @@ export class Secretary implements OnInit, OnDestroy {
     this.auth.performLogout(this.router);
   }
 
+  private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   ngOnInit(): void {
     this.reloadCasesFromBackend();
     this.connectRealtimeUpdates();
   }
 
   ngOnDestroy(): void {
+    if (this.reloadDebounceTimer) {
+      clearTimeout(this.reloadDebounceTimer);
+      this.reloadDebounceTimer = null;
+    }
     this.socketSubs.forEach((s) => s.unsubscribe());
   }
 
   private connectRealtimeUpdates(): void {
     this.socketService.connect();
-    const reload = () => this.reloadCasesFromBackend();
+    const scheduleReload = () => this.scheduleBackgroundReload();
     this.socketSubs.push(
       this.socketService.onCaseCreated().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseAssigned().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseReassigned().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseMovedStage().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseCompleted().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseReleased().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseUpdated().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       }),
       this.socketService.onCaseDeleted().subscribe((evt) => {
-        if (evt) reload();
+        if (evt) scheduleReload();
       })
     );
   }
 
-  private reloadCasesFromBackend(): void {
-    this.casesLoading.set(true);
-    this.caseApi.getAllCases(1, 3000).subscribe({
+  /** Avoid refetch storms when many case events arrive together */
+  private scheduleBackgroundReload(): void {
+    if (this.reloadDebounceTimer) clearTimeout(this.reloadDebounceTimer);
+    this.reloadDebounceTimer = setTimeout(() => {
+      this.reloadDebounceTimer = null;
+      this.reloadCasesFromBackend(true);
+    }, 2000);
+  }
+
+  private reloadCasesFromBackend(silent = false): void {
+    if (!silent) this.casesLoading.set(true);
+    this.caseApi.getAllCases(1, 1500).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(rows) ? rows.map(r => mapApiCaseToDentalCase(r)) : [];
@@ -630,7 +645,7 @@ export class Secretary implements OnInit, OnDestroy {
       },
       error: () => {
         this.casesLoading.set(false);
-        this.flash('تعذر تحميل الحالات من الخادم');
+        if (!silent) this.flash('تعذر تحميل الحالات من الخادم');
       },
     });
   }

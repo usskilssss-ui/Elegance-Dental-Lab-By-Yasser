@@ -7,8 +7,8 @@ import { SocketService } from '../../core/services/socket.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DentalCase, CaseStage, AuditLog } from '../../core/models/case.model';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, merge } from 'rxjs';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-case-management',
@@ -69,37 +69,25 @@ export class CaseManagementComponent implements OnInit, OnDestroy {
 
   private connectRealtime(): void {
     this.socketService.connect();
-    this.socketService.onCaseCreated().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseAssigned().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseReassigned().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseMovedStage().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseCompleted().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) {
+    merge(
+      this.socketService.onCaseCreated(),
+      this.socketService.onCaseAssigned(),
+      this.socketService.onCaseReassigned(),
+      this.socketService.onCaseMovedStage(),
+      this.socketService.onCaseCompleted(),
+      this.socketService.onCaseReleased(),
+      this.socketService.onCaseUpdated(),
+      this.socketService.onCaseDeleted()
+    )
+      .pipe(takeUntil(this.destroy$), filter((evt) => !!evt), debounceTime(2000))
+      .subscribe(() => {
         this.reloadCases();
         this.reloadAuditLogs();
-      }
-    });
-    this.socketService.onCaseReleased().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseUpdated().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
-    this.socketService.onCaseDeleted().pipe(takeUntil(this.destroy$)).subscribe((evt) => {
-      if (evt) this.reloadCases();
-    });
+      });
   }
 
   private reloadCases(): void {
-    this.caseApi.getAllCases(1, 3000).subscribe({
+    this.caseApi.getAllCases(1, 1500).subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = rows.map((r) => this.mapApiCaseToModel(r));

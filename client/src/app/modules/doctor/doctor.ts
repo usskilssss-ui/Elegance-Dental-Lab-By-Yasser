@@ -180,12 +180,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return list;
   });
 
+  private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   ngOnInit(): void {
     this.loadCases();
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
     if (socket) {
-      const refresh = () => this.loadCases({ silent: true });
+      const refresh = () => this.scheduleBackgroundReload();
       socket.on('case:created', refresh);
       socket.on('case:updated', refresh);
       this.socketSubs.push({
@@ -198,12 +200,24 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.reloadDebounceTimer) {
+      clearTimeout(this.reloadDebounceTimer);
+      this.reloadDebounceTimer = null;
+    }
     this.socketSubs.forEach((s) => s.unsubscribe());
+  }
+
+  private scheduleBackgroundReload(): void {
+    if (this.reloadDebounceTimer) clearTimeout(this.reloadDebounceTimer);
+    this.reloadDebounceTimer = setTimeout(() => {
+      this.reloadDebounceTimer = null;
+      this.loadCases({ silent: true });
+    }, 2000);
   }
 
   private loadCases(opts?: { silent?: boolean }): void {
     if (!opts?.silent) this.casesLoading.set(true);
-    this.caseApi.getAllCases(1, 3000).subscribe({
+    this.caseApi.getAllCases(1, 1500).subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {

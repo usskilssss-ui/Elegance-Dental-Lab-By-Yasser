@@ -83,9 +83,22 @@ function normalizeDoctorKey(name) {
     .toLowerCase();
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function referringDoctorFromNotes(notes) {
+  const meta = parseNotesMeta(notes || '');
+  return String(meta.doctor || meta.doctorName || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
 function caseBelongsToDoctor(doc, doctorFullName) {
   const want = normalizeDoctorKey(doctorFullName);
   if (!want) return false;
+  const fromField = normalizeDoctorKey(doc.referringDoctor);
+  if (fromField && fromField === want) return true;
   const meta = parseNotesMeta(doc.notes || '');
   const got = normalizeDoctorKey(meta.doctor || meta.doctorName || '');
   return got === want;
@@ -120,6 +133,8 @@ exports.createCase = async (req, res) => {
 
     const normalizedRequesterType = requesterType === 'student' ? 'student' : 'doctor';
     const isStudentCase = normalizedRequesterType === 'student';
+    const notesFinal = notes ?? '';
+    const referringDoctor = referringDoctorFromNotes(notesFinal);
 
     const newCase = new DentalCase({
       patientName,
@@ -130,7 +145,8 @@ exports.createCase = async (req, res) => {
       paymentStatus: isStudentCase ? 'paid' : 'unpaid',
       paidAt: isStudentCase ? new Date() : null,
       paidBy: isStudentCase ? req.user.id : null,
-      notes: notes ?? '',
+      notes: notesFinal,
+      referringDoctor,
       caseType,
       priority,
       dueDate: new Date(dueDate),
@@ -240,46 +256,58 @@ exports.getAllCases = async (req, res) => {
       if (isDoctor) doctorFullName = String(req.user.fullName || '').trim();
     }
 
-    const skip = (page - 1) * limit;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 10;
-
-    // Doctors: load a wide window then filter by referring-doctor meta (notes JSON)
+    // Doctor portal: filter by indexed referringDoctor (+ legacy notes match)
     if (isDoctor && doctorFullName) {
-      const all = await DentalCase.find(filter)
-        .populate('assignedTo', 'fullName email role')
-        .populate('createdBy', 'fullName email')
-        .sort({ createdAt: -1 })
-        .limit(5000);
-      const mine = all.filter((c) => caseBelongsToDoctor(c, doctorFullName));
-      mine.forEach((c) => {
-        c.notes = sanitizeNotesMetaString(c.notes);
-      });
-      const total = mine.length;
-      const paged = mine.slice(skip, skip + limitNum);
-      return res.status(200).json({
-        success: true,
-        data: paged,
-        pagination: {
-          total,
-          page: pageNum,
-          limit: limitNum,
-          pages: Math.ceil(total / limitNum) || 1,
-        },
-      });
+      const doctorClause = {
+        $or: [
+          { referringDoctor: new RegExp(`^${escapeRegex(doctorFullName)}$`, 'i') },
+          {
+            $and: [
+              {
+                $or: [
+                  { referringDoctor: { $exists: false } },
+                  { referringDoctor: null },
+                  { referringDoctor: '' },
+                ],
+              },
+              {
+                notes: new RegExp(
+                  `"doctor"\\s*:\\s*"${escapeRegex(doctorFullName)}"`,
+                  'i'
+                ),
+              },
+            ],
+          },
+        ],
+      };
+      if (filter.$or) {
+        const searchOr = filter.$or;
+        delete filter.$or;
+        filter.$and = [{ $or: searchOr }, doctorClause];
+      } else {
+        Object.assign(filter, doctorClause);
+      }
     }
 
-    const cases = await DentalCase.find(filter)
-      .populate('assignedTo', 'fullName email role')
-      .populate('createdBy', 'fullName email')
-      .skip(skip)
-      .limit(limitNum)
-      .sort({ createdAt: -1 });
-    cases.forEach((c) => {
-      c.notes = sanitizeNotesMetaString(c.notes);
-    });
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    // Cap payload size — clients used to request 3000 and freeze the UI
+    const requested = parseInt(limit, 10) || 10;
+    const limitNum = Math.min(Math.max(1, requested), 1500);
+    const skip = (pageNum - 1) * limitNum;
 
-    const total = await DentalCase.countDocuments(filter);
+    const [cases, total] = await Promise.all([
+      DentalCase.find(filter)
+        .populate('assignedTo', 'fullName email role')
+        .populate('createdBy', 'fullName email')
+        .select(
+          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      DentalCase.countDocuments(filter),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -288,7 +316,7 @@ exports.getAllCases = async (req, res) => {
         total,
         page: pageNum,
         limit: limitNum,
-        pages: Math.ceil(total / limitNum),
+        pages: Math.ceil(total / limitNum) || 1,
       },
     });
   } catch (error) {
@@ -974,7 +1002,10 @@ exports.updateCase = async (req, res) => {
       }
       dentalCase.salaryAmount = parsedSalary;
     }
-    if (notes !== undefined) dentalCase.notes = sanitizeNotesMetaString(notes);
+    if (notes !== undefined) {
+      dentalCase.notes = sanitizeNotesMetaString(notes);
+      dentalCase.referringDoctor = referringDoctorFromNotes(dentalCase.notes);
+    }
     if (caseType !== undefined) dentalCase.caseType = caseType;
     if (priority !== undefined) dentalCase.priority = priority;
     if (dueDate !== undefined) dentalCase.dueDate = new Date(dueDate);

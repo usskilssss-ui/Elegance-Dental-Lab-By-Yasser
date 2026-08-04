@@ -77,7 +77,7 @@ app.use(morgan('combined'));
 const isProduction = process.env.NODE_ENV === 'production';
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isProduction ? 300 : 3000,
+  max: isProduction ? 800 : 3000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

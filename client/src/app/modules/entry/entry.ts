@@ -315,7 +315,7 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Load doctor suggestions
-    this.caseApi.getAllCases(1, 3000).subscribe({
+    this.caseApi.getAllCases(1, 1500).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {
@@ -329,7 +329,7 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.loadTodayJobs();
 
     // Poll so jobs still appear if the agent PC slept or the socket missed events
-    this.jobsPollTimer = setInterval(() => this.loadTodayJobs({ silent: true }), 15000);
+    this.jobsPollTimer = setInterval(() => this.loadTodayJobs({ silent: true }), 30000);
 
     this.onVisibilityChange = () => {
       if (document.visibilityState === 'visible') this.loadTodayJobs({ silent: true });

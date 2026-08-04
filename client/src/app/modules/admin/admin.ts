@@ -11,7 +11,7 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { AiApiService } from '../../core/services/ai-api.service';
 import { MonthArchiveApiService } from '../../core/services/month-archive-api.service';
 import { Subject, merge } from 'rxjs';
-import { filter, takeUntil } from 'rxjs/operators';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 
@@ -292,7 +292,8 @@ export class Admin implements OnInit, OnDestroy {
     )
       .pipe(
         takeUntil(this.destroy$),
-        filter((evt) => !!evt)
+        filter((evt) => !!evt),
+        debounceTime(2000)
       )
       .subscribe(() => {
         this.loadCasesFromApi();
@@ -1383,7 +1384,7 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   private loadCasesFromApi(): void {
-    this.caseApi.getAllCases(1, 3000).subscribe({
+    this.caseApi.getAllCases(1, 1500).subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         this.adminCases = Array.isArray(rows) ? rows.map((row) => this.mapApiCaseToAdminCase(row)) : [];
