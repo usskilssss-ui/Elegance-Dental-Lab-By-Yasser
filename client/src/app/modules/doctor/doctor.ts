@@ -32,11 +32,13 @@ function emptyDraft() {
     quantity: 1,
     date: todayYmd(),
     caseType: 'New' as 'New' | 'Modification' | 'Redo' | 'Empty',
+    urgent: false,
   };
 }
 
 type DoctorFilter =
   | 'all'
+  | 'important'
   | 'pending'
   | 'design'
   | 'finishing'
@@ -87,6 +89,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly saveInProgress = signal(false);
   readonly activeFilter = signal<DoctorFilter>('all');
   readonly searchQuery = signal('');
+  /** Cases the doctor marked as important / urgent to watch */
+  readonly importantIds = signal<Set<string>>(new Set());
 
   editingId: string | null = null;
   formDraft = emptyDraft();
@@ -153,6 +157,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return this.bucket(c) === 'pending';
   }
 
+  isImportant(id: string): boolean {
+    return this.importantIds().has(id);
+  }
+
+  toggleImportant(c: DentalCase, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this.importantIds());
+    if (next.has(c.id)) next.delete(c.id);
+    else next.add(c.id);
+    this.importantIds.set(next);
+    this.persistImportantIds();
+  }
+
   readonly allCases = computed(() => this.sharedCases.cases());
 
   readonly stats = computed(() => {
@@ -175,8 +192,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly filterCounts = computed(() => {
     const all = this.allCases();
     const active = all.filter((c) => c.status !== 'exited');
+    const important = active.filter((c) => this.isImportant(c.id)).length;
     return {
       all: active.length,
+      important,
       pending: all.filter((c) => this.bucket(c) === 'pending').length,
       design: all.filter((c) => this.bucket(c) === 'design').length,
       finishing: all.filter((c) => this.bucket(c) === 'finishing').length,
@@ -188,8 +207,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly cases = computed(() => {
     const q = this.normalizeSearch(this.searchQuery());
     const filter = this.activeFilter();
+    const important = this.importantIds();
     let list = this.allCases();
-    if (filter === 'all') {
+    if (filter === 'important') {
+      list = list.filter((c) => c.status !== 'exited' && important.has(c.id));
+    } else if (filter === 'all') {
       list = list.filter((c) => c.status !== 'exited');
     } else {
       list = list.filter((c) => this.bucket(c) === filter);
@@ -200,6 +222,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
         .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((x) => x.c);
+    } else {
+      // Important cases float to the top
+      list = [...list].sort((a, b) => {
+        const ai = important.has(a.id) ? 1 : 0;
+        const bi = important.has(b.id) ? 1 : 0;
+        if (bi !== ai) return bi - ai;
+        return 0;
+      });
     }
     return list;
   });
@@ -208,6 +238,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadNotificationsFromStorage();
+    this.loadImportantIds();
     this.loadCases();
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
@@ -282,6 +313,43 @@ export class DoctorComponent implements OnInit, OnDestroy {
     } catch {
       /* ignore */
     }
+  }
+
+  private importantStorageKey(): string {
+    const id = this.auth.getSession()?.id || 'anon';
+    return `doctor_portal_important_${id}`;
+  }
+
+  private loadImportantIds(): void {
+    try {
+      const raw = localStorage.getItem(this.importantStorageKey());
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed)) {
+        this.importantIds.set(new Set(parsed.filter(Boolean)));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private persistImportantIds(): void {
+    try {
+      localStorage.setItem(
+        this.importantStorageKey(),
+        JSON.stringify([...this.importantIds()])
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private markImportantId(id: string): void {
+    if (!id) return;
+    const next = new Set(this.importantIds());
+    next.add(id);
+    this.importantIds.set(next);
+    this.persistImportantIds();
   }
 
   private persistNotifications(): void {
@@ -442,6 +510,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       quantity: c.quantity || 1,
       date: todayYmd(),
       caseType,
+      urgent: c.priority === 'emergency' || this.isImportant(c.id),
     };
     this.selectedWorkTypes = new Set();
     this.workTypeQuantities = {};
@@ -639,11 +708,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
       date: todayYmd(),
       branch: d.branch.trim(),
     });
+    if (d.urgent) {
+      casePayload['priority'] = 'urgent';
+    } else if (isEdit) {
+      casePayload['priority'] = 'normal';
+    }
 
     if (isEdit && editId) {
       this.caseApi.updateCase(editId, casePayload).subscribe({
         next: () => {
           this.saveInProgress.set(false);
+          if (d.urgent) this.markImportantId(editId);
           this.flash('✅ تم تحديث الريكويست');
           this.loadCases();
         },
@@ -673,15 +748,26 @@ export class DoctorComponent implements OnInit, OnDestroy {
       quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
       caseNumber: '',
       printDate,
+      urgent: !!d.urgent,
     };
 
     this.caseApi
       .createCase(casePayload)
-      .pipe(switchMap(() => this.http.post(`${this.apiBase}/print/job`, { printData })))
+      .pipe(
+        switchMap((res: any) => {
+          const createdId = String(res?.case?._id ?? res?.case?.id ?? res?.data?._id ?? '');
+          if (d.urgent && createdId) this.markImportantId(createdId);
+          return this.http.post(`${this.apiBase}/print/job`, { printData });
+        })
+      )
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);
-          this.flash('✅ تم حفظ الحالة وإرسال الريكويست للطباعة');
+          this.flash(
+            d.urgent
+              ? '✅ تم حفظ الحالة المستعجلة وإرسالها للطباعة'
+              : '✅ تم حفظ الحالة وإرسال الريكويست للطباعة'
+          );
           this.loadCases();
         },
         error: () => {
@@ -714,7 +800,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   getCasePhase(c: DentalCase): { label: string; color: string } {
     const b = this.bucket(c);
-    const map: Record<DoctorFilter, { label: string; color: string }> = {
+    const map: Record<Exclude<DoctorFilter, 'important'>, { label: string; color: string }> = {
       all: { label: '', color: 'pending' },
       pending: { label: 'الجديدة', color: 'pending' },
       design: { label: 'ديزاين', color: 'design' },
