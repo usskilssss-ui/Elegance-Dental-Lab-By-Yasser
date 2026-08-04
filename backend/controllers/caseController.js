@@ -601,10 +601,11 @@ exports.moveStage = async (req, res) => {
       dentalCase.status = 'completed';
     } else if (stage === 'exited') {
       dentalCase.status = 'exited';
-    } else if (['design', 'khart', 'finishing'].includes(stage)) {
-      if (dentalCase.status === 'waiting') {
-        dentalCase.status = 'in_progress';
-      }
+    } else if (stage === 'waiting') {
+      dentalCase.status = 'waiting';
+    } else {
+      // secretary | design | khart | finishing (reopens completed)
+      dentalCase.status = 'in_progress';
     }
 
     // Update stage timestamp
