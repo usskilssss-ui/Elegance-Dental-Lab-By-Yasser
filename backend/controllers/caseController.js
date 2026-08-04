@@ -683,8 +683,8 @@ const STATION_TARGET = {
 };
 
 const STATION_ALLOWED_FROM = {
-  // سكان 2: جديدة أو منتهية → ديزاين
-  design: new Set(['waiting', 'secretary', 'completed', 'design']),
+  // سكان 2: من أي مرحلة (ما عدا الخارجة) → ديزاين
+  design: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
   // سكان 3: جديدة أو ديزاين → فينيش
   finishing: new Set(['waiting', 'secretary', 'design', 'finishing']),
   // سكان 1: جديدة أو ديزاين → منتهية
