@@ -676,19 +676,20 @@ function normalizeScanCode(raw) {
 }
 
 const STATION_TARGET = {
-  reception: 'waiting',
+  // Lab flow: new → design → finishing → completed (reception desk marks done)
   design: 'design',
   finishing: 'finishing',
+  reception: 'completed',
 };
 
 const STATION_ALLOWED_FROM = {
-  reception: new Set(['waiting', 'secretary']),
-  design: new Set(['waiting', 'secretary', 'design', 'khart']),
+  design: new Set(['waiting', 'secretary', 'design']),
   finishing: new Set(['design', 'khart', 'finishing']),
+  reception: new Set(['finishing', 'completed']),
 };
 
 const STATION_LABEL_AR = {
-  reception: 'الريسبشن',
+  reception: 'الريسبشن (منتهية)',
   design: 'الديزاين',
   finishing: 'الفينيش',
 };
@@ -754,22 +755,6 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    // Reception: if already past front desk, just confirm presence (no backward move)
-    if (station === 'reception' && !STATION_ALLOWED_FROM.reception.has(oldStage)) {
-      return res.status(200).json({
-        success: true,
-        alreadyInLab: true,
-        message: `الحالة ${dentalCase.caseNumber} مسجّلة في المعمل (مرحلة: ${oldStage})`,
-        case: {
-          id: dentalCase._id,
-          caseNumber: dentalCase.caseNumber,
-          patientName: dentalCase.patientName,
-          currentStage: oldStage,
-          caseType: dentalCase.caseType,
-        },
-      });
-    }
-
     if (!STATION_ALLOWED_FROM[station].has(oldStage)) {
       return res.status(400).json({
         success: false,
@@ -784,7 +769,9 @@ exports.scanAtStation = async (req, res) => {
     }
 
     dentalCase.currentStage = targetStage;
-    if (['design', 'khart', 'finishing'].includes(targetStage)) {
+    if (targetStage === 'completed') {
+      dentalCase.status = 'completed';
+    } else if (['design', 'khart', 'finishing'].includes(targetStage)) {
       if (dentalCase.status === 'waiting') {
         dentalCase.status = 'in_progress';
       }

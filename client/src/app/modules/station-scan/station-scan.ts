@@ -21,20 +21,20 @@ const STATION_META: Record<
   ScanStation,
   { title: string; subtitle: string; stageHint: string }
 > = {
-  reception: {
-    title: 'مسح الريسبشن',
-    subtitle: 'تأكيد استلام الحالة في المعمل',
-    stageHint: 'الانتظار / الاستلام',
-  },
   design: {
     title: 'مسح الديزاين',
-    subtitle: 'نقل الحالة إلى مرحلة الديزاين',
+    subtitle: 'من الجديدة → الديزاين',
     stageHint: 'design',
   },
   finishing: {
     title: 'مسح الفينيش',
-    subtitle: 'نقل الحالة إلى مرحلة الفينيش',
+    subtitle: 'من الديزاين → الفينيش',
     stageHint: 'finishing',
+  },
+  reception: {
+    title: 'مسح الريسبشن',
+    subtitle: 'من الفينيش → منتهية',
+    stageHint: 'completed',
   },
 };
 
