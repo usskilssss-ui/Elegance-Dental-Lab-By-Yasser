@@ -29,7 +29,7 @@ const ROLE_META: Partial<
   scanner2: {
     station: 'design',
     title: 'سكان 2 — الديزاين',
-    subtitle: 'من جديدة أو منتهية → ديزاين',
+    subtitle: 'من أي مرحلة → تحت الديزاين',
   },
   scanner3: {
     station: 'finishing',
