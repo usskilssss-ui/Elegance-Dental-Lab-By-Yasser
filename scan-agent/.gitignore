@@ -1,0 +1,6 @@
+node_modules/
+config.json
+config.scanner1.json
+config.scanner2.json
+config.scanner3.json
+*.log
