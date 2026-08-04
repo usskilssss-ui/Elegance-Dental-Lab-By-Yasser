@@ -65,6 +65,12 @@ export class AuthService {
       );
     }
 
+    // Keep UI logged-in while validating (important for PWA reopen)
+    if (this.storedSession) {
+      this.isAuthenticated$.next(true);
+      this.currentUser$.next(this.storedSession);
+    }
+
     return this.http.get<{ success?: boolean; user?: AuthUserDto }>(`${this.apiUrl}/me`).pipe(
       tap((res) => {
         if (res?.success && res.user) {
@@ -76,8 +82,18 @@ export class AuthService {
           this.forceLogoutLocal();
         }
       }),
-      catchError(() => {
-        this.forceLogoutLocal();
+      catchError((err) => {
+        // Only clear login on real auth failure. Network/cold-start must NOT force re-login.
+        const status = err?.status;
+        if (status === 401 || status === 403) {
+          this.forceLogoutLocal();
+        } else if (this.storedSession && this.storedToken) {
+          this.isAuthenticated$.next(true);
+          this.currentUser$.next(this.storedSession);
+        } else {
+          this.isAuthenticated$.next(false);
+          this.currentUser$.next(null);
+        }
         return of(undefined);
       }),
       map(() => void 0),
@@ -195,8 +211,9 @@ export class AuthService {
   setSession(session: AuthSession): void {
     this.storedSession = session;
     try {
-      // Use sessionStorage so each browser tab has its own independent session
-      sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+      // localStorage so installed PWA / phone apps keep login after closing the app
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
     } catch (error) {
       console.warn('Failed to persist auth session:', error);
     }
@@ -206,7 +223,7 @@ export class AuthService {
   saveLastUrl(url: string): void {
     try {
       if (url && url !== '/login' && url !== '/') {
-        sessionStorage.setItem(AUTH_LAST_URL_KEY, url);
+        localStorage.setItem(AUTH_LAST_URL_KEY, url);
       }
     } catch { /* ignore */ }
   }
@@ -214,7 +231,7 @@ export class AuthService {
   /** Pop the last saved URL (returns null if none). */
   popLastUrl(): string | null {
     try {
-      const url = sessionStorage.getItem(AUTH_LAST_URL_KEY);
+      const url = localStorage.getItem(AUTH_LAST_URL_KEY);
       return url || null;
     } catch { return null; }
   }
@@ -222,6 +239,8 @@ export class AuthService {
   clearSession(): void {
     this.storedSession = null;
     try {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(AUTH_LAST_URL_KEY);
       sessionStorage.removeItem(AUTH_SESSION_KEY);
       sessionStorage.removeItem(AUTH_LAST_URL_KEY);
     } catch (error) {
@@ -302,17 +321,29 @@ export class AuthService {
     }
 
     try {
-      // Read session from sessionStorage (per-tab) so each tab is independent
-      const rawSession = sessionStorage.getItem(AUTH_SESSION_KEY);
+      // Prefer localStorage (survives PWA close). Migrate legacy sessionStorage if present.
+      let rawSession = localStorage.getItem(AUTH_SESSION_KEY);
+      if (!rawSession) {
+        rawSession = sessionStorage.getItem(AUTH_SESSION_KEY);
+        if (rawSession) {
+          localStorage.setItem(AUTH_SESSION_KEY, rawSession);
+          sessionStorage.removeItem(AUTH_SESSION_KEY);
+        }
+      }
       if (!rawSession) {
         this.storedSession = null;
         return;
       }
       this.storedSession = JSON.parse(rawSession) as AuthSession;
+      if (this.storedToken && this.storedSession) {
+        this.isAuthenticated$.next(true);
+        this.currentUser$.next(this.storedSession);
+      }
     } catch (error) {
       this.storedSession = null;
       console.warn('Failed to read auth session from storage:', error);
       try {
+        localStorage.removeItem(AUTH_SESSION_KEY);
         sessionStorage.removeItem(AUTH_SESSION_KEY);
       } catch {
         // Ignore storage cleanup failures
