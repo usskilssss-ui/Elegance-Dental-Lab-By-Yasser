@@ -312,12 +312,15 @@ function mapPriorityFromApi(p: string): DentalCase['priority'] {
 function mapUiStatus(doc: Record<string, unknown>, uiStatusOverride: string): DentalCase['status'] {
   const s = String(doc['status'] ?? '');
   const stage = String(doc['currentStage'] ?? '');
-  if (s === 'exited') return 'exited';
+  if (s === 'exited' || stage === 'exited') return 'exited';
   if (uiStatusOverride === 'needs-revision') return 'needs-revision';
-  if (s === 'completed' || stage === 'completed' || stage === 'finishing') return 'finished';
+  // Prefer currentStage — status can lag after station scans reopen a completed case
+  if (stage === 'completed') return 'finished';
+  if (stage === 'finishing') return 'finished';
   if (stage === 'khart') return 'under-khart';
-  // Legacy: under-khart was only in notes meta before `khart` existed on currentStage
   if (stage === 'design' && uiStatusOverride === 'under-khart') return 'under-khart';
   if (stage === 'design') return 'in-progress';
+  if (stage === 'waiting' || stage === 'secretary') return 'pending';
+  if (s === 'completed') return 'finished';
   return 'pending';
 }

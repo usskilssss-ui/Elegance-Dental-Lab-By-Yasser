@@ -849,12 +849,17 @@ exports.scanAtStation = async (req, res) => {
     }
 
     dentalCase.currentStage = targetStage;
+    // Keep status in sync with stage — otherwise completed cases stay "منتهية" in the UI
+    // even after سكان 2/3 moves them back to design/finishing.
     if (targetStage === 'completed') {
       dentalCase.status = 'completed';
-    } else if (['design', 'khart', 'finishing'].includes(targetStage)) {
-      if (dentalCase.status === 'waiting') {
-        dentalCase.status = 'in_progress';
-      }
+    } else if (targetStage === 'exited') {
+      dentalCase.status = 'exited';
+    } else if (targetStage === 'waiting') {
+      dentalCase.status = 'waiting';
+    } else {
+      // secretary | design | khart | finishing (reopens completed)
+      dentalCase.status = 'in_progress';
     }
     if (targetStage !== 'waiting') {
       if (!dentalCase.stageTimestamps) dentalCase.stageTimestamps = {};
