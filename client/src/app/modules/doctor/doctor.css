@@ -30,31 +30,6 @@
   flex-shrink: 0;
 }
 
-.date-range-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-
-.date-chip {
-  border: 1px solid var(--border-color, #e2e8f0);
-  background: var(--surface, #fff);
-  color: var(--text-secondary, #64748b);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.date-chip.active {
-  background: #0f766e;
-  border-color: #0f766e;
-  color: #fff;
-}
-
 .doctor-case-card {
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -144,16 +119,6 @@
   font-size: 11px;
   color: var(--text-secondary, #94a3b8);
   margin-top: 2px;
-}
-
-.show-pw-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary, #64748b);
-  margin: 4px 0 8px;
-  cursor: pointer;
 }
 
 @media (max-width: 720px) {

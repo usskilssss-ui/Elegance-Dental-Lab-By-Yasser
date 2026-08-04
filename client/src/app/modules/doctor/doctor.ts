@@ -43,8 +43,6 @@ type DoctorFilter =
   | 'finished'
   | 'exited';
 
-type DateRangeFilter = 'all' | 'today' | 'week' | 'month';
-
 export type DoctorNotif = {
   id: string;
   caseId: string;
@@ -84,23 +82,15 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly dialogMode = signal<'create' | 'edit'>('create');
   readonly detailOpen = signal(false);
   readonly detailCase = signal<DentalCase | null>(null);
-  readonly passwordOpen = signal(false);
-  readonly passwordSaving = signal(false);
   readonly notificationsOpen = signal(false);
   readonly notifications = signal<DoctorNotif[]>([]);
   readonly saveInProgress = signal(false);
   readonly activeFilter = signal<DoctorFilter>('all');
-  readonly dateRange = signal<DateRangeFilter>('all');
   readonly searchQuery = signal('');
 
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
-  passwordCurrent = '';
-  passwordNew = '';
-  passwordConfirm = '';
-  passwordError = '';
-  showPasswordFields = false;
 
   readonly workTypeOptions = [
     'Zircon',
@@ -183,7 +173,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   });
 
   readonly filterCounts = computed(() => {
-    const all = this.dateFiltered(this.allCases());
+    const all = this.allCases();
     const active = all.filter((c) => c.status !== 'exited');
     return {
       all: active.length,
@@ -198,7 +188,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly cases = computed(() => {
     const q = this.normalizeSearch(this.searchQuery());
     const filter = this.activeFilter();
-    let list = this.dateFiltered(this.allCases());
+    let list = this.allCases();
     if (filter === 'all') {
       list = list.filter((c) => c.status !== 'exited');
     } else {
@@ -375,34 +365,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.activeFilter.set(f);
   }
 
-  setDateRange(r: DateRangeFilter): void {
-    this.dateRange.set(r);
-  }
-
-  private dateFiltered(list: DentalCase[]): DentalCase[] {
-    const range = this.dateRange();
-    if (range === 'all') return list;
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    if (range === 'week') start.setDate(start.getDate() - 6);
-    if (range === 'month') start.setDate(1);
-    return list.filter((c) => {
-      const t = this.caseTime(c);
-      return t !== null && t >= start.getTime();
-    });
-  }
-
-  private caseTime(c: DentalCase): number | null {
-    const raw = c.createdAt || c.receivedDateRaw || c.exitedAtRaw || '';
-    if (!raw) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      const [y, m, d] = raw.split('-').map(Number);
-      return new Date(y, m - 1, d).getTime();
-    }
-    const t = new Date(raw).getTime();
-    return Number.isNaN(t) ? null : t;
-  }
-
   private normalizeSearch(v: string): string {
     return String(v || '')
       .toLowerCase()
@@ -538,48 +500,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
     this.editingId = null;
-  }
-
-  openPasswordModal(): void {
-    this.passwordCurrent = '';
-    this.passwordNew = '';
-    this.passwordConfirm = '';
-    this.passwordError = '';
-    this.showPasswordFields = false;
-    this.passwordOpen.set(true);
-  }
-
-  closePasswordModal(): void {
-    this.passwordOpen.set(false);
-    this.passwordSaving.set(false);
-  }
-
-  submitPasswordChange(): void {
-    this.passwordError = '';
-    if (!this.passwordCurrent || !this.passwordNew) {
-      this.passwordError = 'أدخل كلمة المرور الحالية والجديدة';
-      return;
-    }
-    if (this.passwordNew.length < 6) {
-      this.passwordError = 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف';
-      return;
-    }
-    if (this.passwordNew !== this.passwordConfirm) {
-      this.passwordError = 'تأكيد كلمة المرور غير مطابق';
-      return;
-    }
-    this.passwordSaving.set(true);
-    this.auth.changePassword(this.passwordCurrent, this.passwordNew).subscribe({
-      next: () => {
-        this.passwordSaving.set(false);
-        this.closePasswordModal();
-        this.flash('✅ تم تغيير كلمة المرور بنجاح');
-      },
-      error: (err) => {
-        this.passwordSaving.set(false);
-        this.passwordError = err?.error?.message || 'تعذر تغيير كلمة المرور';
-      },
-    });
   }
 
   onCaseTypeChange(): void {

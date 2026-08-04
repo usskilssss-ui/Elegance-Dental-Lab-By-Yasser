@@ -31,12 +31,6 @@
     </div>
 
     <div class="topbar-right">
-      <button type="button" class="icon-btn" aria-label="تغيير كلمة المرور" (click)="openPasswordModal()" title="تغيير كلمة المرور">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-      </button>
       <button type="button" class="icon-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme()" title="تغيير المظهر">
         <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -125,13 +119,6 @@
         </article>
       }
     </section>
-
-    <div class="date-range-tabs" aria-label="فلتر التاريخ">
-      <button type="button" class="date-chip" [class.active]="dateRange() === 'all'" (click)="setDateRange('all')">الكل</button>
-      <button type="button" class="date-chip" [class.active]="dateRange() === 'today'" (click)="setDateRange('today')">اليوم</button>
-      <button type="button" class="date-chip" [class.active]="dateRange() === 'week'" (click)="setDateRange('week')">الأسبوع</button>
-      <button type="button" class="date-chip" [class.active]="dateRange() === 'month'" (click)="setDateRange('month')">الشهر</button>
-    </div>
 
     <div class="filter-tabs" aria-label="تصفية الحالات">
       <button class="filter-tab" [class.active]="activeFilter() === 'all'" (click)="setFilter('all')">
@@ -285,41 +272,6 @@
             <button type="button" class="btn-primary" (click)="openEditFromDetail()">تعديل الريكويست</button>
           }
         </div>
-      </div>
-    </div>
-  }
-
-  @if (passwordOpen()) {
-    <div class="modal-backdrop" role="presentation" (click)="closePasswordModal()">
-      <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">تغيير كلمة المرور</h2>
-        <form class="case-form" (ngSubmit)="submitPasswordChange()">
-          <label class="form-field">
-            <span>كلمة المرور الحالية</span>
-            <input [type]="showPasswordFields ? 'text' : 'password'" name="pwCur" [(ngModel)]="passwordCurrent" autocomplete="current-password" required />
-          </label>
-          <label class="form-field">
-            <span>كلمة المرور الجديدة</span>
-            <input [type]="showPasswordFields ? 'text' : 'password'" name="pwNew" [(ngModel)]="passwordNew" autocomplete="new-password" required minlength="6" />
-          </label>
-          <label class="form-field">
-            <span>تأكيد كلمة المرور</span>
-            <input [type]="showPasswordFields ? 'text' : 'password'" name="pwConfirm" [(ngModel)]="passwordConfirm" autocomplete="new-password" required />
-          </label>
-          <label class="show-pw-check">
-            <input type="checkbox" [(ngModel)]="showPasswordFields" [ngModelOptions]="{standalone: true}" />
-            إظهار كلمات المرور
-          </label>
-          @if (passwordError) {
-            <p class="wt-error">{{ passwordError }}</p>
-          }
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closePasswordModal()" [disabled]="passwordSaving()">إلغاء</button>
-            <button type="submit" class="btn-primary" [disabled]="passwordSaving()">
-              {{ passwordSaving() ? 'جاري الحفظ…' : 'حفظ' }}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   }
