@@ -36,14 +36,9 @@ function emptyDraft() {
   };
 }
 
-type DoctorFilter =
-  | 'all'
-  | 'important'
-  | 'pending'
-  | 'design'
-  | 'finishing'
-  | 'finished'
-  | 'exited';
+type DoctorStage = 'pending' | 'design' | 'finishing' | 'finished' | 'exited';
+
+type DoctorFilter = 'all' | 'important' | DoctorStage;
 
 export type DoctorNotif = {
   id: string;
@@ -74,7 +69,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
-  private knownStatus = new Map<string, DoctorFilter>();
+  private knownStatus = new Map<string, DoctorStage>();
   private notifHydrated = false;
 
   readonly doctorName = computed(() => this.auth.getSession()?.name?.trim() || '—');
@@ -142,7 +137,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     () => this.notifications().filter((n) => !n.read).length
   );
 
-  private bucket(c: DentalCase): DoctorFilter {
+  private bucket(c: DentalCase): DoctorStage {
     if (c.status === 'exited') return 'exited';
     const stage = String(c.currentStage || '').toLowerCase();
     if (stage === 'finishing') return 'finishing';
@@ -361,7 +356,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   private processStatusNotifications(cases: DentalCase[], isInitial: boolean): void {
-    const nextKnown = new Map<string, DoctorFilter>();
+    const nextKnown = new Map<string, DoctorStage>();
     const fresh: DoctorNotif[] = [];
 
     for (const c of cases) {
@@ -800,8 +795,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   getCasePhase(c: DentalCase): { label: string; color: string } {
     const b = this.bucket(c);
-    const map: Record<Exclude<DoctorFilter, 'important'>, { label: string; color: string }> = {
-      all: { label: '', color: 'pending' },
+    const map: Record<DoctorStage, { label: string; color: string }> = {
       pending: { label: 'الجديدة', color: 'pending' },
       design: { label: 'ديزاين', color: 'design' },
       finishing: { label: 'فينيش', color: 'khart' },
