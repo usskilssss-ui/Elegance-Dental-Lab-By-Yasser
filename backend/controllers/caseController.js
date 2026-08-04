@@ -656,6 +656,10 @@ exports.moveStage = async (req, res) => {
   }
 };
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function normalizeScanCode(raw) {
   let code = String(raw || '').trim();
   if (!code) return '';
@@ -670,9 +674,73 @@ function normalizeScanCode(raw) {
   } catch {
     /* keep raw */
   }
-  // Strip accidental trailing Enter / control chars
-  code = code.replace(/[\r\n\t]+/g, '').trim();
+  // Strip accidental trailing Enter / control chars + zero-width / bidi marks
+  code = code
+    .replace(/[\r\n\t]+/g, '')
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+    .trim();
   return code;
+}
+
+/** Build lookup candidates — handles Arabic keyboard wedge (e.g. أ-2026-00013 → CASE-2026-00013) */
+function caseNumberCandidates(raw) {
+  const code = normalizeScanCode(raw);
+  if (!code) return [];
+
+  const out = new Set();
+  const add = (v) => {
+    const s = String(v || '').trim();
+    if (!s) return;
+    out.add(s);
+    out.add(s.toUpperCase());
+  };
+
+  add(code);
+
+  // Prefix like CASE / أ / ا / A before year-seq
+  const prefixed = code.match(/^([A-Za-z\u0600-\u06FF]+)?[-_\s]?(\d{4})[-_\s]?(\d{1,8})$/u);
+  if (prefixed) {
+    const year = prefixed[2];
+    const seqRaw = prefixed[3];
+    const seqPad = seqRaw.padStart(5, '0');
+    add(`CASE-${year}-${seqPad}`);
+    add(`CASE-${year}-${seqRaw}`);
+  }
+
+  // Any ...YYYY-NNNN at the end
+  const tail = code.match(/(\d{4})[-_\s]?(\d{3,8})\s*$/);
+  if (tail) {
+    const year = tail[1];
+    const seqRaw = tail[2];
+    const seqPad = seqRaw.padStart(5, '0');
+    add(`CASE-${year}-${seqPad}`);
+    add(`CASE-${year}-${seqRaw}`);
+  }
+
+  return [...out];
+}
+
+async function findCaseByScanCode(raw) {
+  const candidates = caseNumberCandidates(raw);
+  if (!candidates.length) return null;
+
+  const or = candidates.map((cn) => ({
+    caseNumber: new RegExp(`^${escapeRegex(cn)}$`, 'i'),
+  }));
+
+  let dentalCase = await DentalCase.findOne({ $or: or });
+  if (dentalCase) return dentalCase;
+
+  // Last resort: match by year-seq suffix (CASE-2026-00013)
+  const tail = normalizeScanCode(raw).match(/(\d{4})[-_\s]?(\d{3,8})\s*$/);
+  if (tail) {
+    const year = tail[1];
+    const seqPad = tail[2].padStart(5, '0');
+    dentalCase = await DentalCase.findOne({
+      caseNumber: new RegExp(`^CASE-${escapeRegex(year)}-${escapeRegex(seqPad)}$`, 'i'),
+    });
+  }
+  return dentalCase;
 }
 
 const STATION_TARGET = {
@@ -706,8 +774,8 @@ function stationFromUserRole(role) {
 // POST /api/cases/scan — barcode/QR scan; station comes from scanner account role
 exports.scanAtStation = async (req, res) => {
   try {
-    const caseNumber = normalizeScanCode(req.body?.caseNumber || req.body?.code || '');
-    if (!caseNumber) {
+    const scannedRaw = normalizeScanCode(req.body?.caseNumber || req.body?.code || '');
+    if (!scannedRaw) {
       return res.status(400).json({ success: false, message: 'رقم الحالة مطلوب' });
     }
 
@@ -726,14 +794,12 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    const dentalCase = await DentalCase.findOne({
-      caseNumber: new RegExp(`^${caseNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-    });
+    const dentalCase = await findCaseByScanCode(scannedRaw);
 
     if (!dentalCase) {
       return res.status(404).json({
         success: false,
-        message: `لم يتم العثور على حالة برقم: ${caseNumber}`,
+        message: `لم يتم العثور على حالة برقم: ${scannedRaw}`,
       });
     }
 

@@ -9,6 +9,7 @@
     "uninstall-service": "node uninstall-service.js"
   },
   "dependencies": {
+    "bwip-js": "^4.11.2",
     "node-windows": "^1.0.0-beta.8",
     "pdf-to-printer": "^5.2.0",
     "puppeteer": "^21.0.0",

@@ -23,7 +23,7 @@
       <p class="scan-kicker">محطة المسح</p>
       <h1>{{ title() }}</h1>
       <p class="scan-sub">{{ subtitle() }}</p>
-      <p class="scan-hint">امسح الـ QR على الورقة — النقل يتم حسب حساب الدخول تلقائياً</p>
+      <p class="scan-hint">امسح الباركود على الورقة — النقل حسب حساب الدخول. خلّي لغة الكيبورد English وقت المسح.</p>
 
       <form class="scan-form" (submit)="onScanSubmit($event)">
         <input
@@ -31,13 +31,16 @@
           class="scan-input"
           type="text"
           name="scanCode"
+          lang="en"
+          dir="ltr"
+          inputmode="latin"
           autocomplete="off"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
           [(ngModel)]="scanBuffer"
           [disabled]="busy()"
-          placeholder="جاهز للمسح…"
+          placeholder="Ready to scan…"
           aria-label="حقل مسح الباركود"
         />
         <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
