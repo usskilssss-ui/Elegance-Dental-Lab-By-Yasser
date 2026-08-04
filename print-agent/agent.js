@@ -603,34 +603,6 @@ async function generatePdf(html, outputPath) {
   fs.writeFileSync(tempHtmlPath, html, 'utf8');
 
   const browserPath = getLocalBrowserPath();
-
-  if (browserPath) {
-    console.log(`   🌐 Generating PDF using native browser: ${browserPath}`);
-    try {
-      await new Promise((resolve, reject) => {
-        const { execFile } = require('child_process');
-        const fileUrl = 'file:///' + tempHtmlPath.replace(/\\/g, '/');
-        const args = [
-          '--headless',
-          '--disable-gpu',
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          `--print-to-pdf=${outputPath}`,
-          fileUrl,
-        ];
-        execFile(browserPath, args, (error) => {
-          if (error) reject(error);
-          else if (!fs.existsSync(outputPath)) reject(new Error('PDF output file was not created'));
-          else resolve();
-        });
-      });
-      fs.unlink(tempHtmlPath, () => {});
-      return;
-    } catch (err) {
-      console.warn(`   ⚠️ Native browser PDF generation failed (${err.message}). Trying Puppeteer fallback...`);
-    }
-  }
-
   const launchArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -640,21 +612,61 @@ async function generatePdf(html, outputPath) {
     '--disable-dev-shm-usage',
   ];
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath: browserPath || undefined,
-    args: launchArgs,
-  });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'load' });
-  await page.pdf({
-    path: outputPath,
-    format: 'A5',
-    printBackground: true,
-    margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
-  });
-  await browser.close();
+  // Prefer Puppeteer with explicit A5 — native Chrome --print-to-pdf often
+  // defaults to Letter and produces a blank first page + content on page 2.
+  try {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: browserPath || undefined,
+      args: launchArgs,
+    });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'load' });
+      await page.pdf({
+        path: outputPath,
+        width: '148mm',
+        height: '210mm',
+        printBackground: true,
+        preferCSSPageSize: true,
+        pageRanges: '1',
+        margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+      });
+    } finally {
+      await browser.close();
+    }
+    fs.unlink(tempHtmlPath, () => {});
+    return;
+  } catch (err) {
+    console.warn(`   ⚠️ Puppeteer PDF failed (${err.message}). Trying native Chrome...`);
+  }
+
+  if (browserPath) {
+    console.log(`   🌐 Generating PDF using native browser: ${browserPath}`);
+    await new Promise((resolve, reject) => {
+      const { execFile } = require('child_process');
+      const fileUrl = 'file:///' + tempHtmlPath.replace(/\\/g, '/');
+      const args = [
+        '--headless=new',
+        '--disable-gpu',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--no-pdf-header-footer',
+        `--print-to-pdf=${outputPath}`,
+        fileUrl,
+      ];
+      execFile(browserPath, args, { timeout: 45000 }, (error) => {
+        if (error) reject(error);
+        else if (!fs.existsSync(outputPath)) reject(new Error('PDF output file was not created'));
+        else resolve();
+      });
+    });
+    fs.unlink(tempHtmlPath, () => {});
+    return;
+  }
+
   fs.unlink(tempHtmlPath, () => {});
+  throw new Error('No browser available to generate PDF');
 }
 
 function escapeHtml(value) {
@@ -675,26 +687,19 @@ async function buildPrintHtml(c) {
   const quantity = c.caseType === 'Empty' ? 0 : (c.quantity || 0);
   const caseNumber = String(c.caseNumber || '').trim();
 
-  let qrBlock = '';
+  let qrImg = '';
   if (caseNumber) {
-    let qrDataUrl = '';
     try {
       const QRCode = require('qrcode');
-      qrDataUrl = await QRCode.toDataURL(caseNumber, {
+      qrImg = await QRCode.toDataURL(caseNumber, {
         errorCorrectionLevel: 'M',
         margin: 1,
-        width: 160,
+        width: 110,
         color: { dark: '#000000', light: '#ffffff' },
       });
     } catch (err) {
       console.warn('   ⚠️ QR generation failed:', err.message);
     }
-    qrBlock = `
-  <div class="qr-block">
-    ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR ${escapeHtml(caseNumber)}" />` : ''}
-    <div class="qr-code-text">${escapeHtml(caseNumber)}</div>
-    <div class="qr-hint">امسح لنقل الحالة بين المحطات</div>
-  </div>`;
   }
 
   return `<!DOCTYPE html>
@@ -703,99 +708,136 @@ async function buildPrintHtml(c) {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { size: A5; margin: 10mm 12mm 10mm 12mm; }
-    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A5 portrait; margin: 6mm; }
+    html, body {
+      width: 148mm;
+      height: 210mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
       background: #fff;
       color: #000;
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.35;
       direction: rtl;
-      padding-top: 40px;
+      overflow: hidden;
     }
-    .qr-block {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      margin: 0 auto 18px; padding: 8px 0 4px;
+    .sheet {
+      width: 100%;
+      max-height: 198mm;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
-    .qr-img { width: 120px; height: 120px; image-rendering: pixelated; }
-    .qr-code-text {
-      margin-top: 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;
-      direction: ltr; unicode-bidi: isolate;
+    .top-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 6px;
     }
-    .qr-hint { font-size: 10px; color: #333; margin-top: 2px; }
-    .section { margin-bottom: 18px; }
+    .top-meta { flex: 1; min-width: 0; }
+    .lab-name { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+    .print-date { font-size: 10px; color: #222; }
+    .qr-side {
+      flex: 0 0 auto;
+      text-align: center;
+      direction: ltr;
+    }
+    .qr-side img { width: 72px; height: 72px; display: block; image-rendering: pixelated; }
+    .qr-side .code {
+      margin-top: 2px; font-size: 9px; font-weight: 800; letter-spacing: 0.3px;
+    }
+    .section { margin-bottom: 8px; }
     .section-title {
-      font-size: 15px; font-weight: 700; color: #000;
-      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 8px;
+      font-size: 12px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 6px; margin-bottom: 4px;
     }
     .row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 7px 0; border-bottom: 1.5px solid #000; font-size: 14px;
+      padding: 3px 0; border-bottom: 1px solid #000; font-size: 12px;
     }
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
-    .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    .teeth-section { margin-top: 20px; margin-bottom: 16px; }
+    .value { font-weight: 700; color: #000; text-align: left; direction: ltr; max-width: 65%; word-break: break-word; }
+    .teeth-section { margin-top: 8px; margin-bottom: 6px; }
     .teeth-title {
-      font-size: 15px; font-weight: 700; color: #000;
-      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 10px;
+      font-size: 12px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 6px; margin-bottom: 4px;
     }
     .teeth-chart { width: 100%; direction: ltr; }
     .teeth-chart .side-labels {
-      display: flex; justify-content: space-between; padding: 0 4%;
-      margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #000;
+      display: flex; justify-content: space-between; padding: 0 3%;
+      margin-bottom: 2px; font-size: 10px; font-weight: 700; color: #000;
     }
-    .teeth-row { display: flex; width: 100%; border-bottom: 1.5px solid #000; padding: 6px 0; }
+    .teeth-row { display: flex; width: 100%; border-bottom: 1px solid #000; padding: 3px 0; }
     .teeth-row:last-child { border-bottom: none; }
-    .teeth-row .tooth { flex: 1; text-align: center; font-size: 14px; font-weight: 700; color: #000; }
-    .teeth-row .tooth.center-r { border-right: 2px solid #000; padding-right: 2px; }
+    .teeth-row .tooth { flex: 1; text-align: center; font-size: 11px; font-weight: 700; color: #000; }
+    .teeth-row .tooth.center-r { border-right: 1.5px solid #000; padding-right: 1px; }
     .footer {
-      margin-top: 24px; padding-top: 10px; border-top: 2px solid #000;
+      margin-top: 6px; padding-top: 4px; border-top: 1.5px solid #000;
       display: flex; justify-content: space-between; align-items: center;
-      font-size: 11px; color: #000; direction: ltr;
+      font-size: 10px; color: #000; direction: ltr;
     }
-    .footer-lab { font-weight: 700; color: #000; font-size: 12px; }
-    .footer-date { color: #000; font-size: 11px; direction: rtl; }
   </style>
 </head>
 <body>
-  ${qrBlock}
-  <div class="section">
-    <div class="section-title">بيانات الطبيب والمريض</div>
-    <div class="row"><span class="label">الطبيب</span><span class="value">${escapeHtml(c.doctor || '—')}</span></div>
-    <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
-    <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
-  </div>
-  <div class="section">
-    <div class="section-title">تفاصيل العمل</div>
-    <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
-    ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}
-    <div class="row"><span class="label">اللون</span><span class="value">${escapeHtml(c.color || '—')}</span></div>
-    <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
-  </div>
-  <div class="teeth-section">
-    <div class="teeth-title">مخطط الأسنان</div>
-    <div class="teeth-chart">
-      <div class="side-labels"><span>R</span><span>L</span></div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+  <div class="sheet">
+    <div class="top-row">
+      <div class="top-meta">
+        <div class="lab-name">Elegance Dental Lab</div>
+        <div class="print-date">تاريخ الطباعة: ${escapeHtml(printDate)}</div>
       </div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+      ${
+        caseNumber
+          ? `<div class="qr-side">
+              ${qrImg ? `<img src="${qrImg}" alt="QR" />` : ''}
+              <div class="code">${escapeHtml(caseNumber)}</div>
+            </div>`
+          : ''
+      }
+    </div>
+
+    <div class="section">
+      <div class="section-title">بيانات الطبيب والمريض</div>
+      <div class="row"><span class="label">الطبيب</span><span class="value">${escapeHtml(c.doctor || '—')}</span></div>
+      <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
+      <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">تفاصيل العمل</div>
+      <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
+      ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}
+      <div class="row"><span class="label">اللون</span><span class="value">${escapeHtml(c.color || '—')}</span></div>
+      <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
+    </div>
+    <div class="teeth-section">
+      <div class="teeth-title">مخطط الأسنان</div>
+      <div class="teeth-chart">
+        <div class="side-labels"><span>R</span><span>L</span></div>
+        <div class="teeth-row">
+          <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
+          <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
+          <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
+          <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+        </div>
+        <div class="teeth-row">
+          <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
+          <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
+          <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
+          <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="footer">
-    <span class="footer-lab">Elegance Dental Lab</span>
-    <span class="footer-date">تاريخ الطباعة: ${escapeHtml(printDate)}</span>
+    <div class="footer">
+      <span>Elegance Dental Lab</span>
+      <span dir="rtl">${escapeHtml(printDate)}</span>
+    </div>
   </div>
 </body>
 </html>`;

@@ -24,7 +24,7 @@ const ROLE_META: Partial<
   scanner1: {
     station: 'reception',
     title: 'سكان 1 — الريسبشن',
-    subtitle: 'من جديدة أو ديزاين → منتهية',
+    subtitle: 'من أي مرحلة → منتهية',
   },
   scanner2: {
     station: 'design',
@@ -34,7 +34,7 @@ const ROLE_META: Partial<
   scanner3: {
     station: 'finishing',
     title: 'سكان 3 — الفينيش',
-    subtitle: 'من جديدة أو ديزاين → فينيش',
+    subtitle: 'من أي مرحلة → تحت الفينيش',
   },
 };
 
