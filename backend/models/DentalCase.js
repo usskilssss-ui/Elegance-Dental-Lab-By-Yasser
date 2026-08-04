@@ -32,6 +32,13 @@ const dentalCaseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    /** Clinic referring doctor (indexed) — mirrors notes meta.doctor for fast list filters */
+    referringDoctor: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
 
     // Workflow
     currentStage: {
@@ -162,5 +169,9 @@ dentalCaseSchema.pre('save', function (next) {
   }
   next();
 });
+
+dentalCaseSchema.index({ createdAt: -1 });
+dentalCaseSchema.index({ currentStage: 1, createdAt: -1 });
+dentalCaseSchema.index({ referringDoctor: 1, createdAt: -1 });
 
 module.exports = mongoose.model('DentalCase', dentalCaseSchema);
