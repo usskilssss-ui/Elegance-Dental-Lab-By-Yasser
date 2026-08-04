@@ -8,6 +8,8 @@ export interface DentalCase {
   patient: string;
   doctor: string;
   clinic: string;
+  /** Branch from notes meta (doctor requests) */
+  branch?: string;
   receivedDate: string;
   deliveryDate: string;
   enteredBy: string;

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription, switchMap } from 'rxjs';
@@ -43,6 +43,19 @@ type DoctorFilter =
   | 'finished'
   | 'exited';
 
+type DateRangeFilter = 'all' | 'today' | 'week' | 'month';
+
+export type DoctorNotif = {
+  id: string;
+  caseId: string;
+  caseNumber: string;
+  patient: string;
+  kind: 'finished' | 'exited';
+  message: string;
+  at: number;
+  read: boolean;
+};
+
 @Component({
   selector: 'app-doctor',
   standalone: true,
@@ -61,17 +74,33 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
+  private knownStatus = new Map<string, DoctorFilter>();
+  private notifHydrated = false;
 
   readonly doctorName = computed(() => this.auth.getSession()?.name?.trim() || '—');
   readonly casesLoading = signal(true);
   readonly toast = signal<string | null>(null);
   readonly dialogOpen = signal(false);
+  readonly dialogMode = signal<'create' | 'edit'>('create');
+  readonly detailOpen = signal(false);
+  readonly detailCase = signal<DentalCase | null>(null);
+  readonly passwordOpen = signal(false);
+  readonly passwordSaving = signal(false);
+  readonly notificationsOpen = signal(false);
+  readonly notifications = signal<DoctorNotif[]>([]);
   readonly saveInProgress = signal(false);
   readonly activeFilter = signal<DoctorFilter>('all');
+  readonly dateRange = signal<DateRangeFilter>('all');
   readonly searchQuery = signal('');
 
+  editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
+  passwordCurrent = '';
+  passwordNew = '';
+  passwordConfirm = '';
+  passwordError = '';
+  showPasswordFields = false;
 
   readonly workTypeOptions = [
     'Zircon',
@@ -98,10 +127,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   workTypeError = '';
 
-  /** Color required only for these work types */
   readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
 
-  /** True when at least one selected type requires color */
   get isColorRequired(): boolean {
     if (this.formDraft.caseType === 'Empty') return false;
     for (const wt of this.selectedWorkTypes) {
@@ -117,6 +144,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.searchQuery.set(v);
   }
 
+  readonly unreadCount = computed(
+    () => this.notifications().filter((n) => !n.read).length
+  );
+
   private bucket(c: DentalCase): DoctorFilter {
     if (c.status === 'exited') return 'exited';
     const stage = String(c.currentStage || '').toLowerCase();
@@ -126,6 +157,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return 'design';
     }
     return 'pending';
+  }
+
+  canEdit(c: DentalCase): boolean {
+    return this.bucket(c) === 'pending';
   }
 
   readonly allCases = computed(() => this.sharedCases.cases());
@@ -148,7 +183,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   });
 
   readonly filterCounts = computed(() => {
-    const all = this.allCases();
+    const all = this.dateFiltered(this.allCases());
     const active = all.filter((c) => c.status !== 'exited');
     return {
       all: active.length,
@@ -161,21 +196,20 @@ export class DoctorComponent implements OnInit, OnDestroy {
   });
 
   readonly cases = computed(() => {
-    const q = this.searchQuery().trim().toLowerCase();
+    const q = this.normalizeSearch(this.searchQuery());
     const filter = this.activeFilter();
-    let list = this.allCases();
+    let list = this.dateFiltered(this.allCases());
     if (filter === 'all') {
       list = list.filter((c) => c.status !== 'exited');
     } else {
       list = list.filter((c) => this.bucket(c) === filter);
     }
     if (q) {
-      list = list.filter(
-        (c) =>
-          c.patient?.toLowerCase().includes(q) ||
-          c.caseNumber?.toLowerCase().includes(q) ||
-          c.workType?.toLowerCase().includes(q)
-      );
+      list = list
+        .map((c) => ({ c, score: this.searchScore(c, q) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.c);
     }
     return list;
   });
@@ -183,6 +217,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
+    this.loadNotificationsFromStorage();
     this.loadCases();
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
@@ -207,6 +242,13 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.socketSubs.forEach((s) => s.unsubscribe());
   }
 
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(ev: MouseEvent): void {
+    const el = ev.target as HTMLElement;
+    if (el.closest('.notif-bell') || el.closest('.notifications-panel')) return;
+    this.notificationsOpen.set(false);
+  }
+
   private scheduleBackgroundReload(): void {
     if (this.reloadDebounceTimer) clearTimeout(this.reloadDebounceTimer);
     this.reloadDebounceTimer = setTimeout(() => {
@@ -221,7 +263,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {
-          this.sharedCases.setCasesFromServer(rows.map((r) => mapApiCaseToDentalCase(r)));
+          const mapped = rows.map((r) => mapApiCaseToDentalCase(r));
+          this.sharedCases.setCasesFromServer(mapped);
+          this.processStatusNotifications(mapped, !opts?.silent);
         }
         this.casesLoading.set(false);
       },
@@ -232,11 +276,173 @@ export class DoctorComponent implements OnInit, OnDestroy {
     });
   }
 
+  private notifStorageKey(): string {
+    const id = this.auth.getSession()?.id || 'anon';
+    return `doctor_portal_notifs_${id}`;
+  }
+
+  private loadNotificationsFromStorage(): void {
+    try {
+      const raw = localStorage.getItem(this.notifStorageKey());
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as DoctorNotif[];
+      if (Array.isArray(parsed)) {
+        this.notifications.set(parsed.slice(0, 40));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private persistNotifications(): void {
+    try {
+      localStorage.setItem(this.notifStorageKey(), JSON.stringify(this.notifications().slice(0, 40)));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private processStatusNotifications(cases: DentalCase[], isInitial: boolean): void {
+    const nextKnown = new Map<string, DoctorFilter>();
+    const fresh: DoctorNotif[] = [];
+
+    for (const c of cases) {
+      const b = this.bucket(c);
+      nextKnown.set(c.id, b);
+      if (!this.notifHydrated) continue;
+      const prev = this.knownStatus.get(c.id);
+      if (!prev || prev === b) continue;
+      if (b !== 'finished' && b !== 'exited') continue;
+      if (prev === 'finished' && b === 'exited') {
+        /* allow exit after finish */
+      } else if (prev === 'exited' || prev === 'finished') {
+        continue;
+      }
+      const kind = b as 'finished' | 'exited';
+      const message =
+        kind === 'finished'
+          ? `حالة ${c.caseNumber} للمريض ${c.patient} أصبحتتهية`
+          : `حالة ${c.caseNumber} للمريض ${c.patient} خرجت من المعمل`;
+      fresh.push({
+        id: `${c.id}-${kind}-${Date.now()}`,
+        caseId: c.id,
+        caseNumber: c.caseNumber,
+        patient: c.patient,
+        kind,
+        message,
+        at: Date.now(),
+        read: false,
+      });
+    }
+
+    this.knownStatus = nextKnown;
+    this.notifHydrated = true;
+
+    if (isInitial || fresh.length === 0) return;
+
+    this.notifications.update((list) => [...fresh, ...list].slice(0, 40));
+    this.persistNotifications();
+    const last = fresh[0];
+    if (last) this.flash(last.kind === 'finished' ? `✅ ${last.message}` : `📦 ${last.message}`);
+  }
+
+  toggleNotifications(ev: Event): void {
+    ev.stopPropagation();
+    const opening = !this.notificationsOpen();
+    this.notificationsOpen.set(opening);
+    if (opening) this.markAllNotificationsRead();
+  }
+
+  markAllNotificationsRead(): void {
+    const hasUnread = this.notifications().some((n) => !n.read);
+    if (!hasUnread) return;
+    this.notifications.update((list) => list.map((n) => ({ ...n, read: true })));
+    this.persistNotifications();
+  }
+
+  openNotification(n: DoctorNotif): void {
+    this.notificationsOpen.set(false);
+    const c = this.allCases().find((x) => x.id === n.caseId);
+    if (c) {
+      this.openDetails(c);
+      return;
+    }
+    this.activeFilter.set(n.kind);
+    this.flash('الحالة غير موجودة في القائمة الحالية');
+  }
+
   setFilter(f: DoctorFilter): void {
     this.activeFilter.set(f);
   }
 
+  setDateRange(r: DateRangeFilter): void {
+    this.dateRange.set(r);
+  }
+
+  private dateFiltered(list: DentalCase[]): DentalCase[] {
+    const range = this.dateRange();
+    if (range === 'all') return list;
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (range === 'week') start.setDate(start.getDate() - 6);
+    if (range === 'month') start.setDate(1);
+    return list.filter((c) => {
+      const t = this.caseTime(c);
+      return t !== null && t >= start.getTime();
+    });
+  }
+
+  private caseTime(c: DentalCase): number | null {
+    const raw = c.createdAt || c.receivedDateRaw || c.exitedAtRaw || '';
+    if (!raw) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split('-').map(Number);
+      return new Date(y, m - 1, d).getTime();
+    }
+    const t = new Date(raw).getTime();
+    return Number.isNaN(t) ? null : t;
+  }
+
+  private normalizeSearch(v: string): string {
+    return String(v || '')
+      .toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .trim();
+  }
+
+  private searchScore(c: DentalCase, q: string): number {
+    const patient = this.normalizeSearch(c.patient);
+    const work = this.normalizeSearch(this.formatWorkTypeForDisplay(c.workType));
+    const color = this.normalizeSearch(c.color);
+    const branch = this.normalizeSearch(c.branch || c.clinic || '');
+    const detail = this.normalizeSearch(c.workDetail || '');
+    const num = this.normalizeSearch(c.caseNumber);
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const hay = `${patient} ${work} ${color} ${branch} ${detail} ${num}`;
+    if (!tokens.every((t) => hay.includes(t))) return 0;
+    if (patient.includes(q) || patient.startsWith(q)) return 120;
+    if (work.includes(q)) return 100;
+    if (color.includes(q)) return 90;
+    if (branch.includes(q)) return 85;
+    if (num.includes(q)) return 80;
+    return 50;
+  }
+
+  openDetails(c: DentalCase): void {
+    this.detailCase.set(c);
+    this.detailOpen.set(true);
+  }
+
+  closeDetails(): void {
+    this.detailOpen.set(false);
+    this.detailCase.set(null);
+  }
+
   openDialog(): void {
+    this.dialogMode.set('create');
+    this.editingId = null;
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
     this.workTypeQuantities = {};
@@ -246,8 +452,134 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.dialogOpen.set(true);
   }
 
+  openEditFromDetail(): void {
+    const c = this.detailCase();
+    if (!c || !this.canEdit(c)) {
+      this.flash('التعديل متاح فقط قبل دخول الديزاين');
+      return;
+    }
+    this.closeDetails();
+    this.openEdit(c);
+  }
+
+  openEdit(c: DentalCase): void {
+    if (!this.canEdit(c)) {
+      this.flash('التعديل متاح فقط قبل دخول الديزاين');
+      return;
+    }
+    this.dialogMode.set('edit');
+    this.editingId = c.id;
+    const caseType = this.getCaseTypeFromWorkType(c.workType);
+    this.formDraft = {
+      caseNumber: c.caseNumber,
+      patient: c.patient,
+      workType: c.workType,
+      workDetail: c.workDetail || '',
+      color: c.color || '',
+      branch: c.branch || c.clinic || '',
+      quantity: c.quantity || 1,
+      date: todayYmd(),
+      caseType,
+    };
+    this.selectedWorkTypes = new Set();
+    this.workTypeQuantities = {};
+    this.workTypeError = '';
+    this.patientNameError = '';
+    this.nightGuardType = '';
+    this.restoreWorkTypes(c.workType, caseType, c.quantity);
+    this.dialogOpen.set(true);
+  }
+
+  private getCaseTypeFromWorkType(wt: string): 'New' | 'Modification' | 'Redo' | 'Empty' {
+    const s = String(wt || '');
+    if (s === 'Empty' || s === 'غير معروف') return 'Empty';
+    if (s === 'Modification' || s.startsWith('Modification - ') || s.startsWith('تعديل')) return 'Modification';
+    if (s === 'Redo' || s === 'Remake' || s.startsWith('Redo - ') || s.startsWith('اعادة')) return 'Redo';
+    return 'New';
+  }
+
+  private restoreWorkTypes(
+    workType: string,
+    caseType: 'New' | 'Modification' | 'Redo' | 'Empty',
+    quantity: number
+  ): void {
+    if (caseType === 'Empty' || !workType) return;
+    let wtToParse = workType;
+    if (wtToParse.startsWith('Modification - ')) wtToParse = wtToParse.replace('Modification - ', '');
+    else if (wtToParse === 'Modification') wtToParse = '';
+    else if (wtToParse.startsWith('Redo - ')) wtToParse = wtToParse.replace('Redo - ', '');
+    else if (wtToParse === 'Redo' || wtToParse === 'Remake') wtToParse = '';
+    else if (wtToParse.startsWith('تعديل - ')) wtToParse = wtToParse.replace('تعديل - ', '');
+    else if (wtToParse.startsWith('اعادة - ')) wtToParse = wtToParse.replace('اعادة - ', '');
+
+    if (!wtToParse) return;
+    const parts = wtToParse.split('+').map((s) => s.trim()).filter(Boolean);
+    for (const p of parts) {
+      const match = p.match(/^(.*?)(?:\s*\((\d+)\))?$/);
+      if (!match) continue;
+      let wtName = match[1].trim();
+      const qty = match[2] ? parseInt(match[2], 10) : 1;
+      if (wtName.startsWith('Night Guard') || wtName.startsWith('Night Gard')) {
+        this.selectedWorkTypes.add('Night Guard');
+        this.workTypeQuantities['Night Guard'] = qty;
+        this.nightGuardType = wtName.includes('Hard') ? 'Hard' : 'Soft';
+      } else if (this.workTypeOptions.includes(wtName)) {
+        this.selectedWorkTypes.add(wtName);
+        this.workTypeQuantities[wtName] = qty;
+      }
+    }
+    if (this.selectedWorkTypes.size === 1 && !workType.includes('(')) {
+      const only = [...this.selectedWorkTypes][0];
+      this.workTypeQuantities[only] = Number(quantity) || 1;
+    }
+    if (this.selectedWorkTypes.size > 0) this.updateWorkTypeString();
+  }
+
   closeDialog(): void {
     this.dialogOpen.set(false);
+    this.editingId = null;
+  }
+
+  openPasswordModal(): void {
+    this.passwordCurrent = '';
+    this.passwordNew = '';
+    this.passwordConfirm = '';
+    this.passwordError = '';
+    this.showPasswordFields = false;
+    this.passwordOpen.set(true);
+  }
+
+  closePasswordModal(): void {
+    this.passwordOpen.set(false);
+    this.passwordSaving.set(false);
+  }
+
+  submitPasswordChange(): void {
+    this.passwordError = '';
+    if (!this.passwordCurrent || !this.passwordNew) {
+      this.passwordError = 'أدخل كلمة المرور الحالية والجديدة';
+      return;
+    }
+    if (this.passwordNew.length < 6) {
+      this.passwordError = 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف';
+      return;
+    }
+    if (this.passwordNew !== this.passwordConfirm) {
+      this.passwordError = 'تأكيد كلمة المرور غير مطابق';
+      return;
+    }
+    this.passwordSaving.set(true);
+    this.auth.changePassword(this.passwordCurrent, this.passwordNew).subscribe({
+      next: () => {
+        this.passwordSaving.set(false);
+        this.closePasswordModal();
+        this.flash('✅ تم تغيير كلمة المرور بنجاح');
+      },
+      error: (err) => {
+        this.passwordSaving.set(false);
+        this.passwordError = err?.error?.message || 'تعذر تغيير كلمة المرور';
+      },
+    });
   }
 
   onCaseTypeChange(): void {
@@ -370,14 +702,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
     }
 
     this.updateWorkTypeString();
+    const isEdit = this.dialogMode() === 'edit' && !!this.editingId;
+    const editId = this.editingId;
     this.closeDialog();
     this.saveInProgress.set(true);
-
-    const now = new Date();
-    const printDate =
-      now.toLocaleDateString('en-GB') +
-      '  ' +
-      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
     const casePayload = buildCreateCasePayload({
       requesterType: 'doctor',
@@ -389,7 +717,30 @@ export class DoctorComponent implements OnInit, OnDestroy {
       size: '',
       quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
       date: todayYmd(),
+      branch: d.branch.trim(),
     });
+
+    if (isEdit && editId) {
+      this.caseApi.updateCase(editId, casePayload).subscribe({
+        next: () => {
+          this.saveInProgress.set(false);
+          this.flash('✅ تم تحديث الريكويست');
+          this.loadCases();
+        },
+        error: (err) => {
+          this.saveInProgress.set(false);
+          this.flash(err?.error?.message || '❌ فشل التحديث');
+          this.loadCases({ silent: true });
+        },
+      });
+      return;
+    }
+
+    const now = new Date();
+    const printDate =
+      now.toLocaleDateString('en-GB') +
+      '  ' +
+      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
     const printData = {
       doctor,
@@ -406,11 +757,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
     this.caseApi
       .createCase(casePayload)
-      .pipe(
-        switchMap(() =>
-          this.http.post(`${this.apiBase}/print/job`, { printData })
-        )
-      )
+      .pipe(switchMap(() => this.http.post(`${this.apiBase}/print/job`, { printData })))
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);
@@ -462,7 +809,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (!value) return { date: '—', time: '' };
     try {
       const raw = String(value).trim();
-      // Date-only (YYYY-MM-DD) → no fake UTC midnight time
       if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
         const [y, m, d] = raw.split('-').map(Number);
         const local = new Date(y, m - 1, d);
@@ -497,8 +843,21 @@ export class DoctorComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Prefer server createdAt so the clock matches when the request was saved */
   caseReceivedStamp(c: DentalCase): string {
     return c.createdAt || c.receivedDateRaw || c.receivedDate || '';
+  }
+
+  formatNotifTime(at: number): string {
+    try {
+      return new Date(at).toLocaleString('ar-EG-u-nu-latn', {
+        day: 'numeric',
+        month: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return '';
+    }
   }
 }

@@ -20,6 +20,8 @@ export interface StaffMember {
   name: string;
   email: string;
   password: string;
+  /** Plaintext copy for admin display (doctors only). */
+  loginPasswordVisible?: string;
   phone: string;
   position: string;
   status: 'active' | 'inactive';
@@ -1908,6 +1910,7 @@ export class Admin implements OnInit, OnDestroy {
       name: String(u['fullName'] ?? ''),
       email: String(u['email'] ?? ''),
       password: '',
+      loginPasswordVisible: String(u['loginPasswordVisible'] ?? ''),
       phone: String(u['phone'] ?? ''),
       position: this.roleToPositionLabel(role),
       status: u['isActive'] === false ? 'inactive' : 'active',
@@ -1957,7 +1960,7 @@ export class Admin implements OnInit, OnDestroy {
   openEditDoctorModal(doc: StaffMember) {
     this.isDoctorEditMode = true;
     this.doctorModalError = '';
-    this.showDoctorPassword = false;
+    this.showDoctorPassword = true;
     this.currentDoctor = { ...doc, password: '', position: 'دكتور' };
     this.showDoctorModal = true;
   }

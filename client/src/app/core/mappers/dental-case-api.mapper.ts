@@ -46,6 +46,7 @@ export type CaseMeta = {
   requesterType?: 'doctor' | 'student';
   studentPrice?: number;
   doctor?: string;
+  branch?: string;
   workDetail?: string;
   color?: string;
   size?: string;
@@ -78,6 +79,7 @@ export type SecretaryCaseFormPayload = {
   date: string;
   deliveryDate?: string;
   deliveryTime?: string;
+  branch?: string;
   exitedAt?: string;
 };
 
@@ -104,6 +106,7 @@ export function buildSecretaryNotes(
     requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
     studentPrice: Number(form.studentPrice || 0),
     doctor: form.doctor,
+    branch: (form.branch || '').trim(),
     workDetail: form.workDetail,
     color: form.color,
     size: form.size,
@@ -270,7 +273,8 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     priority: mapPriorityFromApi(String(doc['priority'] ?? 'normal')),
     patient: patientName,
     doctor,
-    clinic: '',
+    clinic: String(meta['branch'] ?? ''),
+    branch: String(meta['branch'] ?? ''),
     receivedDate: receivedDisplay || caseNumber,
     receivedDateRaw: receivedDateMeta || undefined,
     createdAt: createdAt ? String(createdAt) : undefined,

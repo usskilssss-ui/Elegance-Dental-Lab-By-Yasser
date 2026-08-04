@@ -33,5 +33,12 @@ router.post(
 );
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.getCurrentUser);
+router.post(
+  '/change-password',
+  authenticate,
+  body('currentPassword').notEmpty(),
+  body('newPassword').isLength({ min: 6 }),
+  authController.changePassword
+);
 
 module.exports = router;

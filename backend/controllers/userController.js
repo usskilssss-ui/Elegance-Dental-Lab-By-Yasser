@@ -13,7 +13,10 @@ exports.getAllUsers = async (req, res) => {
     if (role) filter.role = role;
     if (status) filter.status = status;
 
-    const users = await User.find(filter).select('-password').sort({ fullName: 1 });
+    const users = await User.find(filter)
+      .select('+loginPasswordVisible')
+      .select('-password')
+      .sort({ fullName: 1 });
 
     res.status(200).json({
       success: true,
@@ -60,7 +63,7 @@ exports.updateUser = async (req, res) => {
 
     const { fullName, phone, department, role, password, isActive } = req.body;
 
-    const user = await User.findById(req.params.id).select('+password');
+    const user = await User.findById(req.params.id).select('+password +loginPasswordVisible');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -81,6 +84,9 @@ exports.updateUser = async (req, res) => {
         return res.status(403).json({ message: 'Only admin can set passwords' });
       }
       user.password = password;
+      if ((role || user.role) === 'doctor') {
+        user.loginPasswordVisible = password;
+      }
     }
 
     if (req.user.role === 'admin' && isActive !== undefined) {

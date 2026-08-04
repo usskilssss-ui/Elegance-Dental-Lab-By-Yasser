@@ -77,7 +77,7 @@ router.get('/financial-report', authorize('admin'), caseController.getFinancialR
 router.get('/:id', caseController.getCaseById);
 
 // Update case (admin: any, secretary: own created, designer/finisher: assigned case)
-router.put('/:id', authorize('admin', 'secretary', 'designer', 'finisher'), updateCaseValidation, caseController.updateCase);
+router.put('/:id', authorize('admin', 'secretary', 'designer', 'finisher', 'doctor'), updateCaseValidation, caseController.updateCase);
 router.put('/:id/financials', authorize('admin'), updateFinancialsValidation, caseController.updateCaseFinancials);
 router.delete('/:id', authorize('admin', 'secretary'), caseController.deleteCase);
 

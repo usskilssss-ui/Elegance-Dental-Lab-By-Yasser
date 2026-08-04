@@ -166,6 +166,24 @@ export class AuthService {
       );
   }
 
+  /** POST /auth/change-password — authenticated user changes own password. */
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<{ success?: boolean; message?: string }>(`${this.apiUrl}/change-password`, {
+        currentPassword,
+        newPassword,
+      })
+      .pipe(
+        tap((res) => {
+          if (res && res.success === false) {
+            throw new Error(res.message || 'Failed to change password');
+          }
+        }),
+        map(() => void 0),
+        catchError((err) => throwError(() => err))
+      );
+  }
+
   /** Clears token and session without calling the API (e.g. after 401). */
   forceLogoutLocal(): void {
     this.clearSession();

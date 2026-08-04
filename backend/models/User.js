@@ -28,6 +28,12 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    /** Admin-visible password copy (doctors). Auth still uses hashed `password`. */
+    loginPasswordVisible: {
+      type: String,
+      default: '',
+      select: false,
+    },
     role: {
       type: String,
       enum: ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor'],

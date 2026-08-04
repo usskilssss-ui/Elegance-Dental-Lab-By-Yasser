@@ -970,6 +970,26 @@ exports.updateCase = async (req, res) => {
       }
     }
 
+    // Doctor may edit only their own cases before design starts
+    if (req.user.role === 'doctor') {
+      const meta = parseNotesMeta(dentalCase.notes || '');
+      const doctorName = String(meta.doctor || meta.doctorName || dentalCase.referringDoctor || '')
+        .trim()
+        .toLowerCase();
+      const me = String(req.user.fullName || '')
+        .trim()
+        .toLowerCase();
+      if (!me || doctorName !== me) {
+        return res.status(403).json({ message: 'يمكنك تعديل حالاتك فقط' });
+      }
+      const stage = String(dentalCase.currentStage || '');
+      if (stage !== 'waiting' && stage !== 'secretary') {
+        return res.status(403).json({
+          message: 'لا يمكن التعديل بعد دخول الحالة للديزاين',
+        });
+      }
+    }
+
     const {
       patientName,
       patientEmail,

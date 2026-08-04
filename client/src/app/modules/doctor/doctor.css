@@ -1,6 +1,5 @@
 /* Doctor portal overrides (base styles from secretary.css) */
 
-/* 6 stats → 3×2 fills the row without empty left space */
 .stats-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -21,4 +20,182 @@
   font-weight: 500;
   color: var(--text-secondary, #64748b);
   font-size: 0.85em;
+}
+
+.doctor-portal .page-header {
+  gap: 12px;
+}
+
+.doctor-portal .case-create-actions {
+  flex-shrink: 0;
+}
+
+.date-range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.date-chip {
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface, #fff);
+  color: var(--text-secondary, #64748b);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.date-chip.active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.doctor-case-card {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.doctor-case-card:hover,
+.doctor-case-card:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.doctor-card-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.doctor-edit-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.detail-modal {
+  max-width: 480px;
+  width: min(100%, 480px);
+}
+
+.detail-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.detail-modal-head .modal-title {
+  margin: 0;
+}
+
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  font-size: 14px;
+}
+
+.detail-row span {
+  color: var(--text-secondary, #64748b);
+  flex-shrink: 0;
+}
+
+.detail-row strong {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  word-break: break-word;
+}
+
+.detail-notes {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-notes strong {
+  text-align: right;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+.doctor-notif-panel .notification-item.unread {
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.notif-time {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 2px;
+}
+
+.show-pw-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  margin: 4px 0 8px;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .doctor-portal .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .doctor-portal .case-create-actions .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .doctor-portal .filter-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .doctor-portal .filter-tab {
+    flex-shrink: 0;
+  }
+
+  .doctor-portal .case-card {
+    padding: 14px;
+  }
+
+  .doctor-portal .topbar-right {
+    gap: 4px;
+  }
+
+  .doctor-portal .modal {
+    margin: 12px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+
+  .doctor-portal .notifications-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+  }
 }
