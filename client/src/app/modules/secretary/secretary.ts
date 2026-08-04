@@ -103,9 +103,9 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
   private readonly socketSubs: Subscription[] = [];
-  readonly activeFilter = signal<'all' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'>(
-    'all'
-  );
+  readonly activeFilter = signal<
+    'all' | 'urgent' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
+  >('all');
   readonly casesLoading = signal(false);
   readonly saveInProgress = signal(false);
 
@@ -123,6 +123,10 @@ export class Secretary implements OnInit, OnDestroy {
     return 'pending';
   }
 
+  private isUrgentCase(c: { priority?: string }): boolean {
+    return c.priority === 'emergency';
+  }
+
   // عرض الحالات من SharedCasesService مباشرة لتحديث فوري
   readonly cases = computed(() => {
     const allCases = this.sharedCases.cases();
@@ -132,13 +136,22 @@ export class Secretary implements OnInit, OnDestroy {
     let baseCases =
       selectedFilter === 'all'
         ? allCases.filter((c) => c.status !== 'exited')
-        : allCases.filter((c) => this.caseBucket(c) === selectedFilter);
+        : selectedFilter === 'urgent'
+          ? allCases.filter((c) => c.status !== 'exited' && this.isUrgentCase(c))
+          : allCases.filter((c) => this.caseBucket(c) === selectedFilter);
 
     if (selectedFilter === 'exited') {
       baseCases = [...baseCases].sort((a, b) => {
         const timeA = a.exitedAtRaw ? new Date(a.exitedAtRaw).getTime() : 0;
         const timeB = b.exitedAtRaw ? new Date(b.exitedAtRaw).getTime() : 0;
         return timeB - timeA;
+      });
+    } else if (!q) {
+      baseCases = [...baseCases].sort((a, b) => {
+        const au = this.isUrgentCase(a) ? 1 : 0;
+        const bu = this.isUrgentCase(b) ? 1 : 0;
+        if (bu !== au) return bu - au;
+        return 0;
       });
     }
 
@@ -220,6 +233,7 @@ export class Secretary implements OnInit, OnDestroy {
     const activeCases = allCases.filter((c) => c.status !== 'exited');
     return {
       all: activeCases.length,
+      urgent: activeCases.filter((c) => this.isUrgentCase(c)).length,
       pending: allCases.filter((c) => this.caseBucket(c) === 'pending').length,
       design: allCases.filter((c) => this.caseBucket(c) === 'design').length,
       finishing: allCases.filter((c) => this.caseBucket(c) === 'finishing').length,
@@ -651,7 +665,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   setFilter(
-    filter: 'all' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
+    filter: 'all' | 'urgent' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
   ): void {
     this.activeFilter.set(filter);
   }

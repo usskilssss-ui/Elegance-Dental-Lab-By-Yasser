@@ -971,6 +971,7 @@ exports.updateCase = async (req, res) => {
     }
 
     // Doctor may edit only their own cases before design starts
+    // Exception: doctors may set priority (urgent/normal) on their cases at any stage
     if (req.user.role === 'doctor') {
       const meta = parseNotesMeta(dentalCase.notes || '');
       const doctorName = String(meta.doctor || meta.doctorName || dentalCase.referringDoctor || '')
@@ -982,11 +983,19 @@ exports.updateCase = async (req, res) => {
       if (!me || doctorName !== me) {
         return res.status(403).json({ message: 'يمكنك تعديل حالاتك فقط' });
       }
-      const stage = String(dentalCase.currentStage || '');
-      if (stage !== 'waiting' && stage !== 'secretary') {
-        return res.status(403).json({
-          message: 'لا يمكن التعديل بعد دخول الحالة للديزاين',
-        });
+
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const providedKeys = Object.keys(body).filter((k) => body[k] !== undefined);
+      const priorityOnly =
+        providedKeys.length > 0 && providedKeys.every((k) => k === 'priority');
+
+      if (!priorityOnly) {
+        const stage = String(dentalCase.currentStage || '');
+        if (stage !== 'waiting' && stage !== 'secretary') {
+          return res.status(403).json({
+            message: 'لا يمكن التعديل بعد دخول الحالة للديزاين',
+          });
+        }
       }
     }
 
@@ -1027,7 +1036,14 @@ exports.updateCase = async (req, res) => {
       dentalCase.referringDoctor = referringDoctorFromNotes(dentalCase.notes);
     }
     if (caseType !== undefined) dentalCase.caseType = caseType;
-    if (priority !== undefined) dentalCase.priority = priority;
+    if (priority !== undefined) {
+      const allowed = ['low', 'normal', 'high', 'urgent'];
+      const p = String(priority);
+      if (!allowed.includes(p)) {
+        return res.status(400).json({ message: 'Invalid priority' });
+      }
+      dentalCase.priority = p;
+    }
     if (dueDate !== undefined) dentalCase.dueDate = new Date(dueDate);
 
     if (stageTimestamps !== undefined && typeof stageTimestamps === 'object' && stageTimestamps !== null) {

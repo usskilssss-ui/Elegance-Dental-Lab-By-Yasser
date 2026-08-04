@@ -125,7 +125,7 @@
         الكل <span class="tab-count">{{ filterCounts().all }}</span>
       </button>
       <button class="filter-tab filter-important" [class.active]="activeFilter() === 'important'" (click)="setFilter('important')">
-        مهمة <span class="tab-count">{{ filterCounts().important }}</span>
+        مستعجلة <span class="tab-count">{{ filterCounts().important }}</span>
       </button>
       <button class="filter-tab filter-pending" [class.active]="activeFilter() === 'pending'" (click)="setFilter('pending')">
         الجديدة <span class="tab-count">{{ filterCounts().pending }}</span>
@@ -194,8 +194,6 @@
                 <span class="case-id">{{ c.caseNumber }}</span>
                 @if (c.priority === 'emergency') {
                   <span class="urgent-pill">مستعجل</span>
-                } @else if (isImportant(c.id)) {
-                  <span class="important-pill">مهم</span>
                 }
               </div>
               <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">
@@ -279,7 +277,7 @@
           <div class="detail-row"><span>المرحلة</span><strong>{{ getCasePhase(dc).label }}</strong></div>
           <div class="detail-row">
             <span>الأولوية</span>
-            <strong>{{ dc.priority === 'emergency' ? 'مستعجل' : isImportant(dc.id) ? 'مهم للمتابعة' : 'عادي' }}</strong>
+            <strong>{{ dc.priority === 'emergency' ? 'مستعجل' : 'عادي' }}</strong>
           </div>
           <div class="detail-row"><span>نوع العمل</span><strong>{{ formatWorkTypeForDisplay(dc.workType) }}</strong></div>
           @if (dc.color) {
@@ -351,7 +349,7 @@
 
           <label class="urgent-check">
             <input type="checkbox" name="urgent" [(ngModel)]="formDraft.urgent" />
-            <span>مستعجل — يظهر للمعمل ويُضاف للمهمة</span>
+            <span>مستعجل — يظهر فورًا في السكرتارية</span>
           </label>
 
           <label class="form-field">

@@ -84,8 +84,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly saveInProgress = signal(false);
   readonly activeFilter = signal<DoctorFilter>('all');
   readonly searchQuery = signal('');
-  /** Cases the doctor marked as important / urgent to watch */
-  readonly importantIds = signal<Set<string>>(new Set());
 
   editingId: string | null = null;
   formDraft = emptyDraft();
@@ -152,17 +150,42 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return this.bucket(c) === 'pending';
   }
 
-  isImportant(id: string): boolean {
-    return this.importantIds().has(id);
+  isImportant(c: DentalCase | string): boolean {
+    if (typeof c === 'string') {
+      const found = this.allCases().find((x) => x.id === c);
+      return found?.priority === 'emergency';
+    }
+    return c.priority === 'emergency';
   }
 
   toggleImportant(c: DentalCase, ev?: Event): void {
     ev?.stopPropagation();
-    const next = new Set(this.importantIds());
-    if (next.has(c.id)) next.delete(c.id);
-    else next.add(c.id);
-    this.importantIds.set(next);
-    this.persistImportantIds();
+    const makeUrgent = c.priority !== 'emergency';
+    const prev = c.priority;
+    const optimistic: DentalCase = {
+      ...c,
+      priority: makeUrgent ? 'emergency' : 'normal',
+    };
+    this.sharedCases.updateCase(c.id, optimistic);
+    if (this.detailCase()?.id === c.id) {
+      this.detailCase.set(optimistic);
+    }
+    this.caseApi.updateCase(c.id, { priority: makeUrgent ? 'urgent' : 'normal' }).subscribe({
+      next: () => {
+        this.flash(
+          makeUrgent
+            ? '✅ تم تمييز الحالة كمستعجلة — هتظهر للسكرتارية'
+            : 'تم إلغاء تمييز الاستعجال'
+        );
+      },
+      error: (err) => {
+        this.sharedCases.updateCase(c.id, { ...c, priority: prev });
+        if (this.detailCase()?.id === c.id) {
+          this.detailCase.set({ ...c, priority: prev });
+        }
+        this.flash(err?.error?.message || 'تعذر تحديث الأولوية');
+      },
+    });
   }
 
   readonly allCases = computed(() => this.sharedCases.cases());
@@ -187,7 +210,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly filterCounts = computed(() => {
     const all = this.allCases();
     const active = all.filter((c) => c.status !== 'exited');
-    const important = active.filter((c) => this.isImportant(c.id)).length;
+    const important = active.filter((c) => c.priority === 'emergency').length;
     return {
       all: active.length,
       important,
@@ -202,10 +225,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly cases = computed(() => {
     const q = this.normalizeSearch(this.searchQuery());
     const filter = this.activeFilter();
-    const important = this.importantIds();
     let list = this.allCases();
     if (filter === 'important') {
-      list = list.filter((c) => c.status !== 'exited' && important.has(c.id));
+      list = list.filter((c) => c.status !== 'exited' && c.priority === 'emergency');
     } else if (filter === 'all') {
       list = list.filter((c) => c.status !== 'exited');
     } else {
@@ -218,10 +240,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
         .sort((a, b) => b.score - a.score)
         .map((x) => x.c);
     } else {
-      // Important cases float to the top
       list = [...list].sort((a, b) => {
-        const ai = important.has(a.id) ? 1 : 0;
-        const bi = important.has(b.id) ? 1 : 0;
+        const ai = a.priority === 'emergency' ? 1 : 0;
+        const bi = b.priority === 'emergency' ? 1 : 0;
         if (bi !== ai) return bi - ai;
         return 0;
       });
@@ -233,7 +254,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadNotificationsFromStorage();
-    this.loadImportantIds();
     this.loadCases();
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
@@ -308,43 +328,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
     } catch {
       /* ignore */
     }
-  }
-
-  private importantStorageKey(): string {
-    const id = this.auth.getSession()?.id || 'anon';
-    return `doctor_portal_important_${id}`;
-  }
-
-  private loadImportantIds(): void {
-    try {
-      const raw = localStorage.getItem(this.importantStorageKey());
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed)) {
-        this.importantIds.set(new Set(parsed.filter(Boolean)));
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private persistImportantIds(): void {
-    try {
-      localStorage.setItem(
-        this.importantStorageKey(),
-        JSON.stringify([...this.importantIds()])
-      );
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private markImportantId(id: string): void {
-    if (!id) return;
-    const next = new Set(this.importantIds());
-    next.add(id);
-    this.importantIds.set(next);
-    this.persistImportantIds();
   }
 
   private persistNotifications(): void {
@@ -505,7 +488,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       quantity: c.quantity || 1,
       date: todayYmd(),
       caseType,
-      urgent: c.priority === 'emergency' || this.isImportant(c.id),
+      urgent: c.priority === 'emergency',
     };
     this.selectedWorkTypes = new Set();
     this.workTypeQuantities = {};
@@ -713,7 +696,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.caseApi.updateCase(editId, casePayload).subscribe({
         next: () => {
           this.saveInProgress.set(false);
-          if (d.urgent) this.markImportantId(editId);
           this.flash('✅ تم تحديث الريكويست');
           this.loadCases();
         },
@@ -748,13 +730,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
     this.caseApi
       .createCase(casePayload)
-      .pipe(
-        switchMap((res: any) => {
-          const createdId = String(res?.case?._id ?? res?.case?.id ?? res?.data?._id ?? '');
-          if (d.urgent && createdId) this.markImportantId(createdId);
-          return this.http.post(`${this.apiBase}/print/job`, { printData });
-        })
-      )
+      .pipe(switchMap(() => this.http.post(`${this.apiBase}/print/job`, { printData })))
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);
