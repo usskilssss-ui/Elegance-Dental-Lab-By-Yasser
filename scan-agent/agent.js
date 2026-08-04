@@ -3,6 +3,8 @@
  * Runs on a lab Windows PC next to a USB barcode scanner (keyboard wedge).
  * Logs in as scanner1 / scanner2 / scanner3 and POSTs scanned codes to /api/cases/scan.
  *
+ * Primary capture: local Capture page (auto-focused). Console stdin as backup.
+ *
  * Usage:
  *   node agent.js config.scanner2.json
  *   npm run start:2
@@ -14,6 +16,14 @@ const http = require('http');
 const https = require('https');
 const { execFile, exec } = require('child_process');
 const readline = require('readline');
+
+// Never crash the agent on optional hook / spawn noise
+process.on('uncaughtException', (err) => {
+  console.warn('⚠️  Ignored error:', err.message);
+});
+process.on('unhandledRejection', (err) => {
+  console.warn('⚠️  Ignored rejection:', err && err.message ? err.message : err);
+});
 
 const configPath = path.resolve(
   process.cwd(),
@@ -45,12 +55,6 @@ if (!SERVER_URL || !EMAIL || !PASSWORD) {
 let authToken = '';
 let authRole = '';
 let busy = false;
-let buffer = '';
-let lastKeyAt = 0;
-let idleFlushTimer = null;
-/** Scanner chars can be 30–400ms apart depending on device settings */
-const KEY_GAP_MS = 800;
-const IDLE_SUBMIT_MS = 250;
 const MIN_CODE_LEN = 6;
 
 console.log('📷 Elegance Scan Agent starting...');
@@ -167,14 +171,14 @@ async function scanCode(rawCode) {
     .replace(/[\r\n\t]+/g, '')
     .replace(/[\u064B-\u065F\u0670\u200e\u200f\u202a-\u202e\ufeff]/g, '')
     .trim();
-  if (!code) return;
+  if (!code) return { ok: false, message: 'Empty code' };
   if (code.length < MIN_CODE_LEN) {
     console.log(`⏭️  Ignored short code: "${code}"`);
-    return;
+    return { ok: false, message: 'Short code' };
   }
   if (busy) {
     console.log(`⏭️  Busy — skipped: ${code}`);
-    return;
+    return { ok: false, message: 'Busy' };
   }
 
   busy = true;
@@ -201,109 +205,42 @@ async function scanCode(rawCode) {
     }
 
     if (res.status >= 200 && res.status < 300 && res.data?.success) {
-      console.log(`✅ ${res.data.message || 'OK'}`);
+      const message = res.data.message || 'OK';
+      console.log(`✅ ${message}`);
       if (res.data.case?.currentStage) {
         console.log(`   → stage: ${res.data.case.currentStage}`);
       }
       beep(true);
-    } else {
-      const msg = res.data?.message || res.data?.error || `HTTP ${res.status}`;
-      console.error(`❌ ${msg}`);
-      beep(false);
+      return { ok: true, message, stage: res.data.case?.currentStage };
     }
+
+    const message = res.data?.message || res.data?.error || `HTTP ${res.status}`;
+    console.error(`❌ ${message}`);
+    beep(false);
+    return { ok: false, message };
   } catch (err) {
     console.error(`❌ ${err.message}`);
     beep(false);
+    return { ok: false, message: err.message };
   } finally {
     busy = false;
   }
 }
 
-function keyNameToChar(name) {
-  const n = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
-  if (/^[A-Z]$/.test(n)) return n;
-  if (/^[0-9]$/.test(n)) return n;
-  if (/MINUS|DASH|HYPHEN|SUBTRACT|OEM_MINUS/.test(n)) return '-';
-  if (n.startsWith('NUMPAD')) {
-    const d = n.replace(/^NUMPAD\s*/, '');
-    if (/^[0-9]$/.test(d)) return d;
-    if (/MINUS|SUBTRACT|-/.test(d)) return '-';
-  }
-  return null;
-}
-
-function isEnterKey(name) {
-  const n = String(name || '').toUpperCase();
-  return n === 'RETURN' || n === 'ENTER' || n === 'NUMPAD ENTER' || n === 'NUMPAD RETURN';
-}
-
-function scheduleIdleFlush() {
-  if (idleFlushTimer) clearTimeout(idleFlushTimer);
-  idleFlushTimer = setTimeout(() => {
-    idleFlushTimer = null;
-    if (buffer.length >= MIN_CODE_LEN) {
-      const code = buffer;
-      buffer = '';
-      lastKeyAt = 0;
-      console.log(`⏱️  Idle flush → ${code}`);
-      void scanCode(code);
-    }
-  }, IDLE_SUBMIT_MS);
-}
-
-function onBarcodeChar(ch) {
-  const now = Date.now();
-  if (buffer && now - lastKeyAt > KEY_GAP_MS) {
-    console.log(`🧹 Buffer reset (gap), was: "${buffer}"`);
-    buffer = '';
-  }
-  lastKeyAt = now;
-  buffer += ch;
-  scheduleIdleFlush();
-}
-
-function onBarcodeEnter() {
-  if (idleFlushTimer) {
-    clearTimeout(idleFlushTimer);
-    idleFlushTimer = null;
-  }
-  const code = buffer;
-  buffer = '';
-  lastKeyAt = 0;
-  if (!code) {
-    console.log('⏭️  Enter with empty buffer (scan not captured)');
-    return;
-  }
-  void scanCode(code);
-}
-
-function startGlobalKeyboard() {
-  try {
-    const { GlobalKeyboardListener } = require('node-global-key-listener');
-    const listener = new GlobalKeyboardListener();
-    listener.addListener((e) => {
-      if (e.state !== 'DOWN') return;
-      if (isEnterKey(e.name)) {
-        onBarcodeEnter();
-        return;
-      }
-      const ch = keyNameToChar(e.name);
-      if (ch) onBarcodeChar(ch);
-    });
-    console.log('⌨️  Global keyboard hook ON');
-    return true;
-  } catch (err) {
-    console.warn(`⚠️  Global keyboard hook unavailable (${err.message})`);
-    return false;
-  }
-}
-
 function startStdinFallback() {
-  console.log('⌨️  Console input ON — click this black window, then scan');
+  console.log('⌨️  Console input ON — click this black window, then scan (backup)');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.on('line', (line) => {
     void scanCode(line);
   });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function capturePageHtml() {
@@ -311,31 +248,31 @@ function capturePageHtml() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <title>${LABEL.replace(/[<>&"]/g, '')}</title>
+  <title>${escapeHtml(LABEL)}</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: Segoe UI, Tahoma, sans-serif; background: #0f172a; color: #e2e8f0; }
     .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
     h1 { margin: 0; font-size: 22px; }
-    p { margin: 0; opacity: .8; }
+    p { margin: 0; opacity: .8; text-align: center; max-width: 480px; }
     input {
       width: min(520px, 92vw); font-size: 22px; padding: 14px 16px; border-radius: 10px;
       border: 2px solid #38bdf8; background: #020617; color: #f8fafc; direction: ltr; text-align: center;
     }
-    .log { min-height: 28px; font-size: 16px; font-weight: 700; }
+    .log { min-height: 28px; font-size: 16px; font-weight: 700; text-align: center; max-width: 520px; }
     .ok { color: #4ade80; } .err { color: #f87171; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>${LABEL.replace(/[<>&"]/g, '')}</h1>
-    <p>امسح الباركود هنا — الصفحة بتركّز تلقائيًا</p>
+    <h1>${escapeHtml(LABEL)}</h1>
+    <p>امسح الباركود هنا — سيّب الصفحة دي مفتوحة ومختارة</p>
     <input id="scan" autofocus autocomplete="off" spellcheck="false" placeholder="Ready to scan…" />
     <div id="log" class="log"></div>
   </div>
   <script>
     const input = document.getElementById('scan');
     const log = document.getElementById('log');
-    function focusScan() { input.focus({ preventScroll: true }); }
+    function focusScan() { try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); } }
     setInterval(focusScan, 400);
     window.addEventListener('focus', focusScan);
     document.addEventListener('click', focusScan);
@@ -368,53 +305,49 @@ function capturePageHtml() {
 }
 
 function startCaptureUi() {
-  const server = http.createServer(async (req, res) => {
-    if (req.method === 'GET' && (req.url === '/' || req.url?.startsWith('/?'))) {
-      const html = capturePageHtml();
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
-      return;
-    }
-    if (req.method === 'POST' && req.url === '/scan') {
-      let raw = '';
-      req.on('data', (c) => (raw += c));
-      req.on('end', async () => {
-        let code = '';
-        try {
-          code = JSON.parse(raw || '{}').code || '';
-        } catch {
-          code = raw;
-        }
-        // Run scan and return a simple result (don't double-log messily)
-        const before = busy;
-        try {
-          await scanCode(code);
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (req, res) => {
+      if (req.method === 'GET' && (req.url === '/' || req.url?.startsWith('/?'))) {
+        const html = capturePageHtml();
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/scan') {
+        let raw = '';
+        req.on('data', (c) => (raw += c));
+        req.on('end', async () => {
+          let code = '';
+          try {
+            code = JSON.parse(raw || '{}').code || '';
+          } catch {
+            code = raw;
+          }
+          const result = await scanCode(code);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, message: 'Sent to server — check agent window' }));
-        } catch (err) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, message: err.message || 'Failed' }));
-        }
-        void before;
-      });
-      return;
-    }
-    res.writeHead(404);
-    res.end('Not found');
-  });
+          res.end(JSON.stringify(result));
+        });
+        return;
+      }
+      res.writeHead(404);
+      res.end('Not found');
+    });
 
-  server.listen(CAPTURE_PORT, '127.0.0.1', () => {
-    const url = `http://127.0.0.1:${CAPTURE_PORT}/`;
-    console.log(`🌐 Capture UI: ${url}`);
-    if (OPEN_CAPTURE_UI) {
-      const cmd =
-        process.platform === 'win32'
-          ? `start "" "${url}"`
-          : process.platform === 'darwin'
-            ? `open "${url}"`
-            : `xdg-open "${url}"`;
-      exec(cmd, () => {});
-    }
+    server.on('error', reject);
+    server.listen(CAPTURE_PORT, '127.0.0.1', () => {
+      const url = `http://127.0.0.1:${CAPTURE_PORT}/`;
+      console.log(`🌐 Capture UI: ${url}`);
+      if (OPEN_CAPTURE_UI) {
+        const cmd =
+          process.platform === 'win32'
+            ? `start "" "${url}"`
+            : process.platform === 'darwin'
+              ? `open "${url}"`
+              : `xdg-open "${url}"`;
+        exec(cmd, () => {});
+      }
+      resolve(url);
+    });
   });
 }
 
@@ -464,12 +397,13 @@ async function main() {
     loginOnce().catch((err) => console.warn('⚠️  Re-login failed:', err.message));
   }, TOKEN_REFRESH_MS);
 
-  startGlobalKeyboard();
   startStdinFallback();
-  startCaptureUi();
+  await startCaptureUi();
 
-  console.log('\n✅ Ready — scan into the small Capture page (recommended)');
-  console.log('   Or click this black window and scan.\n');
+  console.log('\n✅ Ready');
+  console.log('   1) Use the Capture page that opened');
+  console.log('   2) Scan the barcode there');
+  console.log('   3) Keep that page selected (in front)\n');
 }
 
 main().catch((err) => {
