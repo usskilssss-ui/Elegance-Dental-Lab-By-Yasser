@@ -32,6 +32,8 @@ const EMAIL = String(config.EMAIL || '').trim().toLowerCase();
 const PASSWORD = String(config.PASSWORD || '');
 const LABEL = String(config.LABEL || 'Scan Agent');
 const TOKEN_REFRESH_MS = Number(config.TOKEN_REFRESH_MS) || 6 * 60 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = Number(config.REQUEST_TIMEOUT_MS) || 60000;
+const LOGIN_RETRIES = Number(config.LOGIN_RETRIES) || 8;
 
 if (!SERVER_URL || !EMAIL || !PASSWORD) {
   console.error('❌ Config needs SERVER_URL, EMAIL, PASSWORD');
@@ -76,13 +78,14 @@ function httpJson(method, urlStr, body, headers = {}) {
         port: u.port || (u.protocol === 'https:' ? 443 : 80),
         path: u.pathname + u.search,
         method,
+        family: 4, // prefer IPv4 — avoids some Windows IPv6 hang/timeouts
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
           ...headers,
         },
-        timeout: 20000,
+        timeout: REQUEST_TIMEOUT_MS,
       },
       (res) => {
         let raw = '';
@@ -101,14 +104,18 @@ function httpJson(method, urlStr, body, headers = {}) {
     req.on('error', reject);
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Request timeout'));
+      reject(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS / 1000}s`));
     });
     if (payload) req.write(payload);
     req.end();
   });
 }
 
-async function login() {
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function loginOnce() {
   const res = await httpJson('POST', `${SERVER_URL}/api/auth/login`, {
     email: EMAIL,
     password: PASSWORD,
@@ -124,6 +131,25 @@ async function login() {
   if (!/^scanner[123]$/.test(authRole)) {
     console.warn('⚠️  Account role is not scanner1/2/3 — station may not lock correctly');
   }
+}
+
+async function login() {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= LOGIN_RETRIES; attempt++) {
+    try {
+      await loginOnce();
+      return;
+    } catch (err) {
+      lastErr = err;
+      const wait = Math.min(15000, 1500 * attempt);
+      console.warn(`⚠️  Login attempt ${attempt}/${LOGIN_RETRIES} failed: ${err.message}`);
+      if (attempt < LOGIN_RETRIES) {
+        console.log(`   Retrying in ${Math.round(wait / 1000)}s...`);
+        await sleep(wait);
+      }
+    }
+  }
+  throw lastErr || new Error('Login failed');
 }
 
 async function ensureAuth() {
@@ -280,9 +306,21 @@ public static class SleepPreventer {
 
 async function main() {
   enableKeepAwake();
-  await login();
+
+  // Keep trying forever until first login succeeds (Railway cold start / flaky net)
+  for (;;) {
+    try {
+      await login();
+      break;
+    } catch (err) {
+      console.error(`❌ Cannot reach server yet: ${err.message}`);
+      console.log('   Waiting 10s then trying again... (check internet / Railway)');
+      await sleep(10000);
+    }
+  }
+
   setInterval(() => {
-    login().catch((err) => console.warn('⚠️  Re-login failed:', err.message));
+    loginOnce().catch((err) => console.warn('⚠️  Re-login failed:', err.message));
   }, TOKEN_REFRESH_MS);
 
   const hooked = startGlobalKeyboard();
