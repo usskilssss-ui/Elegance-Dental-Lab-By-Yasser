@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const { execFile } = require('child_process');
+const { execFile, exec } = require('child_process');
 const readline = require('readline');
 
 const configPath = path.resolve(
@@ -34,6 +34,8 @@ const LABEL = String(config.LABEL || 'Scan Agent');
 const TOKEN_REFRESH_MS = Number(config.TOKEN_REFRESH_MS) || 6 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = Number(config.REQUEST_TIMEOUT_MS) || 60000;
 const LOGIN_RETRIES = Number(config.LOGIN_RETRIES) || 8;
+const CAPTURE_PORT = Number(config.CAPTURE_PORT) || 3921;
+const OPEN_CAPTURE_UI = config.OPEN_CAPTURE_UI !== false;
 
 if (!SERVER_URL || !EMAIL || !PASSWORD) {
   console.error('❌ Config needs SERVER_URL, EMAIL, PASSWORD');
@@ -45,7 +47,10 @@ let authRole = '';
 let busy = false;
 let buffer = '';
 let lastKeyAt = 0;
-const KEY_GAP_MS = 120; // barcode wedges are faster than human typing
+let idleFlushTimer = null;
+/** Scanner chars can be 30–400ms apart depending on device settings */
+const KEY_GAP_MS = 800;
+const IDLE_SUBMIT_MS = 250;
 const MIN_CODE_LEN = 6;
 
 console.log('📷 Elegance Scan Agent starting...');
@@ -78,7 +83,7 @@ function httpJson(method, urlStr, body, headers = {}) {
         port: u.port || (u.protocol === 'https:' ? 443 : 80),
         path: u.pathname + u.search,
         method,
-        family: 4, // prefer IPv4 — avoids some Windows IPv6 hang/timeouts
+        family: 4,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -130,6 +135,7 @@ async function loginOnce() {
   console.log(`✅ Logged in as ${name} (role: ${authRole})`);
   if (!/^scanner[123]$/.test(authRole)) {
     console.warn('⚠️  Account role is not scanner1/2/3 — station may not lock correctly');
+    console.warn('   Fix the employee position in Admin to سكان 1 / 2 / 3');
   }
 }
 
@@ -161,7 +167,11 @@ async function scanCode(rawCode) {
     .replace(/[\r\n\t]+/g, '')
     .replace(/[\u064B-\u065F\u0670\u200e\u200f\u202a-\u202e\ufeff]/g, '')
     .trim();
-  if (!code || code.length < MIN_CODE_LEN) return;
+  if (!code) return;
+  if (code.length < MIN_CODE_LEN) {
+    console.log(`⏭️  Ignored short code: "${code}"`);
+    return;
+  }
   if (busy) {
     console.log(`⏭️  Busy — skipped: ${code}`);
     return;
@@ -210,39 +220,60 @@ async function scanCode(rawCode) {
 }
 
 function keyNameToChar(name) {
-  const n = String(name || '').toUpperCase();
+  const n = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
   if (/^[A-Z]$/.test(n)) return n;
   if (/^[0-9]$/.test(n)) return n;
-  if (n === 'MINUS' || n === 'DASH' || n.includes('HYPHEN')) return '-';
-  if (n.startsWith('NUMPAD ') || n.startsWith('NUMPAD')) {
-    const d = n.replace(/NUMPAD\s*/i, '');
+  if (/MINUS|DASH|HYPHEN|SUBTRACT|OEM_MINUS/.test(n)) return '-';
+  if (n.startsWith('NUMPAD')) {
+    const d = n.replace(/^NUMPAD\s*/, '');
     if (/^[0-9]$/.test(d)) return d;
-    if (d === 'MINUS' || d === '-') return '-';
+    if (/MINUS|SUBTRACT|-/.test(d)) return '-';
   }
   return null;
 }
 
 function isEnterKey(name) {
   const n = String(name || '').toUpperCase();
-  return n === 'RETURN' || n === 'ENTER' || n === 'NUMPAD ENTER';
+  return n === 'RETURN' || n === 'ENTER' || n === 'NUMPAD ENTER' || n === 'NUMPAD RETURN';
+}
+
+function scheduleIdleFlush() {
+  if (idleFlushTimer) clearTimeout(idleFlushTimer);
+  idleFlushTimer = setTimeout(() => {
+    idleFlushTimer = null;
+    if (buffer.length >= MIN_CODE_LEN) {
+      const code = buffer;
+      buffer = '';
+      lastKeyAt = 0;
+      console.log(`⏱️  Idle flush → ${code}`);
+      void scanCode(code);
+    }
+  }, IDLE_SUBMIT_MS);
 }
 
 function onBarcodeChar(ch) {
   const now = Date.now();
   if (buffer && now - lastKeyAt > KEY_GAP_MS) {
-    // Gap too long → start fresh (human typing / interrupted)
+    console.log(`🧹 Buffer reset (gap), was: "${buffer}"`);
     buffer = '';
   }
   lastKeyAt = now;
   buffer += ch;
+  scheduleIdleFlush();
 }
 
 function onBarcodeEnter() {
+  if (idleFlushTimer) {
+    clearTimeout(idleFlushTimer);
+    idleFlushTimer = null;
+  }
   const code = buffer;
   buffer = '';
   lastKeyAt = 0;
-  if (!code) return;
-  // Ignore slow/human short fragments
+  if (!code) {
+    console.log('⏭️  Enter with empty buffer (scan not captured)');
+    return;
+  }
   void scanCode(code);
 }
 
@@ -259,8 +290,7 @@ function startGlobalKeyboard() {
       const ch = keyNameToChar(e.name);
       if (ch) onBarcodeChar(ch);
     });
-    console.log('⌨️  Global keyboard hook active — scan anytime (no browser needed)');
-    console.log('   Tip: keep English keyboard layout if wedge still remaps oddly');
+    console.log('⌨️  Global keyboard hook ON');
     return true;
   } catch (err) {
     console.warn(`⚠️  Global keyboard hook unavailable (${err.message})`);
@@ -269,10 +299,122 @@ function startGlobalKeyboard() {
 }
 
 function startStdinFallback() {
-  console.log('⌨️  Fallback: type/scan into THIS window, then Enter');
+  console.log('⌨️  Console input ON — click this black window, then scan');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.on('line', (line) => {
     void scanCode(line);
+  });
+}
+
+function capturePageHtml() {
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>${LABEL.replace(/[<>&"]/g, '')}</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Segoe UI, Tahoma, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
+    h1 { margin: 0; font-size: 22px; }
+    p { margin: 0; opacity: .8; }
+    input {
+      width: min(520px, 92vw); font-size: 22px; padding: 14px 16px; border-radius: 10px;
+      border: 2px solid #38bdf8; background: #020617; color: #f8fafc; direction: ltr; text-align: center;
+    }
+    .log { min-height: 28px; font-size: 16px; font-weight: 700; }
+    .ok { color: #4ade80; } .err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>${LABEL.replace(/[<>&"]/g, '')}</h1>
+    <p>امسح الباركود هنا — الصفحة بتركّز تلقائيًا</p>
+    <input id="scan" autofocus autocomplete="off" spellcheck="false" placeholder="Ready to scan…" />
+    <div id="log" class="log"></div>
+  </div>
+  <script>
+    const input = document.getElementById('scan');
+    const log = document.getElementById('log');
+    function focusScan() { input.focus({ preventScroll: true }); }
+    setInterval(focusScan, 400);
+    window.addEventListener('focus', focusScan);
+    document.addEventListener('click', focusScan);
+    input.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const code = input.value.trim();
+      input.value = '';
+      if (!code) return;
+      log.textContent = 'Sending ' + code + '…';
+      log.className = 'log';
+      try {
+        const res = await fetch('/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
+        log.textContent = data.message || (data.ok ? 'OK' : 'Failed');
+        log.className = 'log ' + (data.ok ? 'ok' : 'err');
+      } catch (err) {
+        log.textContent = err.message || 'Error';
+        log.className = 'log err';
+      }
+      focusScan();
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function startCaptureUi() {
+  const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && (req.url === '/' || req.url?.startsWith('/?'))) {
+      const html = capturePageHtml();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/scan') {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', async () => {
+        let code = '';
+        try {
+          code = JSON.parse(raw || '{}').code || '';
+        } catch {
+          code = raw;
+        }
+        // Run scan and return a simple result (don't double-log messily)
+        const before = busy;
+        try {
+          await scanCode(code);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, message: 'Sent to server — check agent window' }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, message: err.message || 'Failed' }));
+        }
+        void before;
+      });
+      return;
+    }
+    res.writeHead(404);
+    res.end('Not found');
+  });
+
+  server.listen(CAPTURE_PORT, '127.0.0.1', () => {
+    const url = `http://127.0.0.1:${CAPTURE_PORT}/`;
+    console.log(`🌐 Capture UI: ${url}`);
+    if (OPEN_CAPTURE_UI) {
+      const cmd =
+        process.platform === 'win32'
+          ? `start "" "${url}"`
+          : process.platform === 'darwin'
+            ? `open "${url}"`
+            : `xdg-open "${url}"`;
+      exec(cmd, () => {});
+    }
   });
 }
 
@@ -307,7 +449,6 @@ public static class SleepPreventer {
 async function main() {
   enableKeepAwake();
 
-  // Keep trying forever until first login succeeds (Railway cold start / flaky net)
   for (;;) {
     try {
       await login();
@@ -323,10 +464,12 @@ async function main() {
     loginOnce().catch((err) => console.warn('⚠️  Re-login failed:', err.message));
   }, TOKEN_REFRESH_MS);
 
-  const hooked = startGlobalKeyboard();
-  if (!hooked) startStdinFallback();
+  startGlobalKeyboard();
+  startStdinFallback();
+  startCaptureUi();
 
-  console.log('\n✅ Ready — waiting for barcode scans...\n');
+  console.log('\n✅ Ready — scan into the small Capture page (recommended)');
+  console.log('   Or click this black window and scan.\n');
 }
 
 main().catch((err) => {
