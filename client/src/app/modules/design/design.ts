@@ -22,6 +22,7 @@ export type CaseStatus =
   | 'in-progress'
   | 'needs-revision'
   | 'under-khart'
+  | 'ready-for-finishing'
   | 'finished'
   | 'exited';
 
@@ -294,12 +295,13 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   statusLabel(s: CaseStatus): string {
     return {
-      pending:          'قيد الانتظار',
-      'in-progress':    'تحت الديزاين',
-      'needs-revision': 'محتاجة تعديل',
-      'under-khart':    'تحت الخرط',
-      finished:         'منتهية',
-      exited:           'خروج',
+      pending:               'قيد الانتظار',
+      'in-progress':         'تحت الديزاين',
+      'needs-revision':      'محتاجة تعديل',
+      'under-khart':         'تحت الخرط',
+      'ready-for-finishing': 'تحت الفينيش',
+      finished:              'منتهية',
+      exited:                'خروج',
     }[s];
   }
 
