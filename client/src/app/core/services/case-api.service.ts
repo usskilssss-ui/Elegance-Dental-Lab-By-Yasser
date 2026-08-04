@@ -77,9 +77,14 @@ export class CaseApiService {
     return this.http.put(`${this.apiUrl}/${id}/move-stage`, { stage });
   }
 
-  /** Station barcode/QR scan → move case by caseNumber */
-  scanAtStation(caseNumber: string, station: 'reception' | 'design' | 'finishing'): Observable<any> {
-    return this.http.post(`${this.apiUrl}/scan`, { caseNumber, station });
+  /** Station barcode/QR scan. Station is optional — scanner accounts use their role on the server. */
+  scanAtStation(
+    caseNumber: string,
+    station?: 'reception' | 'design' | 'finishing'
+  ): Observable<any> {
+    const body: Record<string, string> = { caseNumber };
+    if (station) body['station'] = station;
+    return this.http.post(`${this.apiUrl}/scan`, body);
   }
 
   // Upload a case image file (designer/finisher/admin)

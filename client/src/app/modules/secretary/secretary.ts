@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -46,7 +46,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabelPipe, RouterLink],
+  imports: [CommonModule, FormsModule, PatientLabelPipe],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })

@@ -334,7 +334,16 @@ export class Admin implements OnInit, OnDestroy {
     joinDate: new Date().toISOString().split('T')[0],
   };
 
-  readonly positions = ['مصمم', 'مسؤول الطباعة', 'سكرتير', 'مدير', 'ريكويست'] as const;
+  readonly positions = [
+    'مصمم',
+    'مسؤول الطباعة',
+    'سكرتير',
+    'مدير',
+    'ريكويست',
+    'سكان 1',
+    'سكان 2',
+    'سكان 3',
+  ] as const;
 
   get filteredStaff(): StaffMember[] {
     const staffOnly = this.staffMembers.filter((s) => s.position !== 'دكتور');
@@ -1926,6 +1935,9 @@ export class Admin implements OnInit, OnDestroy {
     if (r === 'finisher') return 'مسؤول الطباعة';
     if (r === 'requester') return 'ريكويست';
     if (r === 'doctor') return 'دكتور';
+    if (r === 'scanner1') return 'سكان 1';
+    if (r === 'scanner2') return 'سكان 2';
+    if (r === 'scanner3') return 'سكان 3';
     return 'سكرتير';
   }
 
@@ -1937,6 +1949,9 @@ export class Admin implements OnInit, OnDestroy {
     if (p === 'finisher' || p === 'مسؤول الطباعة' || p === 'فني تشطيب') return 'finisher';
     if (p === 'requester' || p === 'ريكويست') return 'requester';
     if (p === 'doctor' || p === 'دكتور') return 'doctor';
+    if (p === 'scanner1' || p === 'سكان 1' || p === 'سكان١') return 'scanner1';
+    if (p === 'scanner2' || p === 'سكان 2' || p === 'سكان٢') return 'scanner2';
+    if (p === 'scanner3' || p === 'سكان 3' || p === 'سكان٣') return 'scanner3';
     return 'secretary';
   }
 

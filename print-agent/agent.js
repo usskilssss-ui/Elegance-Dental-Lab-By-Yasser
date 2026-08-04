@@ -767,7 +767,6 @@ async function buildPrintHtml(c) {
     <div class="row"><span class="label">الطبيب</span><span class="value">${escapeHtml(c.doctor || '—')}</span></div>
     <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
     <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
-    ${caseNumber ? `<div class="row"><span class="label">رقم الحالة</span><span class="value">${escapeHtml(caseNumber)}</span></div>` : ''}
   </div>
   <div class="section">
     <div class="section-title">تفاصيل العمل</div>

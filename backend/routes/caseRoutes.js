@@ -76,7 +76,7 @@ router.get('/financial-report', authorize('admin'), caseController.getFinancialR
 // Station barcode/QR scan (must be before /:id)
 router.post(
   '/scan',
-  authorize('admin', 'secretary', 'designer', 'finisher'),
+  authorize('admin', 'secretary', 'designer', 'finisher', 'scanner1', 'scanner2', 'scanner3'),
   caseController.scanAtStation
 );
 

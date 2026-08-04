@@ -35,6 +35,13 @@
   color: var(--text-secondary, #64748b);
 }
 
+.scan-account {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
 .scan-top-actions {
   display: flex;
   align-items: center;

@@ -298,6 +298,10 @@ export class AuthService {
         return '/requester/dashboard';
       case 'doctor':
         return '/doctor/dashboard';
+      case 'scanner1':
+      case 'scanner2':
+      case 'scanner3':
+        return '/scan';
       default:
         return '/admin/dashboard';
     }
@@ -322,7 +326,10 @@ export class AuthService {
       v === 'designer' ||
       v === 'finisher' ||
       v === 'requester' ||
-      v === 'doctor'
+      v === 'doctor' ||
+      v === 'scanner1' ||
+      v === 'scanner2' ||
+      v === 'scanner3'
     ) {
       return v;
     }

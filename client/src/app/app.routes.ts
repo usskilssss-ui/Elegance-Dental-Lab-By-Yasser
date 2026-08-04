@@ -20,10 +20,14 @@ export const routes: Routes = [
   { path: 'login', component: Login, canActivate: [guestGuard] },
 
   {
-    path: 'scan/:station',
+    path: 'scan',
     component: StationScanComponent,
-    canActivate: [authGuard, roleGuard(['admin', 'secretary', 'designer', 'finisher'])],
+    canActivate: [
+      authGuard,
+      roleGuard(['admin', 'secretary', 'designer', 'finisher', 'scanner1', 'scanner2', 'scanner3']),
+    ],
   },
+  { path: 'scan/:station', pathMatch: 'full', redirectTo: '/scan' },
 
   {
     path: 'admin',

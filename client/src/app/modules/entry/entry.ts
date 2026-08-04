@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -58,7 +58,7 @@ export interface PrintJobCard {
 @Component({
   selector: 'app-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './entry.html',
   styleUrl: './entry.css',
 })

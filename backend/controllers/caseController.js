@@ -676,40 +676,56 @@ function normalizeScanCode(raw) {
 }
 
 const STATION_TARGET = {
-  // Lab flow: new → design → finishing → completed (reception desk marks done)
+  // Scanner accounts: scanner1=reception, scanner2=design, scanner3=finishing
   design: 'design',
   finishing: 'finishing',
   reception: 'completed',
 };
 
 const STATION_ALLOWED_FROM = {
-  design: new Set(['waiting', 'secretary', 'design']),
-  finishing: new Set(['design', 'khart', 'finishing']),
-  reception: new Set(['finishing', 'completed']),
+  // سكان 2: جديدة أو منتهية → ديزاين
+  design: new Set(['waiting', 'secretary', 'completed', 'design']),
+  // سكان 3: جديدة أو ديزاين → فينيش
+  finishing: new Set(['waiting', 'secretary', 'design', 'finishing']),
+  // سكان 1: جديدة أو ديزاين → منتهية
+  reception: new Set(['waiting', 'secretary', 'design', 'completed']),
 };
 
 const STATION_LABEL_AR = {
-  reception: 'الريسبشن (منتهية)',
-  design: 'الديزاين',
-  finishing: 'الفينيش',
+  reception: 'سكان 1 — منتهية',
+  design: 'سكان 2 — ديزاين',
+  finishing: 'سكان 3 — فينيش',
 };
 
-// POST /api/cases/scan — barcode/QR station scan moves case by caseNumber
+function stationFromUserRole(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'scanner1') return 'reception';
+  if (r === 'scanner2') return 'design';
+  if (r === 'scanner3') return 'finishing';
+  return null;
+}
+
+// POST /api/cases/scan — barcode/QR scan; station comes from scanner account role
 exports.scanAtStation = async (req, res) => {
   try {
-    const station = String(req.body?.station || '')
-      .trim()
-      .toLowerCase();
     const caseNumber = normalizeScanCode(req.body?.caseNumber || req.body?.code || '');
-
-    if (!STATION_TARGET[station]) {
-      return res.status(400).json({
-        success: false,
-        message: 'محطة غير صحيحة (reception / design / finishing)',
-      });
-    }
     if (!caseNumber) {
       return res.status(400).json({ success: false, message: 'رقم الحالة مطلوب' });
+    }
+
+    // Prefer station locked to the logged-in scanner role (no page selection needed)
+    let station = stationFromUserRole(req.user?.role);
+    if (!station && ['admin', 'secretary', 'designer', 'finisher'].includes(String(req.user?.role || ''))) {
+      station = String(req.body?.station || '')
+        .trim()
+        .toLowerCase();
+    }
+
+    if (!station || !STATION_TARGET[station]) {
+      return res.status(400).json({
+        success: false,
+        message: 'حساب السكان غير معروف أو المحطة غير صحيحة',
+      });
     }
 
     const dentalCase = await DentalCase.findOne({

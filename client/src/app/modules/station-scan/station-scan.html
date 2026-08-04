@@ -3,70 +3,76 @@
     <div class="scan-brand">
       <strong>Elegance</strong>
       <span>Precision Labs</span>
+      @if (accountName()) {
+        <span class="scan-account">{{ accountName() }}</span>
+      }
     </div>
     <div class="scan-top-actions">
       <button type="button" class="scan-icon-btn" (click)="themeService.toggleTheme(); $event.stopPropagation()" title="المظهر">
         ☀/☾
       </button>
-      <a class="scan-link" routerLink="/" (click)="$event.stopPropagation()">الرئيسية</a>
-      <button type="button" class="scan-link" (click)="goHome(); $event.stopPropagation()">رجوع</button>
       <button type="button" class="scan-link" (click)="logout(); $event.stopPropagation()">خروج</button>
     </div>
   </header>
 
   <main class="scan-main">
-    <p class="scan-kicker">محطة المسح</p>
-    <h1>{{ meta().title }}</h1>
-    <p class="scan-sub">{{ meta().subtitle }}</p>
-    <p class="scan-hint">وجّه السكان نحو QR على الورقة — أو اكتب رقم الحالة واضغط Enter</p>
-
-    <form class="scan-form" (submit)="onScanSubmit($event)">
-      <input
-        #scanInput
-        class="scan-input"
-        type="text"
-        name="scanCode"
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck="false"
-        [(ngModel)]="scanBuffer"
-        [disabled]="busy()"
-        placeholder="جاهز للمسح…"
-        aria-label="حقل مسح الباركود"
-      />
-      <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
-        {{ busy() ? 'جاري…' : 'تنفيذ' }}
-      </button>
-    </form>
-
-    @if (feedback(); as fb) {
-      <div class="scan-result" [class.ok]="fb.ok" [class.err]="!fb.ok" role="status">
-        <div class="scan-result-title">{{ fb.title }}</div>
-        <div class="scan-result-detail">{{ fb.detail }}</div>
-        @if (fb.stage) {
-          <div class="scan-result-stage">المرحلة: {{ fb.stage }}</div>
-        }
-      </div>
+    @if (unauthorized()) {
+      <h1>غير مصرح</h1>
+      <p class="scan-sub">ادخل بحساب سكان 1 أو سكان 2 أو سكان 3</p>
     } @else {
-      <div class="scan-idle">
-        <div class="scan-pulse" aria-hidden="true"></div>
-        <span>في انتظار المسح…</span>
-      </div>
-    }
+      <p class="scan-kicker">محطة المسح</p>
+      <h1>{{ title() }}</h1>
+      <p class="scan-sub">{{ subtitle() }}</p>
+      <p class="scan-hint">امسح الـ QR على الورقة — النقل يتم حسب حساب الدخول تلقائياً</p>
 
-    @if (lastScans().length > 0) {
-      <section class="scan-history" aria-label="آخر عمليات المسح">
-        <h2>آخر المسحات</h2>
-        <ul>
-          @for (item of lastScans(); track $index) {
-            <li [class.ok]="item.ok" [class.err]="!item.ok">
-              <strong>{{ item.caseNumber || item.detail }}</strong>
-              <span>{{ item.title }}</span>
-            </li>
+      <form class="scan-form" (submit)="onScanSubmit($event)">
+        <input
+          #scanInput
+          class="scan-input"
+          type="text"
+          name="scanCode"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          [(ngModel)]="scanBuffer"
+          [disabled]="busy()"
+          placeholder="جاهز للمسح…"
+          aria-label="حقل مسح الباركود"
+        />
+        <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
+          {{ busy() ? 'جاري…' : 'تنفيذ' }}
+        </button>
+      </form>
+
+      @if (feedback(); as fb) {
+        <div class="scan-result" [class.ok]="fb.ok" [class.err]="!fb.ok" role="status">
+          <div class="scan-result-title">{{ fb.title }}</div>
+          <div class="scan-result-detail">{{ fb.detail }}</div>
+          @if (fb.stage) {
+            <div class="scan-result-stage">المرحلة: {{ fb.stage }}</div>
           }
-        </ul>
-      </section>
+        </div>
+      } @else {
+        <div class="scan-idle">
+          <div class="scan-pulse" aria-hidden="true"></div>
+          <span>في انتظار المسح…</span>
+        </div>
+      }
+
+      @if (lastScans().length > 0) {
+        <section class="scan-history" aria-label="آخر عمليات المسح">
+          <h2>آخر المسحات</h2>
+          <ul>
+            @for (item of lastScans(); track $index) {
+              <li [class.ok]="item.ok" [class.err]="!item.ok">
+                <strong>{{ item.caseNumber || item.detail }}</strong>
+                <span>{{ item.title }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
     }
   </main>
 </div>

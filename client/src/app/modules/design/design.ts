@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
@@ -34,7 +34,7 @@ export interface WorkStage {
 @Component({
   selector: 'app-case-details',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './design.html',
   styleUrls: ['./design.css']
 })
