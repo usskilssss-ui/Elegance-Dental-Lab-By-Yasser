@@ -65,6 +65,8 @@ export class StationScanComponent implements OnInit, OnDestroy {
   scanBuffer = '';
   private focusTimer: ReturnType<typeof setInterval> | null = null;
   private clearFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private submitTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastKeyAt = 0;
 
   ngOnInit(): void {
     const session = this.auth.getSession();
@@ -96,10 +98,13 @@ export class StationScanComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.focusTimer) clearInterval(this.focusTimer);
     if (this.clearFeedbackTimer) clearTimeout(this.clearFeedbackTimer);
+    if (this.submitTimer) clearTimeout(this.submitTimer);
   }
 
   focusScanner(): void {
     if (this.busy() || this.unauthorized()) return;
+    // Don't steal focus mid-barcode (keyboard wedge is still typing)
+    if (Date.now() - this.lastKeyAt < 200) return;
     const el = this.scanInput?.nativeElement;
     if (!el) return;
     if (document.activeElement !== el) {
@@ -107,15 +112,34 @@ export class StationScanComponent implements OnInit, OnDestroy {
     }
   }
 
+  onScanKeydown(): void {
+    this.lastKeyAt = Date.now();
+  }
+
   onScanSubmit(ev?: Event): void {
     ev?.preventDefault();
-    const code = this.scanBuffer.trim();
-    this.scanBuffer = '';
-    if (!code || this.busy() || this.unauthorized()) {
+    if (this.busy() || this.unauthorized()) {
       this.focusScanner();
       return;
     }
-    this.submitCode(code);
+
+    // Wedge scanners fire Enter before Angular ngModel catches the last chars.
+    // Read the DOM value after a short delay, then submit once.
+    if (this.submitTimer) clearTimeout(this.submitTimer);
+    this.submitTimer = setTimeout(() => {
+      this.submitTimer = null;
+      const el = this.scanInput?.nativeElement;
+      const code = String(el?.value ?? this.scanBuffer ?? '')
+        .replace(/[\r\n\t]+/g, '')
+        .trim();
+      if (el) el.value = '';
+      this.scanBuffer = '';
+      if (!code) {
+        this.focusScanner();
+        return;
+      }
+      this.submitCode(code);
+    }, 80);
   }
 
   private submitCode(code: string): void {

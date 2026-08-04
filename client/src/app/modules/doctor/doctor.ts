@@ -138,7 +138,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private bucket(c: DentalCase): DoctorStage {
     if (c.status === 'exited') return 'exited';
     const stage = String(c.currentStage || '').toLowerCase();
-    if (stage === 'finishing') return 'finishing';
+    if (stage === 'finishing' || c.status === 'ready-for-finishing') return 'finishing';
     if (c.status === 'finished' || stage === 'completed') return 'finished';
     if (c.status === 'in-progress' || c.status === 'under-khart' || c.status === 'needs-revision') {
       return 'design';

@@ -675,15 +675,28 @@ function normalizeScanCode(raw) {
   } catch {
     /* keep raw */
   }
-  // Strip accidental trailing Enter / control chars + zero-width / bidi marks
+  // Strip control chars, bidi marks, Arabic harakat (keyboard-wedge junk)
   code = code
     .replace(/[\r\n\t]+/g, '')
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
     .trim();
   return code;
 }
 
-/** Build lookup candidates — handles Arabic keyboard wedge (e.g. أ-2026-00013 → CASE-2026-00013) */
+/** Pull CASE-YYYY-NNNNN from messy wedge input (Arabic layout → }ٍُِ-2026-00015) */
+function extractYearSeq(code) {
+  const s = String(code || '');
+  // Prefer explicit YEAR-SEQ
+  let m = s.match(/(20\d{2})\D+(\d{3,8})/);
+  if (m) return { year: m[1], seq: m[2].padStart(5, '0') };
+  // Digits only fallback: 202600015
+  m = s.replace(/\D/g, '').match(/(20\d{2})(\d{3,8})$/);
+  if (m) return { year: m[1], seq: m[2].padStart(5, '0') };
+  return null;
+}
+
+/** Build lookup candidates — handles Arabic keyboard wedge garbage before the year */
 function caseNumberCandidates(raw) {
   const code = normalizeScanCode(raw);
   if (!code) return [];
@@ -698,21 +711,21 @@ function caseNumberCandidates(raw) {
 
   add(code);
 
-  // Prefix like CASE / أ / ا / A before year-seq
+  // Cleaned latin-ish form
+  const asciiish = code.replace(/[^A-Za-z0-9\-]/g, '');
+  add(asciiish);
+
+  const ys = extractYearSeq(code) || extractYearSeq(asciiish);
+  if (ys) {
+    add(`CASE-${ys.year}-${ys.seq}`);
+    add(`${ys.year}-${ys.seq}`);
+  }
+
+  // Prefix like CASE / أ / ا before year-seq
   const prefixed = code.match(/^([A-Za-z\u0600-\u06FF]+)?[-_\s]?(\d{4})[-_\s]?(\d{1,8})$/u);
   if (prefixed) {
     const year = prefixed[2];
     const seqRaw = prefixed[3];
-    const seqPad = seqRaw.padStart(5, '0');
-    add(`CASE-${year}-${seqPad}`);
-    add(`CASE-${year}-${seqRaw}`);
-  }
-
-  // Any ...YYYY-NNNN at the end
-  const tail = code.match(/(\d{4})[-_\s]?(\d{3,8})\s*$/);
-  if (tail) {
-    const year = tail[1];
-    const seqRaw = tail[2];
     const seqPad = seqRaw.padStart(5, '0');
     add(`CASE-${year}-${seqPad}`);
     add(`CASE-${year}-${seqRaw}`);
@@ -732,13 +745,11 @@ async function findCaseByScanCode(raw) {
   let dentalCase = await DentalCase.findOne({ $or: or });
   if (dentalCase) return dentalCase;
 
-  // Last resort: match by year-seq suffix (CASE-2026-00013)
-  const tail = normalizeScanCode(raw).match(/(\d{4})[-_\s]?(\d{3,8})\s*$/);
-  if (tail) {
-    const year = tail[1];
-    const seqPad = tail[2].padStart(5, '0');
+  // Last resort: YEAR-SEQ → CASE-YYYY-NNNNN
+  const ys = extractYearSeq(normalizeScanCode(raw));
+  if (ys) {
     dentalCase = await DentalCase.findOne({
-      caseNumber: new RegExp(`^CASE-${escapeRegex(year)}-${escapeRegex(seqPad)}$`, 'i'),
+      caseNumber: new RegExp(`^CASE-${escapeRegex(ys.year)}-${escapeRegex(ys.seq)}$`, 'i'),
     });
   }
   return dentalCase;

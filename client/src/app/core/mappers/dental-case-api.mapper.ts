@@ -314,9 +314,9 @@ function mapUiStatus(doc: Record<string, unknown>, uiStatusOverride: string): De
   const stage = String(doc['currentStage'] ?? '');
   if (s === 'exited' || stage === 'exited') return 'exited';
   if (uiStatusOverride === 'needs-revision') return 'needs-revision';
-  // Prefer currentStage — status can lag after station scans reopen a completed case
+  // Prefer currentStage — status can lag after station scans
   if (stage === 'completed') return 'finished';
-  if (stage === 'finishing') return 'finished';
+  if (stage === 'finishing') return 'ready-for-finishing';
   if (stage === 'khart') return 'under-khart';
   if (stage === 'design' && uiStatusOverride === 'under-khart') return 'under-khart';
   if (stage === 'design') return 'in-progress';

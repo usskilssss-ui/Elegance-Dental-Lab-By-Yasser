@@ -20,6 +20,7 @@ export interface DentalCase {
     | 'in-progress'
     | 'needs-revision'
     | 'under-khart'
+    | 'ready-for-finishing'
     | 'finished'
     | 'exited';
   /** Backend currentStage when available (waiting|design|khart|finishing|completed|exited|…) */

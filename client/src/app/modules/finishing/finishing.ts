@@ -60,13 +60,17 @@ export class Finishing implements OnInit, OnDestroy {
   }
 
   /* ── Cases ── */
-  private get finishedCases(): DentalCase[] {
-    return this.sharedCasesService.cases().filter(c => c.status === 'finished');
+  private get finishingQueue(): DentalCase[] {
+    return this.sharedCasesService.cases().filter(
+      (c) =>
+        c.currentStage === 'finishing' ||
+        c.status === 'ready-for-finishing'
+    );
   }
 
   get queueCases(): DentalCase[] {
     const search = this.searchTerm.trim().toLowerCase();
-    const queue = this.finishedCases;
+    const queue = this.finishingQueue;
     if (!search) return queue;
     return queue.filter(c =>
       c.caseNumber.toLowerCase().includes(search) ||
