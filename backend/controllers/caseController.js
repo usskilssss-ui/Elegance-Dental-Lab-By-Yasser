@@ -881,23 +881,35 @@ exports.scanAtStation = async (req, res) => {
 
     await dentalCase.save();
 
-    await AuditLog.create({
-      caseId: dentalCase._id,
-      caseNumber: dentalCase.caseNumber,
-      action: 'scanned_station',
-      performedBy: req.user.id,
-      performedByName: req.user.fullName,
-      details: { station, oldValue: oldStage, newValue: targetStage },
-    });
+    try {
+      await AuditLog.create({
+        caseId: dentalCase._id,
+        caseNumber: dentalCase.caseNumber,
+        action: 'moved_stage',
+        performedBy: req.user.id,
+        performedByName: req.user.fullName,
+        details: {
+          oldValue: oldStage,
+          newValue: targetStage,
+          notes: `station-scan:${station}`,
+        },
+      });
+    } catch (auditErr) {
+      console.error('scanAtStation audit log failed:', auditErr.message);
+    }
 
-    await Notification.create({
-      type: 'case_moved',
-      title: 'Station Scan',
-      message: `Case ${dentalCase.caseNumber} scanned at ${station}: ${oldStage} → ${targetStage}`,
-      caseId: dentalCase._id,
-      caseNumber: dentalCase.caseNumber,
-      targetAudience: ['all'],
-    });
+    try {
+      await Notification.create({
+        type: 'case_moved',
+        title: 'Station Scan',
+        message: `Case ${dentalCase.caseNumber} scanned at ${station}: ${oldStage} → ${targetStage}`,
+        caseId: dentalCase._id,
+        caseNumber: dentalCase.caseNumber,
+        targetAudience: ['all'],
+      });
+    } catch (notifErr) {
+      console.error('scanAtStation notification failed:', notifErr.message);
+    }
 
     emitToAll('case:moved-stage', {
       caseId: String(dentalCase._id),
@@ -922,6 +934,7 @@ exports.scanAtStation = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('scanAtStation failed:', error);
     return res.status(500).json({
       success: false,
       message: 'فشل مسح الحالة',
