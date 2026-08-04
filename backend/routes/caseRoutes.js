@@ -73,6 +73,13 @@ router.post(
 
 router.get('/financial-report', authorize('admin'), caseController.getFinancialReport);
 
+// Station barcode/QR scan (must be before /:id)
+router.post(
+  '/scan',
+  authorize('admin', 'secretary', 'designer', 'finisher'),
+  caseController.scanAtStation
+);
+
 // Get case by ID
 router.get('/:id', caseController.getCaseById);
 

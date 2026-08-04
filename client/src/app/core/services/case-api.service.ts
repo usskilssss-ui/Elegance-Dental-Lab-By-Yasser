@@ -77,6 +77,11 @@ export class CaseApiService {
     return this.http.put(`${this.apiUrl}/${id}/move-stage`, { stage });
   }
 
+  /** Station barcode/QR scan → move case by caseNumber */
+  scanAtStation(caseNumber: string, station: 'reception' | 'design' | 'finishing'): Observable<any> {
+    return this.http.post(`${this.apiUrl}/scan`, { caseNumber, station });
+  }
+
   // Upload a case image file (designer/finisher/admin)
   uploadCaseImage(id: string, file: File): Observable<any> {
     const form = new FormData();

@@ -656,6 +656,196 @@ exports.moveStage = async (req, res) => {
   }
 };
 
+function normalizeScanCode(raw) {
+  let code = String(raw || '').trim();
+  if (!code) return '';
+  // Scanner may send a URL: .../s/CASE-xxx or query ?c=CASE-xxx
+  try {
+    if (/^https?:\/\//i.test(code)) {
+      const u = new URL(code);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const last = parts[parts.length - 1] || '';
+      code = u.searchParams.get('c') || u.searchParams.get('case') || last || code;
+    }
+  } catch {
+    /* keep raw */
+  }
+  // Strip accidental trailing Enter / control chars
+  code = code.replace(/[\r\n\t]+/g, '').trim();
+  return code;
+}
+
+const STATION_TARGET = {
+  reception: 'waiting',
+  design: 'design',
+  finishing: 'finishing',
+};
+
+const STATION_ALLOWED_FROM = {
+  reception: new Set(['waiting', 'secretary']),
+  design: new Set(['waiting', 'secretary', 'design', 'khart']),
+  finishing: new Set(['design', 'khart', 'finishing']),
+};
+
+const STATION_LABEL_AR = {
+  reception: 'الريسبشن',
+  design: 'الديزاين',
+  finishing: 'الفينيش',
+};
+
+// POST /api/cases/scan — barcode/QR station scan moves case by caseNumber
+exports.scanAtStation = async (req, res) => {
+  try {
+    const station = String(req.body?.station || '')
+      .trim()
+      .toLowerCase();
+    const caseNumber = normalizeScanCode(req.body?.caseNumber || req.body?.code || '');
+
+    if (!STATION_TARGET[station]) {
+      return res.status(400).json({
+        success: false,
+        message: 'محطة غير صحيحة (reception / design / finishing)',
+      });
+    }
+    if (!caseNumber) {
+      return res.status(400).json({ success: false, message: 'رقم الحالة مطلوب' });
+    }
+
+    const dentalCase = await DentalCase.findOne({
+      caseNumber: new RegExp(`^${caseNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+    });
+
+    if (!dentalCase) {
+      return res.status(404).json({
+        success: false,
+        message: `لم يتم العثور على حالة برقم: ${caseNumber}`,
+      });
+    }
+
+    const oldStage = String(dentalCase.currentStage || 'waiting');
+    const targetStage = STATION_TARGET[station];
+
+    if (oldStage === 'exited') {
+      return res.status(400).json({
+        success: false,
+        message: 'الحالة خارجة بالفعل ولا يمكن نقلها',
+        case: {
+          id: dentalCase._id,
+          caseNumber: dentalCase.caseNumber,
+          patientName: dentalCase.patientName,
+          currentStage: oldStage,
+        },
+      });
+    }
+
+    // Already at target → acknowledge without error (re-scan OK)
+    if (oldStage === targetStage) {
+      return res.status(200).json({
+        success: true,
+        alreadyAtStage: true,
+        message: `الحالة ${dentalCase.caseNumber} موجودة بالفعل في ${STATION_LABEL_AR[station]}`,
+        case: {
+          id: dentalCase._id,
+          caseNumber: dentalCase.caseNumber,
+          patientName: dentalCase.patientName,
+          currentStage: oldStage,
+          caseType: dentalCase.caseType,
+        },
+      });
+    }
+
+    // Reception: if already past front desk, just confirm presence (no backward move)
+    if (station === 'reception' && !STATION_ALLOWED_FROM.reception.has(oldStage)) {
+      return res.status(200).json({
+        success: true,
+        alreadyInLab: true,
+        message: `الحالة ${dentalCase.caseNumber} مسجّلة في المعمل (مرحلة: ${oldStage})`,
+        case: {
+          id: dentalCase._id,
+          caseNumber: dentalCase.caseNumber,
+          patientName: dentalCase.patientName,
+          currentStage: oldStage,
+          caseType: dentalCase.caseType,
+        },
+      });
+    }
+
+    if (!STATION_ALLOWED_FROM[station].has(oldStage)) {
+      return res.status(400).json({
+        success: false,
+        message: `لا يمكن نقل الحالة من «${oldStage}» إلى محطة ${STATION_LABEL_AR[station]}`,
+        case: {
+          id: dentalCase._id,
+          caseNumber: dentalCase.caseNumber,
+          patientName: dentalCase.patientName,
+          currentStage: oldStage,
+        },
+      });
+    }
+
+    dentalCase.currentStage = targetStage;
+    if (['design', 'khart', 'finishing'].includes(targetStage)) {
+      if (dentalCase.status === 'waiting') {
+        dentalCase.status = 'in_progress';
+      }
+    }
+    if (targetStage !== 'waiting') {
+      if (!dentalCase.stageTimestamps) dentalCase.stageTimestamps = {};
+      dentalCase.stageTimestamps[targetStage] = new Date();
+      dentalCase.markModified('stageTimestamps');
+    }
+
+    await dentalCase.save();
+
+    await AuditLog.create({
+      caseId: dentalCase._id,
+      caseNumber: dentalCase.caseNumber,
+      action: 'scanned_station',
+      performedBy: req.user.id,
+      performedByName: req.user.fullName,
+      details: { station, oldValue: oldStage, newValue: targetStage },
+    });
+
+    await Notification.create({
+      type: 'case_moved',
+      title: 'Station Scan',
+      message: `Case ${dentalCase.caseNumber} scanned at ${station}: ${oldStage} → ${targetStage}`,
+      caseId: dentalCase._id,
+      caseNumber: dentalCase.caseNumber,
+      targetAudience: ['all'],
+    });
+
+    emitToAll('case:moved-stage', {
+      caseId: String(dentalCase._id),
+      caseNumber: dentalCase.caseNumber,
+      oldStage,
+      newStage: targetStage,
+      station,
+      timestamp: new Date(),
+    });
+    emitCaseUpdated(dentalCase, req.user);
+
+    return res.status(200).json({
+      success: true,
+      message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
+      case: {
+        id: dentalCase._id,
+        caseNumber: dentalCase.caseNumber,
+        patientName: dentalCase.patientName,
+        currentStage: targetStage,
+        previousStage: oldStage,
+        caseType: dentalCase.caseType,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'فشل مسح الحالة',
+      error: error.message,
+    });
+  }
+};
+
 // Complete case
 exports.completeCase = async (req, res) => {
   try {

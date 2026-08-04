@@ -714,23 +714,27 @@ export class DoctorComponent implements OnInit, OnDestroy {
       '  ' +
       now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    const printData = {
-      doctor,
-      patient: d.patient.trim(),
-      branch: d.branch.trim(),
-      caseType: d.caseType,
-      workType: d.workType.trim(),
-      workDetail: (d.workDetail || '').trim(),
-      color: (d.color || '').trim(),
-      quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
-      caseNumber: '',
-      printDate,
-      urgent: !!d.urgent,
-    };
-
     this.caseApi
       .createCase(casePayload)
-      .pipe(switchMap(() => this.http.post(`${this.apiBase}/print/job`, { printData })))
+      .pipe(
+        switchMap((res: any) => {
+          const caseNumber = String(res?.case?.caseNumber ?? '');
+          const printData = {
+            doctor,
+            patient: d.patient.trim(),
+            branch: d.branch.trim(),
+            caseType: d.caseType,
+            workType: d.workType.trim(),
+            workDetail: (d.workDetail || '').trim(),
+            color: (d.color || '').trim(),
+            quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
+            caseNumber,
+            printDate,
+            urgent: !!d.urgent,
+          };
+          return this.http.post(`${this.apiBase}/print/job`, { printData });
+        })
+      )
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);

@@ -11,12 +11,19 @@ import { Finishing } from './modules/finishing/finishing';
 import { RequesterComponent } from './modules/requester/requester';
 import { EntryComponent } from './modules/entry/entry';
 import { DoctorComponent } from './modules/doctor/doctor';
+import { StationScanComponent } from './modules/station-scan/station-scan';
 
 /** Admin may open designer / secretary / finisher workspaces from the admin UI. */
 const WITH_ADMIN: (r: AppRole) => AppRole[] = r => [r, 'admin'];
 
 export const routes: Routes = [
   { path: 'login', component: Login, canActivate: [guestGuard] },
+
+  {
+    path: 'scan/:station',
+    component: StationScanComponent,
+    canActivate: [authGuard, roleGuard(['admin', 'secretary', 'designer', 'finisher'])],
+  },
 
   {
     path: 'admin',

@@ -366,7 +366,7 @@ async function processQueue() {
       await assertPrinterReady(PRINTER_NAME);
       console.log(`   ✅ Printer ready: ${PRINTER_NAME}`);
 
-      const html = buildPrintHtml(job.printData);
+      const html = await buildPrintHtml(job.printData);
       const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
       await generatePdf(html, pdfPath);
       console.log(`   ✅ PDF generated: ${pdfPath}`);
@@ -657,13 +657,45 @@ async function generatePdf(html, outputPath) {
   fs.unlink(tempHtmlPath, () => {});
 }
 
-function buildPrintHtml(c) {
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function buildPrintHtml(c) {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
   const dateStr = now.toLocaleDateString('en-GB');
   const printDate = c.printDate || `${timeStr} ${dateStr}`;
   const workTypeDisplay = c.workType || '—';
   const quantity = c.caseType === 'Empty' ? 0 : (c.quantity || 0);
+  const caseNumber = String(c.caseNumber || '').trim();
+
+  let qrBlock = '';
+  if (caseNumber) {
+    let qrDataUrl = '';
+    try {
+      const QRCode = require('qrcode');
+      qrDataUrl = await QRCode.toDataURL(caseNumber, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 160,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+    } catch (err) {
+      console.warn('   ⚠️ QR generation failed:', err.message);
+    }
+    qrBlock = `
+  <div class="qr-block">
+    ${qrDataUrl ? `<img class="qr-img" src="${qrDataUrl}" alt="QR ${escapeHtml(caseNumber)}" />` : ''}
+    <div class="qr-code-text">${escapeHtml(caseNumber)}</div>
+    <div class="qr-hint">امسح لنقل الحالة بين المحطات</div>
+  </div>`;
+  }
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -681,8 +713,18 @@ function buildPrintHtml(c) {
       font-size: 14px;
       line-height: 1.6;
       direction: rtl;
-      padding-top: 120px;
+      padding-top: 40px;
     }
+    .qr-block {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      margin: 0 auto 18px; padding: 8px 0 4px;
+    }
+    .qr-img { width: 120px; height: 120px; image-rendering: pixelated; }
+    .qr-code-text {
+      margin-top: 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;
+      direction: ltr; unicode-bidi: isolate;
+    }
+    .qr-hint { font-size: 10px; color: #333; margin-top: 2px; }
     .section { margin-bottom: 18px; }
     .section-title {
       font-size: 15px; font-weight: 700; color: #000;
@@ -719,17 +761,19 @@ function buildPrintHtml(c) {
   </style>
 </head>
 <body>
+  ${qrBlock}
   <div class="section">
     <div class="section-title">بيانات الطبيب والمريض</div>
-    <div class="row"><span class="label">الطبيب</span><span class="value">${c.doctor || '—'}</span></div>
-    <div class="row"><span class="label">المريض</span><span class="value">${c.patient || '—'}</span></div>
-    <div class="row"><span class="label">الفرع</span><span class="value">${c.branch || '—'}</span></div>
+    <div class="row"><span class="label">الطبيب</span><span class="value">${escapeHtml(c.doctor || '—')}</span></div>
+    <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
+    <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
+    ${caseNumber ? `<div class="row"><span class="label">رقم الحالة</span><span class="value">${escapeHtml(caseNumber)}</span></div>` : ''}
   </div>
   <div class="section">
     <div class="section-title">تفاصيل العمل</div>
-    <div class="row"><span class="label">نوع العمل</span><span class="value">${workTypeDisplay}</span></div>
-    ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${c.workDetail}</span></div>` : ''}
-    <div class="row"><span class="label">اللون</span><span class="value">${c.color || '—'}</span></div>
+    <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
+    ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}
+    <div class="row"><span class="label">اللون</span><span class="value">${escapeHtml(c.color || '—')}</span></div>
     <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
   </div>
   <div class="teeth-section">
@@ -752,7 +796,7 @@ function buildPrintHtml(c) {
   </div>
   <div class="footer">
     <span class="footer-lab">Elegance Dental Lab</span>
-    <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
+    <span class="footer-date">تاريخ الطباعة: ${escapeHtml(printDate)}</span>
   </div>
 </body>
 </html>`;
