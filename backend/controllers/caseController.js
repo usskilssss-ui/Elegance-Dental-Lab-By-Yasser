@@ -777,7 +777,7 @@ const STATION_LABEL_AR = {
 
 function stationFromUserRole(role) {
   const r = String(role || '').toLowerCase();
-  if (r === 'scanner1') return 'reception';
+  if (r === 'scanner1' || r === 'secretary') return 'reception';
   if (r === 'scanner2') return 'design';
   if (r === 'scanner3') return 'finishing';
   return null;
@@ -791,9 +791,9 @@ exports.scanAtStation = async (req, res) => {
       return res.status(400).json({ success: false, message: 'رقم الحالة مطلوب' });
     }
 
-    // Prefer station locked to the logged-in scanner role (no page selection needed)
+    // Prefer station locked to the logged-in scanner/secretary role
     let station = stationFromUserRole(req.user?.role);
-    if (!station && ['admin', 'secretary', 'designer', 'finisher'].includes(String(req.user?.role || ''))) {
+    if (!station && ['admin', 'designer', 'finisher'].includes(String(req.user?.role || ''))) {
       station = String(req.body?.station || '')
         .trim()
         .toLowerCase();

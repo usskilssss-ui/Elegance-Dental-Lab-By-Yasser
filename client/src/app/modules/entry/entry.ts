@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -58,7 +58,7 @@ export interface PrintJobCard {
 @Component({
   selector: 'app-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './entry.html',
   styleUrl: './entry.css',
 })
@@ -81,6 +81,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   readonly toast = signal<string | null>(null);
   readonly notificationsOpen = signal(false);
   readonly jobsLoading = signal(true);
+  readonly showReceptionHub = signal(false);
 
   // Today's print jobs list
   readonly printJobs = signal<PrintJobCard[]>([]);
@@ -314,6 +315,9 @@ export class EntryComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    const role = this.auth.getSession()?.role;
+    this.showReceptionHub.set(role === 'secretary' || role === 'admin');
+
     // Load doctor suggestions
     this.caseApi.getAllCases(1, 1500).subscribe({
       next: res => {

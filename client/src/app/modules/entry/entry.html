@@ -56,6 +56,14 @@
     </div>
   </header>
 
+  @if (showReceptionHub()) {
+    <nav class="reception-hub" aria-label="أقسام الريسبشن">
+      <a class="hub-link" routerLink="/secretary/dashboard">الحالات</a>
+      <a class="hub-link active" routerLink="/entry/dashboard">الطباعة</a>
+      <a class="hub-link" routerLink="/scan">المسح</a>
+    </nav>
+  }
+
   <!-- Main content -->
   <main class="entry-main">
 

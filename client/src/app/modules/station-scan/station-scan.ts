@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
@@ -21,6 +21,11 @@ type ScanFeedback = {
 const ROLE_META: Partial<
   Record<AppRole, { station: ScanStation; title: string; subtitle: string }>
 > = {
+  secretary: {
+    station: 'reception',
+    title: 'مسح الريسبشن',
+    subtitle: 'من أي مرحلة → منتهية',
+  },
   scanner1: {
     station: 'reception',
     title: 'سكان 1 — الريسبشن',
@@ -41,7 +46,7 @@ const ROLE_META: Partial<
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './station-scan.html',
   styleUrls: ['./station-scan.css'],
 })
@@ -61,6 +66,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
   readonly feedback = signal<ScanFeedback | null>(null);
   readonly lastScans = signal<ScanFeedback[]>([]);
   readonly unauthorized = signal(false);
+  readonly showReceptionHub = signal(false);
 
   scanBuffer = '';
   private focusTimer: ReturnType<typeof setInterval> | null = null;
@@ -72,14 +78,15 @@ export class StationScanComponent implements OnInit, OnDestroy {
     const session = this.auth.getSession();
     const role = session?.role;
     this.accountName.set(session?.name || '');
+    this.showReceptionHub.set(role === 'secretary' || role === 'admin');
 
     const meta = role ? ROLE_META[role] : undefined;
     if (!meta) {
-      // Admin/lab staff can open /scan but need a scanner account for locked station
-      if (role === 'admin' || role === 'secretary' || role === 'designer' || role === 'finisher') {
+      // Admin/lab staff can open /scan for testing
+      if (role === 'admin' || role === 'designer' || role === 'finisher') {
         this.unauthorized.set(false);
         this.title.set('مسح تجريبي');
-        this.subtitle.set('سجّل دخول بحساب سكان 1 / 2 / 3 للاستخدام اليومي');
+        this.subtitle.set('سجّل دخول بحساب سكرتير أو سكان 2 / 3 للاستخدام اليومي');
         this.station.set('design');
       } else {
         this.unauthorized.set(true);
@@ -145,9 +152,13 @@ export class StationScanComponent implements OnInit, OnDestroy {
   private submitCode(code: string): void {
     this.busy.set(true);
     const role = this.auth.getSession()?.role;
-    const isScanner = role === 'scanner1' || role === 'scanner2' || role === 'scanner3';
-    // Scanners: station comes from JWT/role on server. Others may pass station for testing.
-    const station = isScanner ? undefined : this.station();
+    const stationLocked =
+      role === 'scanner1' ||
+      role === 'scanner2' ||
+      role === 'scanner3' ||
+      role === 'secretary';
+    // Locked roles: station comes from JWT on server. Others may pass station for testing.
+    const station = stationLocked ? undefined : this.station();
     this.caseApi.scanAtStation(code, station).subscribe({
       next: (res) => {
         this.busy.set(false);

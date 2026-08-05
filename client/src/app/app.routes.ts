@@ -63,7 +63,7 @@ export const routes: Routes = [
 
   {
     path: 'entry',
-    canActivate: [authGuard, roleGuard(WITH_ADMIN('finisher'))],
+    canActivate: [authGuard, roleGuard(['finisher', 'secretary', 'admin'])],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: EntryComponent },
@@ -72,7 +72,7 @@ export const routes: Routes = [
 
   {
     path: 'finisher',
-    canActivate: [authGuard, roleGuard(WITH_ADMIN('finisher'))],
+    canActivate: [authGuard, roleGuard(['finisher', 'secretary', 'admin'])],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: EntryComponent },
