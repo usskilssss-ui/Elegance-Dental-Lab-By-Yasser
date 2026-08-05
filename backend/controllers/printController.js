@@ -1,5 +1,61 @@
 const PrintJob = require('../models/PrintJob');
+const DentalCase = require('../models/DentalCase');
 const { getIO } = require('../services/socketService');
+
+const META_PREFIX = '__META__\n';
+
+function buildNotesFromPrintData(printData) {
+  const meta = {
+    requesterType: 'doctor',
+    doctor: String(printData.doctor || '').trim(),
+    branch: String(printData.branch || '').trim(),
+    workDetail: String(printData.workDetail || '').trim(),
+    color: String(printData.color || '').trim(),
+    quantity: printData.quantity ?? 1,
+    receivedDate: new Date().toISOString().slice(0, 10),
+  };
+  return `${META_PREFIX}${JSON.stringify(meta)}`;
+}
+
+/** Create a DB case when print job has no case number (authenticated flows). */
+async function ensureCaseNumberForPrint(printData, reqUser) {
+  const existing = String(printData.caseNumber || '').trim();
+  if (existing) return printData;
+
+  const uid = reqUser?.id || reqUser?.userId;
+  if (!uid) return printData;
+
+  const newCase = new DentalCase({
+    patientName: String(printData.patient || '').trim() || 'غير محدد',
+    patientEmail: `case+${Date.now()}@mylab.com`,
+    patientPhone: '0000000000',
+    requesterType: 'doctor',
+    notes: buildNotesFromPrintData(printData),
+    referringDoctor: String(printData.doctor || '').trim(),
+    caseType: String(printData.workType || '').trim() || '—',
+    priority: printData.urgent ? 'urgent' : 'normal',
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    createdBy: uid,
+    currentStage: 'waiting',
+    status: 'waiting',
+  });
+
+  let lastError;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) newCase.caseNumber = undefined;
+    try {
+      await newCase.save();
+      lastError = undefined;
+      break;
+    } catch (err) {
+      lastError = err;
+      if (err?.code !== 11000) throw err;
+    }
+  }
+  if (lastError) throw lastError;
+
+  return { ...printData, caseNumber: newCase.caseNumber };
+}
 
 // POST /api/print/job  — create a new print job and push to Print Agent
 exports.createPrintJob = async (req, res) => {
@@ -20,6 +76,8 @@ exports.createPrintJob = async (req, res) => {
         data = { ...data, doctor: String(u.fullName || '').trim() };
       }
     }
+
+    data = await ensureCaseNumberForPrint(data, req.user);
 
     const job = await PrintJob.create({
       printData: data,

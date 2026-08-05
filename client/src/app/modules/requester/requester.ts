@@ -6,8 +6,13 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
-import { buildCreateCasePayload, mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
-import { Subscription } from 'rxjs';
+import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
+import {
+  buildCasePayloadFromPrintForm,
+  buildPrintData,
+  formatWorkTypeForPrint,
+} from '../../core/utils/print-job.util';
+import { Subscription, switchMap } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { environment } from '../../../environments/environment';
@@ -323,30 +328,37 @@ export class RequesterComponent implements OnInit, OnDestroy {
     }
     if (!this.isColorOptional && !d.color?.trim()) { this.flash('يرجى إدخال اللون'); return; }
 
-    const createdCase = {
-      ...d,
-      caseNumber: d.caseNumber ? d.caseNumber.trim() : '',
+    this.updateWorkTypeString();
+    const draft = {
       doctor: d.doctor.trim(),
       patient: d.patient.trim(),
+      branch: d.branch.trim(),
+      caseType: d.caseType,
       workType: d.workType.trim(),
       workDetail: (d.workDetail || '').trim(),
       color: (d.color || '').trim(),
       quantity: d.caseType === 'Empty' ? 0 : (d.quantity || 1),
+      date: d.date,
     };
 
     this.closeDialog();
     this.saveInProgress.set(true);
 
-    const now = new Date();
-    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const token = this.auth.getToken();
+    const createThenPrint = token
+      ? this.caseApi.createCase(buildCasePayloadFromPrintForm(draft)).pipe(
+          switchMap((res: { case?: { caseNumber?: string } }) => {
+            const caseNumber = String(res?.case?.caseNumber ?? '');
+            return this.http.post(`${this.apiBase}/print/job`, {
+              printData: buildPrintData(draft, caseNumber),
+            });
+          })
+        )
+      : this.http.post(`${this.apiBase}/print/job`, {
+          printData: buildPrintData(draft, ''),
+        });
 
-    // Send to remote print API
-    this.http.post(`${this.apiBase}/print/job`, {
-      printData: {
-        ...createdCase,
-        printDate,
-      }
-    }).subscribe({
+    createThenPrint.subscribe({
       next: () => {
         this.saveInProgress.set(false);
         this.flash('✅ تم إرسال الريكويست للطباعة');
@@ -354,7 +366,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
       error: () => {
         this.saveInProgress.set(false);
         this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
-      }
+      },
     });
   }
 
@@ -373,14 +385,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
   }
 
   formatWorkTypeForDisplay(wt: string): string {
-    if (!wt) return '';
-    if (wt === 'Empty') return 'غير معروف';
-    if (wt === 'Modification') return 'تعديل';
-    if (wt === 'Redo' || wt === 'Remake') return 'اعادة';
-    let display = wt;
-    if (display.startsWith('Modification - ')) display = display.replace('Modification - ', 'تعديل - ');
-    else if (display.startsWith('Redo - ')) display = display.replace('Redo - ', 'اعادة - ');
-    return display;
+    return formatWorkTypeForPrint(wt);
   }
 
   printCaseCard(c: any): void {

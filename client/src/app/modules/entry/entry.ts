@@ -6,7 +6,13 @@ import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
-import { Subscription } from 'rxjs';
+import {
+  buildCasePayloadFromPrintForm,
+  buildPrintData,
+  formatPrintDate,
+  formatWorkTypeForPrint,
+} from '../../core/utils/print-job.util';
+import { Subscription, switchMap } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -425,44 +431,50 @@ export class EntryComponent implements OnInit, OnDestroy {
 
     if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
     if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
+    if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
       return;
     }
 
-    const createdCase = {
-      ...d,
-      caseNumber: d.caseNumber ? d.caseNumber.trim() : '',
+    this.updateWorkTypeString();
+    const draft = {
       doctor: d.doctor.trim(),
       patient: d.patient.trim(),
+      branch: d.branch.trim(),
+      caseType: d.caseType,
       workType: d.workType.trim(),
       workDetail: (d.workDetail || '').trim(),
       color: (d.color || '').trim(),
       quantity: d.caseType === 'Empty' ? 0 : (d.quantity || 1),
+      date: d.date,
     };
 
     this.closeDialog();
     this.saveInProgress.set(true);
 
-    const now = new Date();
-    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-    // Send to remote Print Agent API
-    this.http.post(`${this.apiBase}/print/job`, {
-      printData: { ...createdCase, printDate },
-    }).subscribe({
-      next: () => {
-        this.saveInProgress.set(false);
-        this.flash('✅ تم إرسال الريكويست للطباعة');
-        // Refresh today's jobs list
-        this.loadTodayJobs();
-      },
-      error: () => {
-        this.saveInProgress.set(false);
-        this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
-      }
-    });
+    this.caseApi
+      .createCase(buildCasePayloadFromPrintForm(draft))
+      .pipe(
+        switchMap((res: { case?: { caseNumber?: string } }) => {
+          const caseNumber = String(res?.case?.caseNumber ?? '');
+          return this.http.post(`${this.apiBase}/print/job`, {
+            printData: buildPrintData(draft, caseNumber),
+          });
+        })
+      )
+      .subscribe({
+        next: () => {
+          this.saveInProgress.set(false);
+          this.flash('✅ تم إرسال الريكويست للطباعة');
+          this.loadTodayJobs();
+        },
+        error: () => {
+          this.saveInProgress.set(false);
+          this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
+        },
+      });
   }
 
   logout(): void {
@@ -480,14 +492,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   }
 
   formatWorkTypeForDisplay(wt: string): string {
-    if (!wt) return '';
-    if (wt === 'Empty') return 'غير معروف';
-    if (wt === 'Modification') return 'تعديل';
-    if (wt === 'Redo' || wt === 'Remake') return 'اعادة';
-    let display = wt;
-    if (display.startsWith('Modification - ')) display = display.replace('Modification - ', 'تعديل - ');
-    else if (display.startsWith('Redo - ')) display = display.replace('Redo - ', 'اعادة - ');
-    return display;
+    return formatWorkTypeForPrint(wt);
   }
 
   formatTime(dateStr: string): string {
@@ -580,15 +585,9 @@ export class EntryComponent implements OnInit, OnDestroy {
 
   /** Reprint via Print Agent only (same path/format as doctor request link). Never browser-print. */
   reprintJob(job: PrintJobCard): void {
-    const now = new Date();
-    const printDate =
-      now.toLocaleDateString('en-GB') +
-      '  ' +
-      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
     this.http
       .post(`${this.apiBase}/print/job`, {
-        printData: { ...job.printData, printDate },
+        printData: { ...job.printData, printDate: formatPrintDate() },
       })
       .subscribe({
         next: () => {

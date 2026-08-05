@@ -7,7 +7,12 @@ import { Subscription, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
-import { buildCreateCasePayload, mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
+import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
+import {
+  buildCasePayloadFromPrintForm,
+  buildPrintData,
+  formatWorkTypeForPrint,
+} from '../../core/utils/print-job.util';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { environment } from '../../../environments/environment';
@@ -674,23 +679,23 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.closeDialog();
     this.saveInProgress.set(true);
 
-    const casePayload = buildCreateCasePayload({
-      requesterType: 'doctor',
+    const draft = {
       doctor,
       patient: d.patient.trim(),
+      branch: d.branch.trim(),
+      caseType: d.caseType,
       workType: d.workType.trim(),
       workDetail: (d.workDetail || '').trim(),
       color: (d.color || '').trim(),
-      size: '',
       quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
       date: todayYmd(),
-      branch: d.branch.trim(),
+      urgent: !!d.urgent,
+    };
+
+    const casePayload = buildCasePayloadFromPrintForm(draft, {
+      requesterType: 'doctor',
+      priority: d.urgent ? 'urgent' : isEdit ? 'normal' : undefined,
     });
-    if (d.urgent) {
-      casePayload['priority'] = 'urgent';
-    } else if (isEdit) {
-      casePayload['priority'] = 'normal';
-    }
 
     if (isEdit && editId) {
       this.caseApi.updateCase(editId, casePayload).subscribe({
@@ -708,31 +713,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const now = new Date();
-    const printDate =
-      now.toLocaleDateString('en-GB') +
-      '  ' +
-      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
     this.caseApi
       .createCase(casePayload)
       .pipe(
-        switchMap((res: any) => {
+        switchMap((res: { case?: { caseNumber?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
-          const printData = {
-            doctor,
-            patient: d.patient.trim(),
-            branch: d.branch.trim(),
-            caseType: d.caseType,
-            workType: d.workType.trim(),
-            workDetail: (d.workDetail || '').trim(),
-            color: (d.color || '').trim(),
-            quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
-            caseNumber,
-            printDate,
-            urgent: !!d.urgent,
-          };
-          return this.http.post(`${this.apiBase}/print/job`, { printData });
+          return this.http.post(`${this.apiBase}/print/job`, {
+            printData: buildPrintData(draft, caseNumber),
+          });
         })
       )
       .subscribe({
@@ -763,14 +751,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   formatWorkTypeForDisplay(wt: string): string {
-    if (!wt) return '';
-    if (wt === 'Empty') return 'غير معروف';
-    if (wt === 'Modification') return 'تعديل';
-    if (wt === 'Redo' || wt === 'Remake') return 'اعادة';
-    let display = wt;
-    if (display.startsWith('Modification - ')) display = display.replace('Modification - ', 'تعديل - ');
-    else if (display.startsWith('Redo - ')) display = display.replace('Redo - ', 'اعادة - ');
-    return display;
+    return formatWorkTypeForPrint(wt);
   }
 
   getCasePhase(c: DentalCase): { label: string; color: string } {

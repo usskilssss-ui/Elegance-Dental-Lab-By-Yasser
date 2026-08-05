@@ -284,6 +284,19 @@
             />
           </label>
 
+          <!-- Branch -->
+          <label class="form-field">
+            <span>الفرع <abbr title="مطلوب">*</abbr></span>
+            <input
+              type="text"
+              name="branch"
+              [(ngModel)]="formDraft.branch"
+              placeholder="اسم الفرع"
+              required
+              autocomplete="off"
+            />
+          </label>
+
           <!-- Case Type -->
           <label class="form-field">
             <span>نوع الحالة <abbr title="مطلوب">*</abbr></span>
