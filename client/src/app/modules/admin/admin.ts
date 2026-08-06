@@ -1795,8 +1795,11 @@ export class Admin implements OnInit, OnDestroy {
       next: (res) => {
         const list = (res?.data ?? res?.users ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(list) ? list.map((u) => this.mapApiUserToStaff(u)) : [];
-        this.doctorMembers = mapped.filter((m) => m.position === 'دكتور');
-        this.staffMembers = mapped.filter((m) => m.position !== 'دكتور');
+        const visible = mapped.filter(
+          (m) => String(m.email || '').trim().toLowerCase() !== 'mentor@dental.com'
+        );
+        this.doctorMembers = visible.filter((m) => m.position === 'دكتور');
+        this.staffMembers = visible.filter((m) => m.position !== 'دكتور');
       },
       error: (err) => {
         console.error(err);
@@ -2266,18 +2269,22 @@ export class Admin implements OnInit, OnDestroy {
     return this.doctorPayments.filter(p => this.doctorGroupKey(p.doctorName) === key);
   }
 
-  saveDoctorReceiptPdf(): void {
+  async saveDoctorReceiptPdf(): Promise<void> {
     if (!this.reportDoctorFilter) return;
 
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const dateStr =
+      now.toLocaleDateString('en-GB') +
+      '  ' +
+      now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const doctorName = this.reportDoctorFilter;
     const totalDue = this.getDoctorTotalDue(doctorName);
     const totalPaid = this.getDoctorTotalPaid(doctorName);
     const remaining = totalDue - totalPaid;
     const casesCount = this.reportFilteredCases.length;
     const payments = this.getDoctorPaymentsList(doctorName);
-    const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const fmt = (n: number) =>
+      n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const safeFileName = `كشف-حساب-${doctorName}`.replace(/[\\/:*?"<>|]+/g, '_');
 
     let paymentsRows = '';
@@ -2295,88 +2302,92 @@ export class Admin implements OnInit, OnDestroy {
       });
     }
 
-    const html = `<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>${safeFileName}</title>
-  <style>
-    @page { margin: 12mm; size: A4; }
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
-    body {
-      width: 100%;
-      max-width: 180mm;
-      margin: 0 auto;
-      padding: 12px 16px;
-      font-size: 13px;
-    }
-    .center { text-align: center; }
-    .bold { font-weight: bold; }
-    .dash { border-top: 1px dashed #555; margin: 8px 0; }
-    .solid { border-top: 2px solid #000; margin: 8px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 6px 0; }
-    th { padding: 6px 4px; font-weight: bold; border-bottom: 1px solid #000; }
-    td { padding: 5px 4px; }
-    .val-col { text-align: left; padding-left: 6px !important; }
-    .hint { text-align:center; font-size:11px; color:#555; margin-top:10px; }
-  </style>
-</head>
-<body>
-  <div style="margin-bottom:8px;">
-    <div class="center bold" style="font-size:20px;letter-spacing:1px;">Elite Lab</div>
-    <div class="center" style="font-size:11px;color:#333;">Precision Dental Laboratories</div>
-  </div>
-  <div class="solid"></div>
-  <div class="center bold" style="font-size:15px;padding:4px 0;">كشف حساب — د. ${doctorName}</div>
-  <div class="solid"></div>
-  <table>
-    <thead>
-      <tr><th style="text-align:right;">البيان</th><th class="val-col">القيمة</th></tr>
-    </thead>
-    <tbody>
-      <tr><td style="text-align:right;">عدد الحالات الخارجة</td><td class="bold val-col">${casesCount}</td></tr>
-      <tr><td style="text-align:right;">إجمالي الحساب</td><td class="bold val-col">${fmt(totalDue)} EGP</td></tr>
-      <tr><td style="text-align:right;">المبلغ المدفوع</td><td class="bold val-col">${fmt(totalPaid)} EGP</td></tr>
-      <tr><td style="text-align:right;border-top:1px solid #000;padding-top:4px;" class="bold">المبلغ المستحق</td><td class="bold val-col" style="border-top:1px solid #000;padding-top:4px;">${fmt(remaining)} EGP</td></tr>
-    </tbody>
-  </table>
-  <div class="dash"></div>
-  <div class="center bold" style="margin:4px 0;font-size:13px;">سجل الدفعات</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:right;">المبلغ</th>
-        <th style="text-align:center;">ملاحظات</th>
-        <th class="val-col" style="white-space:nowrap;">تاريخ الدفع</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${paymentsRows}
-    </tbody>
-  </table>
-  <div class="solid"></div>
-  <table>
-    <tbody>
-      <tr><td style="text-align:right;font-size:13px;" class="bold">إجمالي المتبقي</td><td class="bold val-col" style="font-size:13px;">${fmt(remaining)} EGP</td></tr>
-      <tr><td style="text-align:right;color:#444;" class="bold">تاريخ حفظ الملف</td><td class="bold val-col" style="color:#444;white-space:nowrap;">${dateStr}</td></tr>
-    </tbody>
-  </table>
-  <div class="dash"></div>
-  <div class="center" style="font-size:11px;margin-top:8px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
-  <div class="hint">اختر «Save as PDF» / «حفظ كـ PDF» من نافذة الطباعة لحفظ الملف</div>
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 250);
-    };
-  </script>
-</body>
-</html>`;
+    const container = document.createElement('div');
+    container.setAttribute('dir', 'rtl');
+    container.style.cssText =
+      'position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:#000;padding:28px 32px;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;font-size:14px;z-index:-1;';
+    container.innerHTML = `
+      <div style="margin-bottom:8px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:1px;">Elite Lab</div>
+        <div style="font-size:12px;color:#333;">Precision Dental Laboratories</div>
+      </div>
+      <div style="border-top:2px solid #000;margin:10px 0;"></div>
+      <div style="text-align:center;font-size:16px;font-weight:800;padding:4px 0;">كشف حساب — د. ${doctorName}</div>
+      <div style="border-top:2px solid #000;margin:10px 0;"></div>
+      <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+        <thead>
+          <tr>
+            <th style="text-align:right;padding:6px 4px;border-bottom:1px solid #000;">البيان</th>
+            <th style="text-align:left;padding:6px 4px;border-bottom:1px solid #000;">القيمة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="text-align:right;padding:5px 4px;">عدد الحالات الخارجة</td><td style="text-align:left;padding:5px 4px;font-weight:700;">${casesCount}</td></tr>
+          <tr><td style="text-align:right;padding:5px 4px;">إجمالي الحساب</td><td style="text-align:left;padding:5px 4px;font-weight:700;">${fmt(totalDue)} EGP</td></tr>
+          <tr><td style="text-align:right;padding:5px 4px;">المبلغ المدفوع</td><td style="text-align:left;padding:5px 4px;font-weight:700;">${fmt(totalPaid)} EGP</td></tr>
+          <tr><td style="text-align:right;padding:5px 4px;border-top:1px solid #000;font-weight:800;">المبلغ المستحق</td><td style="text-align:left;padding:5px 4px;border-top:1px solid #000;font-weight:800;">${fmt(remaining)} EGP</td></tr>
+        </tbody>
+      </table>
+      <div style="border-top:1px dashed #555;margin:10px 0;"></div>
+      <div style="text-align:center;font-weight:800;margin:6px 0;">سجل الدفعات</div>
+      <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+        <thead>
+          <tr>
+            <th style="text-align:right;padding:6px 4px;border-bottom:1px solid #000;">المبلغ</th>
+            <th style="text-align:center;padding:6px 4px;border-bottom:1px solid #000;">ملاحظات</th>
+            <th style="text-align:left;padding:6px 4px;border-bottom:1px solid #000;">تاريخ الدفع</th>
+          </tr>
+        </thead>
+        <tbody>${paymentsRows}</tbody>
+      </table>
+      <div style="border-top:2px solid #000;margin:10px 0;"></div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tbody>
+          <tr><td style="text-align:right;padding:5px 4px;font-weight:800;">إجمالي المتبقي</td><td style="text-align:left;padding:5px 4px;font-weight:800;">${fmt(remaining)} EGP</td></tr>
+          <tr><td style="text-align:right;padding:5px 4px;color:#444;font-weight:700;">تاريخ حفظ الملف</td><td style="text-align:left;padding:5px 4px;color:#444;font-weight:700;">${dateStr}</td></tr>
+        </tbody>
+      </table>
+      <div style="border-top:1px dashed #555;margin:10px 0;"></div>
+      <div style="text-align:center;font-size:12px;margin-top:8px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
+    `;
 
-    const popup = window.open('', '_blank', 'width=820,height=900,toolbar=0,menubar=0,scrollbars=1');
-    if (popup) {
-      popup.document.write(html);
-      popup.document.close();
+    document.body.appendChild(container);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const imgWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight - margin * 2;
+
+      while (heightLeft > 0) {
+        position = margin - (imgHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight - margin * 2;
+      }
+
+      pdf.save(`${safeFileName}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('تعذر حفظ ملف PDF، حاول مرة أخرى');
+    } finally {
+      container.remove();
     }
   }
 }
