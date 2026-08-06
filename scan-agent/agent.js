@@ -1,5 +1,5 @@
 /**
- * Elegance Dental Lab — Station Scan Agent
+ * Elite Dental Lab — Station Scan Agent
  * Runs on a lab Windows PC next to a USB barcode scanner (keyboard wedge).
  * Logs in as scanner1 / scanner2 / scanner3 and POSTs scanned codes to /api/cases/scan.
  *
@@ -57,7 +57,7 @@ let authRole = '';
 let busy = false;
 const MIN_CODE_LEN = 6;
 
-console.log('📷 Elegance Scan Agent starting...');
+console.log('📷 Elite Scan Agent starting...');
 console.log(`   Config : ${configPath}`);
 console.log(`   Label  : ${LABEL}`);
 console.log(`   Server : ${SERVER_URL}`);

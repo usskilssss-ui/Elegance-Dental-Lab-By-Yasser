@@ -501,7 +501,7 @@ exports.exportMonthData = async (req, res) => {
     const stamp = hasMonth
       ? `${year}-${String(month).padStart(2, '0')}`
       : new Date().toISOString().slice(0, 10);
-    const filename = `Elegance-Lab-Export-${stamp}.zip`;
+    const filename = `Elite-Lab-Export-${stamp}.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

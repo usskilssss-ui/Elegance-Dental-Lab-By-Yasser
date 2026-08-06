@@ -1707,7 +1707,7 @@ export class Admin implements OnInit, OnDestroy {
     this.monthArchiveApi.exportZip(year, month).subscribe({
       next: (blob) => {
         this.archiveLoading = false;
-        const filename = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
+        const filename = `Elite-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -2386,7 +2386,7 @@ export class Admin implements OnInit, OnDestroy {
 </head>
 <body>
   <div style="margin-bottom:6px;">
-    <div class="center bold" style="font-size:18px;letter-spacing:1px;">Elegance Lab</div>
+    <div class="center bold" style="font-size:18px;letter-spacing:1px;">Elite Lab</div>
     <div class="center" style="font-size:9px;color:#333;">Precision Dental Laboratories</div>
   </div>
   <div class="solid"></div>
@@ -2425,7 +2425,7 @@ export class Admin implements OnInit, OnDestroy {
     </tbody>
   </table>
   <div class="dash"></div>
-  <div class="center" style="font-size:10px;margin-top:6px;">شكراً لتعاملكم معنا — Elegance Dental Lab</div>
+  <div class="center" style="font-size:10px;margin-top:6px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
   <script>
     window.onload = function() {
       window.print();

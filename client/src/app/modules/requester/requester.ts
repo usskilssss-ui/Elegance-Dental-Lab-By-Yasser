@@ -463,7 +463,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
 
   <div class="footer">
     <div class="footer-brand">
-      <span class="footer-brand-name">Elegance Dental Lab</span>
+      <span class="footer-brand-name">Elite Dental Lab</span>
       <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
     </div>
   </div>

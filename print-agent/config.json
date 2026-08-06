@@ -1,6 +1,6 @@
 {
-  "SERVER_URL": "https://elegance-dental-lab-by-yasser-production.up.railway.app",
-  "PRINT_AGENT_SECRET": "elegance-print-secret-2024",
+  "SERVER_URL": "https://YOUR-ELITE-RAILWAY-URL.up.railway.app",
+  "PRINT_AGENT_SECRET": "CHANGE-ME-elite-print-secret",
   "PRINTER_NAME": "POSPrinter POS80",
   "POLL_INTERVAL_MS": 20000,
   "PRINT_CONFIRM_TIMEOUT_MS": 90000,

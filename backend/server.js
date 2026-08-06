@@ -42,8 +42,9 @@ app.use(helmet());
 // CORS
 const allowedOrigins = [
   'http://localhost:4200',
-  'https://dental-system-seven.vercel.app'
-];
+  // Elite frontend URL — set real Vercel domain after deploy (or use CORS_ORIGIN env)
+  process.env.FRONTEND_URL || 'https://YOUR-ELITE-VERCEL-URL.vercel.app',
+].filter(Boolean);
 if (process.env.CORS_ORIGIN) allowedOrigins.push(process.env.CORS_ORIGIN);
 
 app.use(
@@ -101,8 +102,8 @@ setupSocket(server);
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Elegance Dental Lab API Backend is running',
-    frontend: 'https://dental-system-kappa.vercel.app'
+    message: 'Elite Dental Lab API Backend is running',
+    frontend: process.env.FRONTEND_URL || 'https://YOUR-ELITE-VERCEL-URL.vercel.app'
   });
 });
 

@@ -6,8 +6,8 @@ const Service = require('node-windows').Service;
 const path = require('path');
 
 const svc = new Service({
-  name: 'ElegancePrintAgent',
-  description: 'Elegance Dental Lab — Remote Print Agent',
+  name: 'ElitePrintAgent',
+  description: 'Elite Dental Lab — Remote Print Agent',
   script: path.join(__dirname, 'agent.js'),
   nodeOptions: [],
   // Restart automatically if crashed / process killed

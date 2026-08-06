@@ -1381,7 +1381,7 @@ export class Secretary implements OnInit, OnDestroy {
 <body>
 <div class="page-content">
   <div class="header">
-    <h1>Elegance Lab</h1>
+    <h1>Elite Lab</h1>
     <p>Precision Dental Laboratories</p>
   </div>
 
@@ -1458,7 +1458,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   <div class="footer">
     <span>تاريخ الطباعة: ${printDate}</span>
-    <span>Elegance Dental Lab</span>
+    <span>Elite Dental Lab</span>
   </div>
 </div>
   <script>

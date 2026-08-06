@@ -6,7 +6,7 @@ const Service = require('node-windows').Service;
 const path = require('path');
 
 const svc = new Service({
-  name: 'ElegancePrintAgent',
+  name: 'ElitePrintAgent',
   script: path.join(__dirname, 'agent.js'),
 });
 
