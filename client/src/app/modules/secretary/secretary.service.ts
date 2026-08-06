@@ -16,6 +16,7 @@ export interface LabCase {
 }
 
 export type CaseDraft = Omit<LabCase, 'id'> & {
+  labName?: string;
   patientPhone?: string;
   studentPrice?: number;
   caseType?: string;

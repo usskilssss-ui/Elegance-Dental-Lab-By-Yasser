@@ -131,7 +131,8 @@ exports.createCase = async (req, res) => {
       requesterType = 'doctor';
     }
 
-    const normalizedRequesterType = requesterType === 'student' ? 'student' : 'doctor';
+    const normalizedRequesterType =
+      requesterType === 'student' ? 'student' : requesterType === 'lab' ? 'lab' : 'doctor';
     const isStudentCase = normalizedRequesterType === 'student';
     const notesFinal = notes ?? '';
     const referringDoctor = referringDoctorFromNotes(notesFinal);
@@ -1304,7 +1305,8 @@ exports.updateCase = async (req, res) => {
     if (patientEmail !== undefined) dentalCase.patientEmail = String(patientEmail).toLowerCase();
     if (patientPhone !== undefined) dentalCase.patientPhone = patientPhone;
     if (requesterType !== undefined) {
-      dentalCase.requesterType = requesterType === 'student' ? 'student' : 'doctor';
+      dentalCase.requesterType =
+        requesterType === 'student' ? 'student' : requesterType === 'lab' ? 'lab' : 'doctor';
       if (dentalCase.requesterType === 'student') {
         dentalCase.paymentStatus = 'paid';
         dentalCase.paidAt = new Date();

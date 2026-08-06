@@ -7,7 +7,7 @@ export interface DentalCase {
   patientName: string;
   patientEmail: string;
   patientPhone: string;
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   notes: string;
 
   // Workflow

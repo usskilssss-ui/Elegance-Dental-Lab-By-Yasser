@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -26,6 +26,7 @@ function emptyDraft(): CaseDraft {
   const dd = String(today.getDate()).padStart(2, '0');
 
   return {
+    labName: '',
     doctor: '',
     patient: '',
     patientPhone: '',
@@ -46,7 +47,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe],
+  imports: [CommonModule, FormsModule, PatientLabelPipe],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })
@@ -254,6 +255,8 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly dialogOpen = signal(false);
   readonly dialogMode = signal<'create' | 'edit'>('create');
+  /** Create-flow kind; edit derives from existing case */
+  readonly createRequesterKind = signal<'doctor' | 'lab'>('doctor');
   editingId: string | null = null;
   formDraft: any = emptyDraft();
 
@@ -709,6 +712,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   openCreateDialog(): void {
     this.dialogMode.set('create');
+    this.createRequesterKind.set('doctor');
     this.editingId = null;
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
@@ -720,6 +724,11 @@ export class Secretary implements OnInit, OnDestroy {
     this.clearPlySelection();
     this.dialogOpen.set(true);
     this.menuOpenId.set(null);
+  }
+
+  openCreateLabDialog(): void {
+    this.openCreateDialog();
+    this.createRequesterKind.set('lab');
   }
 
   openEdit(c: any): void {
@@ -738,7 +747,9 @@ export class Secretary implements OnInit, OnDestroy {
     const delivery = String(c.deliveryDate || '');
     const dateMatch = delivery.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(.+))?$/);
     const currentCaseType = this.getCaseTypeFromWorkType(c.workType);
+    this.createRequesterKind.set(c.requesterType === 'lab' ? 'lab' : 'doctor');
     this.formDraft = {
+      labName: c.labName || '',
       doctor: c.doctor,
       patient: c.patient,
       patientPhone: c.patientPhone || '',
@@ -850,7 +861,14 @@ export class Secretary implements OnInit, OnDestroy {
         ? this.sharedCases.getCaseById(this.editingId)
         : undefined;
     const isStudentCase = existing?.requesterType === 'student';
+    const isLabCase =
+      existing?.requesterType === 'lab' ||
+      (this.dialogMode() === 'create' && this.createRequesterKind() === 'lab');
 
+    if (isLabCase && !(d.labName || '').trim()) {
+      this.flash('يرجى إدخال اسم المعمل');
+      return;
+    }
     if (!d.doctor.trim()) {
       this.flash('يرجى تعبئة اسم الطبيب');
       return;
@@ -908,8 +926,13 @@ export class Secretary implements OnInit, OnDestroy {
     }
 
     const formPayload = {
-      requesterType: isStudentCase ? ('student' as const) : ('doctor' as const),
+      requesterType: isStudentCase
+        ? ('student' as const)
+        : isLabCase
+          ? ('lab' as const)
+          : ('doctor' as const),
       studentPrice: isStudentCase ? Number(d.studentPrice || 0) : 0,
+      labName: isLabCase ? String(d.labName || '').trim() : '',
       doctor: docName,
       patient: patientName,
       patientEmail: existing?.patientEmail?.trim() || undefined,
@@ -1045,6 +1068,13 @@ export class Secretary implements OnInit, OnDestroy {
     return false;
   }
 
+  isLabDialog(): boolean {
+    if (this.dialogMode() === 'edit' && this.editingId) {
+      return this.sharedCases.getCaseById(this.editingId)?.requesterType === 'lab';
+    }
+    return this.createRequesterKind() === 'lab';
+  }
+
   private formatCaseApiError(err: unknown): string {
     if (err instanceof HttpErrorResponse) {
       const body = err.error as Record<string, unknown> | undefined;
@@ -1143,6 +1173,7 @@ export class Secretary implements OnInit, OnDestroy {
       caseNumber: string;
       doctor: string;
       patient: string;
+      labName?: string;
       workType: string;
       workDetail: string;
       color: string;
@@ -1152,22 +1183,28 @@ export class Secretary implements OnInit, OnDestroy {
   ): number {
     const doctor = this.normalizeSearchText(caseItem.doctor).replace(/^د\s+/, '').replace(/^dr\s+/, '');
     const patient = this.normalizeSearchText(caseItem.patient);
+    const labName = this.normalizeSearchText(caseItem.labName || '');
     const caseNumber = this.normalizeSearchText(caseItem.caseNumber);
     const queryTokens = query.split(' ').filter(Boolean);
     const patientHasAllTokens = queryTokens.every(token => patient.includes(token));
     const doctorHasAllTokens = queryTokens.every(token => doctor.includes(token));
+    const labHasAllTokens =
+      labName.length > 0 && queryTokens.every(token => labName.includes(token));
 
-    // Priority 1: patient/doctor starts with query
+    // Priority 1: patient/doctor/lab starts with query
     if (patient.startsWith(query)) return 120;
     if (doctor.startsWith(query)) return 110;
+    if (labName && labName.startsWith(query)) return 108;
 
-    // Priority 1.5: all query words found in patient/doctor
+    // Priority 1.5: all query words found in patient/doctor/lab
     if (patientHasAllTokens) return 105;
     if (doctorHasAllTokens) return 95;
+    if (labHasAllTokens) return 93;
 
-    // Priority 2: patient/doctor contains query
+    // Priority 2: patient/doctor/lab contains query
     if (patient.includes(query)) return 100;
     if (doctor.includes(query)) return 90;
+    if (labName && labName.includes(query)) return 88;
 
     // Priority 3: case number only
     if (caseNumber.includes(query)) return 80;
@@ -1301,7 +1338,8 @@ export class Secretary implements OnInit, OnDestroy {
     const deliveryDate = c.deliveryDate ? this.formatDateValue(c.deliveryDate) : null;
 
     const workTypeDisplay = this.formatWorkTypeForDisplay ? this.formatWorkTypeForDisplay(c.workType) : (c.workType || '');
-    const requesterLabel = c.requesterType === 'student' ? 'طالب' : 'دكتور';
+    const requesterLabel =
+      c.requesterType === 'student' ? 'طالب' : c.requesterType === 'lab' ? 'معمل' : 'دكتور';
 
     const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">

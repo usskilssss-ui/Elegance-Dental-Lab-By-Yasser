@@ -43,9 +43,10 @@ export function sanitizeCaseImageListForStorage(images: string[] | undefined): s
 }
 
 export type CaseMeta = {
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   studentPrice?: number;
   doctor?: string;
+  labName?: string;
   branch?: string;
   workDetail?: string;
   color?: string;
@@ -65,8 +66,9 @@ export type CaseMeta = {
 };
 
 export type SecretaryCaseFormPayload = {
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   studentPrice?: number;
+  labName?: string;
   doctor: string;
   patient: string;
   patientEmail?: string;
@@ -82,6 +84,14 @@ export type SecretaryCaseFormPayload = {
   branch?: string;
   exitedAt?: string;
 };
+
+function normalizeRequesterType(
+  value: string | undefined | null
+): 'doctor' | 'student' | 'lab' {
+  if (value === 'student') return 'student';
+  if (value === 'lab') return 'lab';
+  return 'doctor';
+}
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
   if (!notes || !notes.startsWith(META_PREFIX)) {
@@ -103,9 +113,10 @@ export function buildSecretaryNotes(
   plyPreserve?: { plyScanPath: string; plyFileName?: string }
 ): string {
   const meta: CaseMeta = {
-    requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType: normalizeRequesterType(form.requesterType),
     studentPrice: Number(form.studentPrice || 0),
     doctor: form.doctor,
+    labName: (form.labName || '').trim(),
     branch: (form.branch || '').trim(),
     workDetail: form.workDetail,
     color: form.color,
@@ -148,7 +159,7 @@ export function buildCreateCasePayload(
     patientName: (form.patient || '').trim() || 'غير محدد',
     patientEmail: email,
     patientPhone: phone,
-    requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType: normalizeRequesterType(form.requesterType),
     salaryAmount: Number(form.studentPrice || 0),
     caseType: (form.workType || '').trim(),
     priority: 'normal',
@@ -182,6 +193,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const id = String(doc['_id'] ?? doc['id'] ?? '');
   const meta = parseMeta(String(doc['notes'] ?? ''));
   const doctor = String(meta['doctor'] ?? '');
+  const labName = String(meta['labName'] ?? '').trim();
   const workDetail = String(meta['workDetail'] ?? '');
   const color = String(meta['color'] ?? '');
   const size = String(meta['size'] ?? '');
@@ -222,6 +234,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
       : 'السكرتارية';
 
   const instructionsLines = [
+    labName && `المعمل: ${labName}`,
     doctor && `الطبيب: ${doctor}`,
     `نوع العمل: ${caseType}${workDetail ? ' — ' + workDetail : ''}`,
     color && `اللون: ${color}`,
@@ -245,8 +258,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const plyFileName = String(meta['plyFileName'] ?? '');
   const plyScanUrl = plyScanPath ? normalizeCaseImageUrl(plyScanPath) : '';
   const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
-  const requesterType: 'doctor' | 'student' =
-    requesterTypeRaw === 'student' ? 'student' : 'doctor';
+  const requesterType = normalizeRequesterType(requesterTypeRaw);
   const salaryAmountRaw = doc['salaryAmount'];
   const salaryAmount =
     typeof salaryAmountRaw === 'number' && !Number.isNaN(salaryAmountRaw)
@@ -273,6 +285,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     priority: mapPriorityFromApi(String(doc['priority'] ?? 'normal')),
     patient: patientName,
     doctor,
+    labName: labName || undefined,
     clinic: String(meta['branch'] ?? ''),
     branch: String(meta['branch'] ?? ''),
     receivedDate: receivedDisplay || caseNumber,

@@ -8,12 +8,14 @@ export interface DentalCase {
   patient: string;
   doctor: string;
   clinic: string;
+  /** Referring lab name (lab cases) */
+  labName?: string;
   /** Branch from notes meta (doctor requests) */
   branch?: string;
   receivedDate: string;
   deliveryDate: string;
   enteredBy: string;
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   instructions: string;
   status:
     | 'pending'
