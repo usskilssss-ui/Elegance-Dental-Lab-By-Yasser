@@ -1,21 +1,18 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, switchMap } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import {
   buildCasePayloadFromPrintForm,
-  buildPrintData,
   formatWorkTypeForPrint,
 } from '../../core/utils/print-job.util';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
-import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
 
 function todayYmd(): string {
@@ -69,10 +66,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private readonly sharedCases = inject(SharedCasesService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
-  private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
 
-  private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
   private knownStatus = new Map<string, DoctorStage>();
   private notifHydrated = false;
@@ -701,7 +696,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.caseApi.updateCase(editId, casePayload).subscribe({
         next: () => {
           this.saveInProgress.set(false);
-          this.flash('✅ تم تحديث الريكويست');
+          this.flash('✅ تم تحديث الحالة');
+          this.closeDialog();
           this.loadCases();
         },
         error: (err) => {
@@ -713,32 +709,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.caseApi
-      .createCase(casePayload)
-      .pipe(
-        switchMap((res: { case?: { caseNumber?: string } }) => {
-          const caseNumber = String(res?.case?.caseNumber ?? '');
-          return this.http.post(`${this.apiBase}/print/job`, {
-            printData: buildPrintData(draft, caseNumber),
-          });
-        })
-      )
-      .subscribe({
-        next: () => {
-          this.saveInProgress.set(false);
-          this.flash(
-            d.urgent
-              ? '✅ تم حفظ الحالة المستعجلة وإرسالها للطباعة'
-              : '✅ تم حفظ الحالة وإرسال الريكويست للطباعة'
-          );
-          this.loadCases();
-        },
-        error: () => {
-          this.saveInProgress.set(false);
-          this.flash('❌ فشل الحفظ أو الطباعة، تحقق من الاتصال');
-          this.loadCases({ silent: true });
-        },
-      });
+    this.caseApi.createCase(casePayload).subscribe({
+      next: () => {
+        this.saveInProgress.set(false);
+        this.flash('✅ تم حفظ الحالة');
+        this.closeDialog();
+        this.loadCases();
+      },
+      error: () => {
+        this.saveInProgress.set(false);
+        this.flash('❌ فشل حفظ الحالة، تحقق من الاتصال');
+        this.loadCases({ silent: true });
+      },
+    });
   }
 
   logout(): void {

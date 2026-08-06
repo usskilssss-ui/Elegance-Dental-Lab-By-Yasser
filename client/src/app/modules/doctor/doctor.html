@@ -93,14 +93,14 @@
     <div class="page-header">
       <div class="page-header-text">
         <h1>لوحة تتبع حالات دكتور {{ doctorName() }}</h1>
-        <p>متابعة حالاتك في المعمل وإضافة ريكويست جديد للطباعة</p>
+        <p>متابعة حالاتك في المعمل وإضافة حالة جديدة</p>
       </div>
       <div class="case-create-actions">
         <button type="button" class="btn-primary" (click)="openDialog()" [disabled]="saveInProgress()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
           </svg>
-          إضافة ريكويست
+          إضافة حالة
         </button>
       </div>
     </div>
@@ -315,7 +315,7 @@
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="closeDetails()">إغلاق</button>
           @if (canEdit(dc)) {
-            <button type="button" class="btn-primary" (click)="openEditFromDetail()">تعديل الريكويست</button>
+            <button type="button" class="btn-primary" (click)="openEditFromDetail()">تعديل الحالة</button>
           }
         </div>
       </div>
@@ -325,7 +325,7 @@
   @if (dialogOpen()) {
     <div class="modal-backdrop" role="presentation" (click)="closeDialog()">
       <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">{{ dialogMode() === 'edit' ? 'تعديل الريكويست' : 'إضافة ريكويست' }}</h2>
+        <h2 class="modal-title">{{ dialogMode() === 'edit' ? 'تعديل الحالة' : 'إضافة حالة' }}</h2>
         <form class="case-form" (ngSubmit)="save()">
           <label class="form-field">
             <span>اسم المريض (ثنائي) <abbr title="مطلوب">*</abbr></span>
@@ -453,7 +453,7 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
             <button type="submit" class="btn-primary">
-              {{ dialogMode() === 'edit' ? 'حفظ التعديل' : 'حفظ وطباعة' }}
+              {{ dialogMode() === 'edit' ? 'حفظ التعديل' : 'حفظ الحالة' }}
             </button>
           </div>
         </form>

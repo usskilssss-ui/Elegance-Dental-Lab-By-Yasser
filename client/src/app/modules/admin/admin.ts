@@ -2266,7 +2266,7 @@ export class Admin implements OnInit, OnDestroy {
     return this.doctorPayments.filter(p => this.doctorGroupKey(p.doctorName) === key);
   }
 
-  printDoctorReceipt(): void {
+  saveDoctorReceiptPdf(): void {
     if (!this.reportDoctorFilter) return;
 
     const now = new Date();
@@ -2278,6 +2278,7 @@ export class Admin implements OnInit, OnDestroy {
     const casesCount = this.reportFilteredCases.length;
     const payments = this.getDoctorPaymentsList(doctorName);
     const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const safeFileName = `كشف-حساب-${doctorName}`.replace(/[\\/:*?"<>|]+/g, '_');
 
     let paymentsRows = '';
     if (payments.length === 0) {
@@ -2298,35 +2299,36 @@ export class Admin implements OnInit, OnDestroy {
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>كشف حساب — د. ${doctorName}</title>
+  <title>${safeFileName}</title>
   <style>
-    @page { margin: 2mm; size: 80mm auto; }
+    @page { margin: 12mm; size: A4; }
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     html, body { margin: 0; padding: 0; background: #fff; color: #000; }
     body {
       width: 100%;
-      max-width: 72mm;
+      max-width: 180mm;
       margin: 0 auto;
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 12px 16px;
+      font-size: 13px;
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
-    .dash { border-top: 1px dashed #555; margin: 6px 0; }
-    .solid { border-top: 2px solid #000; margin: 6px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-    th { padding: 4px 4px; font-weight: bold; border-bottom: 1px solid #000; }
-    td { padding: 3px 4px; }
+    .dash { border-top: 1px dashed #555; margin: 8px 0; }
+    .solid { border-top: 2px solid #000; margin: 8px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+    th { padding: 6px 4px; font-weight: bold; border-bottom: 1px solid #000; }
+    td { padding: 5px 4px; }
     .val-col { text-align: left; padding-left: 6px !important; }
+    .hint { text-align:center; font-size:11px; color:#555; margin-top:10px; }
   </style>
 </head>
 <body>
-  <div style="margin-bottom:6px;">
-    <div class="center bold" style="font-size:18px;letter-spacing:1px;">Elite Lab</div>
-    <div class="center" style="font-size:9px;color:#333;">Precision Dental Laboratories</div>
+  <div style="margin-bottom:8px;">
+    <div class="center bold" style="font-size:20px;letter-spacing:1px;">Elite Lab</div>
+    <div class="center" style="font-size:11px;color:#333;">Precision Dental Laboratories</div>
   </div>
   <div class="solid"></div>
-  <div class="center bold" style="font-size:13px;padding:2px 0;">كشف حساب — د. ${doctorName}</div>
+  <div class="center bold" style="font-size:15px;padding:4px 0;">كشف حساب — د. ${doctorName}</div>
   <div class="solid"></div>
   <table>
     <thead>
@@ -2340,7 +2342,7 @@ export class Admin implements OnInit, OnDestroy {
     </tbody>
   </table>
   <div class="dash"></div>
-  <div class="center bold" style="margin:4px 0;font-size:12px;">سجل الدفعات</div>
+  <div class="center bold" style="margin:4px 0;font-size:13px;">سجل الدفعات</div>
   <table>
     <thead>
       <tr>
@@ -2356,22 +2358,22 @@ export class Admin implements OnInit, OnDestroy {
   <div class="solid"></div>
   <table>
     <tbody>
-      <tr><td style="text-align:right;font-size:12px;" class="bold">إجمالي المتبقي</td><td class="bold val-col" style="font-size:12px;">${fmt(remaining)} EGP</td></tr>
-      <tr><td style="text-align:right;color:#444;" class="bold">تاريخ طباعة الوصل</td><td class="bold val-col" style="color:#444;white-space:nowrap;">${dateStr}</td></tr>
+      <tr><td style="text-align:right;font-size:13px;" class="bold">إجمالي المتبقي</td><td class="bold val-col" style="font-size:13px;">${fmt(remaining)} EGP</td></tr>
+      <tr><td style="text-align:right;color:#444;" class="bold">تاريخ حفظ الملف</td><td class="bold val-col" style="color:#444;white-space:nowrap;">${dateStr}</td></tr>
     </tbody>
   </table>
   <div class="dash"></div>
-  <div class="center" style="font-size:10px;margin-top:6px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
+  <div class="center" style="font-size:11px;margin-top:8px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
+  <div class="hint">اختر «Save as PDF» / «حفظ كـ PDF» من نافذة الطباعة لحفظ الملف</div>
   <script>
     window.onload = function() {
-      window.print();
-      window.onafterprint = function() { window.close(); };
+      setTimeout(function() { window.print(); }, 250);
     };
   </script>
 </body>
 </html>`;
 
-    const popup = window.open('', '_blank', 'width=380,height=650,toolbar=0,menubar=0,scrollbars=0');
+    const popup = window.open('', '_blank', 'width=820,height=900,toolbar=0,menubar=0,scrollbars=1');
     if (popup) {
       popup.document.write(html);
       popup.document.close();
