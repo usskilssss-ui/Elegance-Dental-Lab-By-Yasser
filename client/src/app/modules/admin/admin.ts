@@ -1123,11 +1123,6 @@ export class Admin implements OnInit, OnDestroy {
   get financialCostEligibleCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;
-      
-      // Skip Jundi (الجندي)
-      const doctor = (c.doctorName || c.assignedTo || '').toLowerCase();
-      const isJundi = doctor.includes('الجندي') || doctor.includes('jundi') || doctor.includes('gundi');
-      if (isJundi) return false;
 
       const ct = (c.caseType || '').toLowerCase();
       // Skip redo, remake, modification, unknown (غير معروف)
@@ -1330,44 +1325,6 @@ export class Admin implements OnInit, OnDestroy {
       }
     }
     return total;
-  }
-
-  /** الحالات الخارجة للدكتور الجندي فقط (بدون إعادة أو تعديل) */
-  get jundiExitedNonRedoCases(): AdminCaseRow[] {
-    return this.exitedNonRedoCases.filter(c => {
-      const doctor = (c.doctorName || c.assignedTo || '').toLowerCase();
-      return doctor.includes('الجندي') || doctor.includes('jundi') || doctor.includes('gundi');
-    });
-  }
-
-  /** عداد زيركون الجندي */
-  get jundiZirconCount(): number {
-    return this.jundiRegularZirconCount + this.jundiGermanZirconCount + this.jundiTitaniumCount + this.jundiPeekCount;
-  }
-
-  get jundiRegularZirconCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['zircon'], ['german']);
-  }
-
-  get jundiGermanZirconCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['german zircon', 'german'], []);
-  }
-
-  get jundiTitaniumCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['titanium'], []);
-  }
-
-  get jundiPeekCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['peek'], []);
-  }
-
-  /** عداد إيماكس الجندي */
-  get jundiEmaxCount(): number {
-    return this.countUnitsByKeywordsFromCases(
-      this.jundiExitedNonRedoCases,
-      ['emax'],
-      []
-    );
   }
 
   private countUnitsByKeywordsFromCases(cases: AdminCaseRow[], includeKeywords: string[], excludeKeywords: string[]): number {
