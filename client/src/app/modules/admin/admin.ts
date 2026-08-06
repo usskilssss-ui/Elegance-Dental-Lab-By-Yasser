@@ -1327,27 +1327,6 @@ export class Admin implements OnInit, OnDestroy {
     return total;
   }
 
-  private countUnitsByKeywordsFromCases(cases: AdminCaseRow[], includeKeywords: string[], excludeKeywords: string[]): number {
-    let total = 0;
-    for (const c of cases) {
-      const ct = c.caseType || '';
-      const parts = ct.split('+').map(p => p.trim());
-      const meta = this.parseNotesMeta(c.rawNotes || '');
-      const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
-
-      for (const part of parts) {
-        const lowerPart = part.toLowerCase();
-        const hasInclude = includeKeywords.some(kw => lowerPart.includes(kw));
-        const hasExclude = excludeKeywords.some(kw => lowerPart.includes(kw));
-        if (hasInclude && !hasExclude) {
-          const match = part.match(/\((\d+)\)/);
-          total += match ? parseInt(match[1], 10) : caseOverallQuantity;
-        }
-      }
-    }
-    return total;
-  }
-
   private loadCasesFromApi(): void {
     this.caseApi.getAllCases(1, 1500).subscribe({
       next: (res) => {
