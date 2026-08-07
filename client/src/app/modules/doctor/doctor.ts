@@ -110,6 +110,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     'Try in',
     'Mokup',
     'Night Guard',
+    'Removable Denture',
     'Wax',
     'Ring',
   ];
@@ -124,6 +125,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
   nightGuardType: 'Soft' | 'Hard' | '' = '';
+  removableDentureType: 'Acrylic' | 'Flex' | '' = '';
   workTypeError = '';
 
   readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
@@ -469,6 +471,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.removableDentureType = '';
     this.dialogOpen.set(true);
   }
 
@@ -507,6 +510,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.removableDentureType = '';
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
     this.dialogOpen.set(true);
   }
@@ -544,6 +548,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Night Guard');
         this.workTypeQuantities['Night Guard'] = qty;
         this.nightGuardType = wtName.includes('Hard') ? 'Hard' : 'Soft';
+      } else if (wtName.startsWith('Removable Denture')) {
+        this.selectedWorkTypes.add('Removable Denture');
+        this.workTypeQuantities['Removable Denture'] = qty;
+        this.removableDentureType = wtName.includes('Flex') ? 'Flex' : 'Acrylic';
       } else if (this.workTypeOptions.includes(wtName)) {
         this.selectedWorkTypes.add(wtName);
         this.workTypeQuantities[wtName] = qty;
@@ -566,6 +574,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.selectedWorkTypes.clear();
       this.workTypeQuantities = {};
       this.nightGuardType = '';
+      this.removableDentureType = '';
       this.workTypeError = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
@@ -579,10 +588,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
       if (type === 'Night Guard') this.nightGuardType = '';
+      if (type === 'Removable Denture') this.removableDentureType = '';
     } else {
       this.selectedWorkTypes.add(type);
       this.workTypeQuantities[type] = this.workTypeQuantities[type] || 1;
       if (type === 'Night Guard') this.nightGuardType = 'Soft';
+      if (type === 'Removable Denture') this.removableDentureType = 'Acrylic';
     }
     this.workTypeError = '';
     this.updateWorkTypeString();
@@ -604,6 +615,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.updateWorkTypeString();
   }
 
+  setRemovableDentureType(type: 'Acrylic' | 'Flex'): void {
+    this.removableDentureType = type;
+    this.updateWorkTypeString();
+  }
+
   onWorkTypeQtyChange(): void {
     this.updateWorkTypeString();
   }
@@ -622,6 +638,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
       let displayName = wt;
       if (wt === 'Night Guard') {
         displayName = this.nightGuardType ? `Night Guard ${this.nightGuardType}` : 'Night Guard';
+      } else if (wt === 'Removable Denture') {
+        displayName = this.removableDentureType
+          ? `Removable Denture ${this.removableDentureType}`
+          : 'Removable Denture';
       }
       if (this.selectedWorkTypes.size > 1 || q > 1) {
         parts.push(`${displayName} (${q})`);

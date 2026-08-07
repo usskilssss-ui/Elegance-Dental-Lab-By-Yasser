@@ -397,6 +397,16 @@
                 </div>
               }
 
+              @if (isWorkTypeSelected('Removable Denture')) {
+                <div class="night-guard-sub-container">
+                  <span class="night-guard-sub-title">نوع الـ Removable Denture:</span>
+                  <div class="night-guard-options">
+                    <button type="button" class="ng-sub-chip" [class.selected]="removableDentureType === 'Acrylic'" (click)="setRemovableDentureType('Acrylic')">Acrylic</button>
+                    <button type="button" class="ng-sub-chip" [class.selected]="removableDentureType === 'Flex'" (click)="setRemovableDentureType('Flex')">Flex</button>
+                  </div>
+                </div>
+              }
+
               @if (hasWorkTypesWithQuantity) {
                 <div class="wt-quantities-container">
                   <div class="wt-quantities-title">العدد لكل نوع:</div>

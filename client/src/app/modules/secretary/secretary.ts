@@ -356,7 +356,7 @@ export class Secretary implements OnInit, OnDestroy {
   readonly workTypeOptions = [
     'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
     'Peek', 'Titanium', 'Try in', 'Mokup',
-    'Night Guard', 'Wax', 'Ring'
+    'Night Guard', 'Removable Denture', 'Wax', 'Ring'
   ];
   readonly caseTypeOptions = [
     { value: 'New', label: 'جديد' },
@@ -396,6 +396,7 @@ export class Secretary implements OnInit, OnDestroy {
       this.selectedWorkTypes.clear();
       this.workTypeQuantities = {};
       this.nightGuardType = '';
+      this.removableDentureType = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
     } else {
@@ -407,6 +408,7 @@ export class Secretary implements OnInit, OnDestroy {
   workTypeQuantities: Record<string, number> = {};
   workTypeError = '';
   nightGuardType: 'Soft' | 'Hard' | '' = '';
+  removableDentureType: 'Acrylic' | 'Flex' | '' = '';
   patientWarning = '';
 
   readonly passwordDialogOpen = signal(false);
@@ -448,6 +450,11 @@ export class Secretary implements OnInit, OnDestroy {
 
   setNightGuardType(type: 'Soft' | 'Hard'): void {
     this.nightGuardType = type;
+    this.updateWorkTypeString();
+  }
+
+  setRemovableDentureType(type: 'Acrylic' | 'Flex'): void {
+    this.removableDentureType = type;
     this.updateWorkTypeString();
   }
 
@@ -501,6 +508,9 @@ export class Secretary implements OnInit, OnDestroy {
       if (type === 'Night Guard') {
         this.nightGuardType = '';
       }
+      if (type === 'Removable Denture') {
+        this.removableDentureType = '';
+      }
     } else {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
@@ -508,6 +518,7 @@ export class Secretary implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
+        this.removableDentureType = '';
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
@@ -515,6 +526,9 @@ export class Secretary implements OnInit, OnDestroy {
         this.workTypeQuantities[type] = 1;
         if (type === 'Night Guard') {
           this.nightGuardType = 'Soft';
+        }
+        if (type === 'Removable Denture') {
+          this.removableDentureType = 'Acrylic';
         }
       }
     }
@@ -543,6 +557,12 @@ export class Secretary implements OnInit, OnDestroy {
           displayName = `Night Guard ${this.nightGuardType}`;
         } else {
           displayName = 'Night Guard';
+        }
+      } else if (wt === 'Removable Denture') {
+        if (this.removableDentureType) {
+          displayName = `Removable Denture ${this.removableDentureType}`;
+        } else {
+          displayName = 'Removable Denture';
         }
       }
       
@@ -719,6 +739,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.workTypeQuantities = {};
     this.workTypeError = '';
     this.nightGuardType = '';
+    this.removableDentureType = '';
     this.patientWarning = '';
     this.existingPlyFileName = null;
     this.clearPlySelection();
@@ -770,6 +791,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.workTypeQuantities = {};
     this.workTypeError = '';
     this.nightGuardType = '';
+    this.removableDentureType = '';
     this.patientWarning = '';
     if (currentCaseType !== 'Empty' && c.workType) {
       let wtToParse = c.workType;
@@ -797,6 +819,14 @@ export class Secretary implements OnInit, OnDestroy {
               this.nightGuardType = 'Hard';
             } else {
               this.nightGuardType = 'Soft';
+            }
+          } else if (wtName.startsWith('Removable Denture')) {
+            this.selectedWorkTypes.add('Removable Denture');
+            this.workTypeQuantities['Removable Denture'] = qty;
+            if (wtName.includes('Flex')) {
+              this.removableDentureType = 'Flex';
+            } else {
+              this.removableDentureType = 'Acrylic';
             }
           } else if (this.workTypeOptions.includes(wtName)) {
             this.selectedWorkTypes.add(wtName);
