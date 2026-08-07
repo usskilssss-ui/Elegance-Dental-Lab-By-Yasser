@@ -1,5 +1,5 @@
-// archiver v8 is ESM; CJS require returns { ZipArchive, ... } not a callable.
-const { ZipArchive } = require('archiver');
+// archiver v8+ is ESM-only; stay on v7 for CommonJS (Railway Node 18).
+const archiver = require('archiver');
 const DentalCase = require('../models/DentalCase');
 const User = require('../models/User');
 const PrintJob = require('../models/PrintJob');
@@ -306,7 +306,7 @@ exports.exportMonthData = async (req, res) => {
 
     // Build the entire ZIP in memory first (avoids broken streams on Railway)
     const zipBuffer = await new Promise((resolve, reject) => {
-      const archive = new ZipArchive({ zlib: { level: 5 } });
+      const archive = archiver('zip', { zlib: { level: 5 } });
       const chunks = [];
       archive.on('data', (chunk) => chunks.push(chunk));
       archive.on('error', reject);
