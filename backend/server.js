@@ -7,9 +7,6 @@ const rateLimit = require('express-rate-limit');
 const http = require('http');
 const path = require('path');
 
-// Import database connection
-const connectDB = require('./config/database');
-
 // Import socket service
 const { setupSocket } = require('./services/socketService');
 
