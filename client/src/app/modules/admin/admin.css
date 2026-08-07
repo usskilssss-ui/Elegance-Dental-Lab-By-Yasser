@@ -593,6 +593,160 @@ tbody td { padding: 12px 16px; font-size: 12px; color: var(--color-text-primary)
   text-align: center;
 }
 
+.cash-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cash-summary-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 18px;
+}
+
+.cash-summary-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.cash-summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.cash-summary-card.income .cash-summary-value {
+  color: #059669;
+}
+
+.cash-summary-card.expense .cash-summary-value {
+  color: #dc2626;
+}
+
+.cash-summary-card.profit .cash-summary-value {
+  color: #185fa5;
+}
+
+.cash-summary-card.loss .cash-summary-value {
+  color: #b45309;
+}
+
+.cash-controls {
+  margin-bottom: 16px;
+}
+
+.cash-form-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+
+.cash-form-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--color-text-primary);
+}
+
+.cash-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.cash-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+  flex: 1;
+}
+
+.cash-field-wide {
+  flex: 2;
+  min-width: 220px;
+}
+
+.cash-field-action {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+.cash-field label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.cash-field input,
+.cash-field select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary, #fff);
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.cash-error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.cash-table-card {
+  overflow: auto;
+}
+
+.cash-type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cash-type-badge.income {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.cash-type-badge.expense {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.cash-amount-income {
+  color: #059669;
+  font-weight: 700;
+}
+
+.cash-amount-expense {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.cash-delete-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .cash-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .doctor-link-btn {
   border: none;
   background: transparent;

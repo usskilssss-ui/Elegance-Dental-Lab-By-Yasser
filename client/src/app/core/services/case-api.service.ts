@@ -153,4 +153,27 @@ export class CaseApiService {
   deleteDoctorPayment(id: string): Observable<any> {
     return this.http.delete(`${environment.apiUrl}/doctor-payments/${id}`);
   }
+
+  getCashEntries(params?: { from?: string; to?: string; type?: string }): Observable<any> {
+    const q = new URLSearchParams();
+    if (params?.from) q.set('from', params.from);
+    if (params?.to) q.set('to', params.to);
+    if (params?.type) q.set('type', params.type);
+    const qs = q.toString();
+    return this.http.get(`${environment.apiUrl}/cash-entries${qs ? `?${qs}` : ''}`);
+  }
+
+  addCashEntry(payload: {
+    type: 'income' | 'expense';
+    amount: number;
+    date?: string;
+    category?: string;
+    notes?: string;
+  }): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/cash-entries`, payload);
+  }
+
+  deleteCashEntry(id: string): Observable<any> {
+    return this.http.delete(`${environment.apiUrl}/cash-entries/${id}`);
+  }
 }

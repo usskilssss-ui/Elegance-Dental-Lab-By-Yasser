@@ -191,6 +191,24 @@ export class Admin implements OnInit, OnDestroy {
   financialYearFilter = '';
   financialMonthFilter = '';
   financialDoctorSearch = '';
+  cashViewMode: 'day' | 'month' = 'day';
+  cashDayFilter = '';
+  cashMonthFilter = '';
+  cashEntries: Array<{
+    _id: string;
+    type: 'income' | 'expense';
+    amount: number;
+    date: string | Date;
+    category?: string;
+    notes?: string;
+  }> = [];
+  cashLoading = false;
+  cashSaving = false;
+  cashError = '';
+  cashFormType: 'income' | 'expense' = 'expense';
+  cashFormAmount: number | null = null;
+  cashFormDate = '';
+  cashFormNotes = '';
   reportYearFilter = '';
   reportMonthFilter = '';
   aiYearFilter = '';
@@ -271,6 +289,10 @@ export class Admin implements OnInit, OnDestroy {
     this.loadStaffFromApi();
     if (this.activeNav === 'staff') {
       this.loadStaffFromApi();
+    }
+    if (this.activeNav === 'financials') {
+      this.ensureCashFiltersInitialized();
+      this.loadCashEntries();
     }
     this.connectCaseRealtime();
   }
@@ -1599,8 +1621,11 @@ export class Admin implements OnInit, OnDestroy {
     this.persistActiveNav();
     if (nav === 'staff' || nav === 'doctors' || nav === 'labs') {
       this.loadStaffFromApi();
-    } else if (nav === 'reports' || nav === 'financials') {
+    } else if (nav === 'reports') {
       this.loadFinancialReportFromApi();
+    } else if (nav === 'financials') {
+      this.ensureCashFiltersInitialized();
+      this.loadCashEntries();
     } else if (nav === 'archive') {
       this.loadArchiveList();
     }
@@ -2392,6 +2417,127 @@ export class Admin implements OnInit, OnDestroy {
         console.error('Error loading doctor payments:', err);
         this.doctorPayments = [];
       }
+    });
+  }
+
+  private localYmd(d = new Date()): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  private localYm(d = new Date()): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  ensureCashFiltersInitialized(): void {
+    if (!this.cashDayFilter) this.cashDayFilter = this.localYmd();
+    if (!this.cashMonthFilter) this.cashMonthFilter = this.localYm();
+    if (!this.cashFormDate) this.cashFormDate = this.cashDayFilter || this.localYmd();
+  }
+
+  private cashRange(): { from: string; to: string } {
+    if (this.cashViewMode === 'month') {
+      const [y, m] = (this.cashMonthFilter || this.localYm()).split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      const mm = String(m).padStart(2, '0');
+      return {
+        from: `${y}-${mm}-01`,
+        to: `${y}-${mm}-${String(last).padStart(2, '0')}`,
+      };
+    }
+    const day = this.cashDayFilter || this.localYmd();
+    return { from: day, to: day };
+  }
+
+  onCashFilterChange(): void {
+    if (this.cashViewMode === 'day' && this.cashDayFilter) {
+      this.cashFormDate = this.cashDayFilter;
+    }
+    this.loadCashEntries();
+  }
+
+  loadCashEntries(): void {
+    this.ensureCashFiltersInitialized();
+    this.cashLoading = true;
+    this.cashError = '';
+    const { from, to } = this.cashRange();
+    this.caseApi.getCashEntries({ from, to }).subscribe({
+      next: (res) => {
+        this.cashEntries = res?.data ?? [];
+        this.cashLoading = false;
+      },
+      error: (err) => {
+        this.cashEntries = [];
+        this.cashLoading = false;
+        this.cashError = 'تعذر تحميل الحركات: ' + (err.error?.message || err.message || '');
+      },
+    });
+  }
+
+  get cashIncomeTotal(): number {
+    return this.cashEntries
+      .filter((e) => e.type === 'income')
+      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  }
+
+  get cashExpenseTotal(): number {
+    return this.cashEntries
+      .filter((e) => e.type === 'expense')
+      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  }
+
+  get cashProfitTotal(): number {
+    return this.cashIncomeTotal - this.cashExpenseTotal;
+  }
+
+  formatCashDate(value: string | Date | undefined): string {
+    if (!value) return '—';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-GB');
+  }
+
+  addCashEntry(): void {
+    const amount = Number(this.cashFormAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      this.cashError = 'أدخل مبلغًا صحيحًا أكبر من صفر';
+      return;
+    }
+    this.cashSaving = true;
+    this.cashError = '';
+    this.caseApi
+      .addCashEntry({
+        type: this.cashFormType,
+        amount,
+        date: this.cashFormDate || this.localYmd(),
+        notes: (this.cashFormNotes || '').trim(),
+      })
+      .subscribe({
+        next: () => {
+          this.cashSaving = false;
+          this.cashFormAmount = null;
+          this.cashFormNotes = '';
+          this.loadCashEntries();
+        },
+        error: (err) => {
+          this.cashSaving = false;
+          this.cashError = 'تعذر إضافة الحركة: ' + (err.error?.message || err.message || '');
+        },
+      });
+  }
+
+  deleteCashEntry(id: string): void {
+    if (!id) return;
+    if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
+    this.caseApi.deleteCashEntry(id).subscribe({
+      next: () => this.loadCashEntries(),
+      error: (err) => {
+        this.cashError = 'تعذر الحذف: ' + (err.error?.message || err.message || '');
+      },
     });
   }
 
