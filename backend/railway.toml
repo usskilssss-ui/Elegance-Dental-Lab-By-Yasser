@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "node server.js"
-healthcheckPath = "/health"
-healthcheckTimeout = 100
+# No healthcheckPath: Mongo connect can exceed Railway's probe window and
+# roll back a good build. /health still exists for manual checks.
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

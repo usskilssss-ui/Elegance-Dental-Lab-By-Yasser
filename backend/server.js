@@ -156,31 +156,34 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-  try {
-    // Connect to MongoDB
-    await connectDB();
-
-    // Ensure print jobs TTL is 7 days (fixes stale 24h Mongo index if present)
-    const PrintJob = require('./models/PrintJob');
-    if (typeof PrintJob.ensurePrintJobTtlIndex === 'function') {
-      await PrintJob.ensurePrintJobTtlIndex();
-    }
-
-    // Start server
-    server.listen(PORT, () => {
+  // Bind immediately so Railway can reach the process even while Mongo connects.
+  await new Promise((resolve, reject) => {
+    server.listen(PORT, '0.0.0.0', (err) => {
+      if (err) return reject(err);
       console.log(`
 ╔════════════════════════════════════════╗
 ║   Dental System Backend Server Ready   ║
 ╠════════════════════════════════════════╣
-║   Port: ${PORT}                           
+║   Port: ${PORT}
 ║   Environment: ${process.env.NODE_ENV}
-║   Database: MongoDB
+║   Database: connecting…
 ║   Socket.io: Enabled
 ╚════════════════════════════════════════╝
       `);
+      resolve();
     });
+  });
+
+  try {
+    await connectDB();
+
+    const PrintJob = require('./models/PrintJob');
+    if (typeof PrintJob.ensurePrintJobTtlIndex === 'function') {
+      await PrintJob.ensurePrintJobTtlIndex();
+    }
+    console.log('MongoDB ready');
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('Failed to connect MongoDB after listen:', error);
     process.exit(1);
   }
 };
