@@ -66,7 +66,7 @@ router.use(authenticate);
 // Create case - Secretary, Admin, Requester, Doctor
 router.post(
   '/',
-  authorize('admin', 'secretary', 'requester', 'doctor'),
+  authorize('admin', 'secretary', 'requester', 'doctor', 'lab'),
   createCaseValidation,
   caseController.createCase
 );
@@ -84,7 +84,7 @@ router.post(
 router.get('/:id', caseController.getCaseById);
 
 // Update case (admin: any, secretary: own created, designer/finisher: assigned case)
-router.put('/:id', authorize('admin', 'secretary', 'designer', 'finisher', 'doctor'), updateCaseValidation, caseController.updateCase);
+router.put('/:id', authorize('admin', 'secretary', 'designer', 'finisher', 'doctor', 'lab'), updateCaseValidation, caseController.updateCase);
 router.put('/:id/financials', authorize('admin'), updateFinancialsValidation, caseController.updateCaseFinancials);
 router.delete('/:id', authorize('admin', 'secretary'), caseController.deleteCase);
 

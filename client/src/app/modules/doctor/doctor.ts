@@ -73,6 +73,18 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private notifHydrated = false;
 
   readonly doctorName = computed(() => this.auth.getSession()?.name?.trim() || '—');
+  readonly isLabPortal = computed(() => this.auth.getSession()?.role === 'lab');
+  readonly portalTitle = computed(() => {
+    const name = this.doctorName();
+    return this.isLabPortal()
+      ? `لوحة تحكم المعمل ${name}`
+      : `لوحة تتبع حالات دكتور ${name}`;
+  });
+  readonly portalSubtitle = computed(() =>
+    this.isLabPortal()
+      ? 'متابعة حالات المعمل وإضافة حالة جديدة'
+      : 'متابعة حالاتك في المعمل وإضافة حالة جديدة'
+  );
   readonly casesLoading = signal(true);
   readonly toast = signal<string | null>(null);
   readonly dialogOpen = signal(false);
@@ -639,9 +651,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   save(): void {
     const d = this.formDraft;
-    const doctor = this.doctorName();
-    if (!doctor || doctor === '—') {
-      this.flash('تعذر قراءة اسم الدكتور من الحساب');
+    const accountName = this.doctorName();
+    const isLab = this.isLabPortal();
+    if (!accountName || accountName === '—') {
+      this.flash(isLab ? 'تعذر قراءة اسم المعمل من الحساب' : 'تعذر قراءة اسم الدكتور من الحساب');
       return;
     }
     if (!d.patient?.trim()) {
@@ -675,7 +688,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.saveInProgress.set(true);
 
     const draft = {
-      doctor,
+      doctor: accountName,
       patient: d.patient.trim(),
       branch: d.branch.trim(),
       caseType: d.caseType,
@@ -688,7 +701,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
     };
 
     const casePayload = buildCasePayloadFromPrintForm(draft, {
-      requesterType: 'doctor',
+      requesterType: isLab ? 'lab' : 'doctor',
+      labName: isLab ? accountName : undefined,
       priority: d.urgent ? 'urgent' : isEdit ? 'normal' : undefined,
     });
 

@@ -297,6 +297,7 @@ export class AuthService {
       case 'requester':
         return '/requester/dashboard';
       case 'doctor':
+      case 'lab':
         return '/doctor/dashboard';
       case 'scanner1':
       case 'scanner2':
@@ -327,6 +328,7 @@ export class AuthService {
       v === 'finisher' ||
       v === 'requester' ||
       v === 'doctor' ||
+      v === 'lab' ||
       v === 'scanner1' ||
       v === 'scanner2' ||
       v === 'scanner3'

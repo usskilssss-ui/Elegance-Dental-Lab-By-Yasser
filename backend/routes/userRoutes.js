@@ -17,6 +17,7 @@ const updateUserValidation = [
     'finisher',
     'requester',
     'doctor',
+    'lab',
     'scanner1',
     'scanner2',
     'scanner3',

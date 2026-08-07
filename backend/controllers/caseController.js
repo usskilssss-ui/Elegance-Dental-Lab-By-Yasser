@@ -76,6 +76,24 @@ function forceDoctorNameInNotes(notes, doctorFullName) {
   return `${prefix}${JSON.stringify(meta)}`;
 }
 
+/** Force lab account name into notes meta (lab portal cannot spoof). */
+function forceLabNameInNotes(notes, labFullName) {
+  const prefix = '__META__\n';
+  const name = String(labFullName || '').trim();
+  let meta = {};
+  if (notes && typeof notes === 'string' && notes.startsWith(prefix)) {
+    try {
+      meta = JSON.parse(notes.slice(prefix.length)) || {};
+    } catch {
+      meta = {};
+    }
+  }
+  meta.labName = name;
+  meta.doctor = name;
+  meta.requesterType = 'lab';
+  return `${prefix}${JSON.stringify(meta)}`;
+}
+
 function normalizeDoctorKey(name) {
   return String(name || '')
     .trim()
@@ -125,10 +143,13 @@ exports.createCase = async (req, res) => {
     } =
       req.body;
 
-    // Doctor accounts: lock referring doctor name to the logged-in user
+    // Doctor / lab accounts: lock referring name to the logged-in user
     if (req.user?.role === 'doctor') {
       notes = forceDoctorNameInNotes(notes, req.user.fullName);
       requesterType = 'doctor';
+    } else if (req.user?.role === 'lab') {
+      notes = forceLabNameInNotes(notes, req.user.fullName);
+      requesterType = 'lab';
     }
 
     const normalizedRequesterType =
@@ -241,9 +262,10 @@ exports.getAllCases = async (req, res) => {
       ];
     }
 
-    // Resolve doctor identity when JWT is present (optional auth on GET /)
-    let doctorFullName = '';
+    // Resolve doctor/lab identity when JWT is present (optional auth on GET /)
+    let portalFullName = '';
     let isDoctor = req.user?.role === 'doctor';
+    let isLab = req.user?.role === 'lab';
     if (req.user?.userId || req.user?.id) {
       const uid = req.user.id || req.user.userId;
       if (!req.user.fullName || !req.user.role) {
@@ -252,16 +274,17 @@ exports.getAllCases = async (req, res) => {
           req.user.fullName = u.fullName;
           req.user.role = u.role;
           isDoctor = u.role === 'doctor';
+          isLab = u.role === 'lab';
         }
       }
-      if (isDoctor) doctorFullName = String(req.user.fullName || '').trim();
+      if (isDoctor || isLab) portalFullName = String(req.user.fullName || '').trim();
     }
 
-    // Doctor portal: filter by indexed referringDoctor (+ legacy notes match)
-    if (isDoctor && doctorFullName) {
-      const doctorClause = {
+    // Doctor/lab portal: filter by indexed referringDoctor (+ legacy notes match)
+    if ((isDoctor || isLab) && portalFullName) {
+      const portalClause = {
         $or: [
-          { referringDoctor: new RegExp(`^${escapeRegex(doctorFullName)}$`, 'i') },
+          { referringDoctor: new RegExp(`^${escapeRegex(portalFullName)}$`, 'i') },
           {
             $and: [
               {
@@ -272,10 +295,10 @@ exports.getAllCases = async (req, res) => {
                 ],
               },
               {
-                notes: new RegExp(
-                  `"doctor"\\s*:\\s*"${escapeRegex(doctorFullName)}"`,
-                  'i'
-                ),
+                notes: {
+                  $regex: `"(doctor|labName)"\\s*:\\s*"${escapeRegex(portalFullName)}"`,
+                  $options: 'i',
+                },
               },
             ],
           },
@@ -284,9 +307,9 @@ exports.getAllCases = async (req, res) => {
       if (filter.$or) {
         const searchOr = filter.$or;
         delete filter.$or;
-        filter.$and = [{ $or: searchOr }, doctorClause];
+        filter.$and = [{ $or: searchOr }, portalClause];
       } else {
-        Object.assign(filter, doctorClause);
+        Object.assign(filter, portalClause);
       }
     }
 
@@ -1258,17 +1281,19 @@ exports.updateCase = async (req, res) => {
       }
     }
 
-    // Doctor may edit only their own cases before design starts
-    // Exception: doctors may set priority (urgent/normal) on their cases at any stage
-    if (req.user.role === 'doctor') {
+    // Doctor/lab may edit only their own cases before design starts
+    // Exception: may set priority (urgent/normal) on their cases at any stage
+    if (req.user.role === 'doctor' || req.user.role === 'lab') {
       const meta = parseNotesMeta(dentalCase.notes || '');
-      const doctorName = String(meta.doctor || meta.doctorName || dentalCase.referringDoctor || '')
+      const ownerName = String(
+        meta.labName || meta.doctor || meta.doctorName || dentalCase.referringDoctor || ''
+      )
         .trim()
         .toLowerCase();
       const me = String(req.user.fullName || '')
         .trim()
         .toLowerCase();
-      if (!me || doctorName !== me) {
+      if (!me || ownerName !== me) {
         return res.status(403).json({ message: 'يمكنك تعديل حالاتك فقط' });
       }
 

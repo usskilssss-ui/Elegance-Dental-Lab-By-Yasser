@@ -80,7 +80,7 @@ exports.register = async (req, res) => {
       department,
       isActive: true,
     });
-    if (role === 'doctor') {
+    if (role === 'doctor' || role === 'lab') {
       user.loginPasswordVisible = password;
     }
 
@@ -179,7 +179,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = String(newPassword);
-    if (user.role === 'doctor') {
+    if (user.role === 'doctor' || user.role === 'lab') {
       user.loginPasswordVisible = String(newPassword);
     }
     await user.save();

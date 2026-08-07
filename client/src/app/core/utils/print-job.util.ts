@@ -50,10 +50,22 @@ export function buildPrintData(draft: PrintFormDraft, caseNumber: string) {
 
 export function buildCasePayloadFromPrintForm(
   draft: PrintFormDraft,
-  opts?: { requesterType?: 'doctor' | 'student'; priority?: string; date?: string }
+  opts?: {
+    requesterType?: 'doctor' | 'student' | 'lab';
+    labName?: string;
+    priority?: string;
+    date?: string;
+  }
 ) {
+  const requesterType =
+    opts?.requesterType === 'student'
+      ? 'student'
+      : opts?.requesterType === 'lab'
+        ? 'lab'
+        : 'doctor';
   const payload = buildCreateCasePayload({
-    requesterType: opts?.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType,
+    labName: opts?.labName || (requesterType === 'lab' ? draft.doctor.trim() : ''),
     doctor: draft.doctor.trim(),
     patient: draft.patient.trim(),
     workType: draft.workType.trim(),

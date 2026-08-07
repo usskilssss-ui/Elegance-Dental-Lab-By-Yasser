@@ -92,8 +92,8 @@
   <main class="dashboard">
     <div class="page-header">
       <div class="page-header-text">
-        <h1>لوحة تتبع حالات دكتور {{ doctorName() }}</h1>
-        <p>متابعة حالاتك في المعمل وإضافة حالة جديدة</p>
+        <h1>{{ portalTitle() }}</h1>
+        <p>{{ portalSubtitle() }}</p>
       </div>
       <div class="case-create-actions">
         <button type="button" class="btn-primary" (click)="openDialog()" [disabled]="saveInProgress()">

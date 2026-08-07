@@ -43,6 +43,7 @@ const userSchema = new mongoose.Schema(
         'finisher',
         'requester',
         'doctor',
+        'lab',
         'scanner1',
         'scanner2',
         'scanner3',

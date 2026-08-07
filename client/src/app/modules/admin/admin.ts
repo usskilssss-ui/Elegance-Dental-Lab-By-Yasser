@@ -305,13 +305,21 @@ export class Admin implements OnInit, OnDestroy {
 
   staffMembers: StaffMember[] = [];
   doctorMembers: StaffMember[] = [];
+  labMembers: StaffMember[] = [];
   doctorSearchTerm = '';
   doctorLoadError = '';
+  labSearchTerm = '';
+  labLoadError = '';
   showDoctorModal = false;
   isDoctorEditMode = false;
   doctorSaving = false;
   doctorModalError = '';
   showDoctorPassword = false;
+  showLabModal = false;
+  isLabEditMode = false;
+  labSaving = false;
+  labModalError = '';
+  showLabPassword = false;
   currentDoctor: StaffMember = {
     id: '',
     name: '',
@@ -319,6 +327,16 @@ export class Admin implements OnInit, OnDestroy {
     password: '',
     phone: '',
     position: 'دكتور',
+    status: 'active',
+    joinDate: new Date().toISOString().split('T')[0],
+  };
+  currentLab: StaffMember = {
+    id: '',
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    position: 'معمل',
     status: 'active',
     joinDate: new Date().toISOString().split('T')[0],
   };
@@ -343,7 +361,9 @@ export class Admin implements OnInit, OnDestroy {
   ] as const;
 
   get filteredStaff(): StaffMember[] {
-    const staffOnly = this.staffMembers.filter((s) => s.position !== 'دكتور');
+    const staffOnly = this.staffMembers.filter(
+      (s) => s.position !== 'دكتور' && s.position !== 'معمل'
+    );
     if (!this.searchTerm.trim()) return staffOnly;
     const search = this.searchTerm.toLowerCase();
     return staffOnly.filter(
@@ -358,6 +378,17 @@ export class Admin implements OnInit, OnDestroy {
     if (!this.doctorSearchTerm.trim()) return this.doctorMembers;
     const search = this.doctorSearchTerm.toLowerCase();
     return this.doctorMembers.filter(
+      (d) =>
+        d.name.toLowerCase().includes(search) ||
+        d.email.toLowerCase().includes(search) ||
+        d.phone.includes(search)
+    );
+  }
+
+  get filteredLabs(): StaffMember[] {
+    if (!this.labSearchTerm.trim()) return this.labMembers;
+    const search = this.labSearchTerm.toLowerCase();
+    return this.labMembers.filter(
       (d) =>
         d.name.toLowerCase().includes(search) ||
         d.email.toLowerCase().includes(search) ||
@@ -1566,7 +1597,7 @@ export class Admin implements OnInit, OnDestroy {
     }
     this.activeNav = nav;
     this.persistActiveNav();
-    if (nav === 'staff' || nav === 'doctors') {
+    if (nav === 'staff' || nav === 'doctors' || nav === 'labs') {
       this.loadStaffFromApi();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
@@ -1799,14 +1830,19 @@ export class Admin implements OnInit, OnDestroy {
           (m) => String(m.email || '').trim().toLowerCase() !== 'mentor@dental.com'
         );
         this.doctorMembers = visible.filter((m) => m.position === 'دكتور');
-        this.staffMembers = visible.filter((m) => m.position !== 'دكتور');
+        this.labMembers = visible.filter((m) => m.position === 'معمل');
+        this.staffMembers = visible.filter(
+          (m) => m.position !== 'دكتور' && m.position !== 'معمل'
+        );
       },
       error: (err) => {
         console.error(err);
         this.staffLoadError = 'تعذر تحميل قائمة الموظفين من الخادم';
         this.doctorLoadError = 'تعذر تحميل قائمة الدكاترة من الخادم';
+        this.labLoadError = 'تعذر تحميل قائمة المعامل من الخادم';
         this.staffMembers = [];
         this.doctorMembers = [];
+        this.labMembers = [];
       },
     });
   }
@@ -1871,6 +1907,7 @@ export class Admin implements OnInit, OnDestroy {
     if (r === 'finisher') return 'مسؤول الطباعة';
     if (r === 'requester') return 'ريكويست';
     if (r === 'doctor') return 'دكتور';
+    if (r === 'lab') return 'معمل';
     if (r === 'scanner1') return 'سكان 1';
     if (r === 'scanner2') return 'سكان 2';
     if (r === 'scanner3') return 'سكان 3';
@@ -1885,6 +1922,7 @@ export class Admin implements OnInit, OnDestroy {
     if (p === 'finisher' || p === 'مسؤول الطباعة' || p === 'فني تشطيب') return 'finisher';
     if (p === 'requester' || p === 'ريكويست') return 'requester';
     if (p === 'doctor' || p === 'دكتور') return 'doctor';
+    if (p === 'lab' || p === 'معمل') return 'lab';
     if (p === 'scanner1' || p === 'سكان 1' || p === 'سكان١') return 'scanner1';
     if (p === 'scanner2' || p === 'سكان 2' || p === 'سكان٢') return 'scanner2';
     if (p === 'scanner3' || p === 'سكان 3' || p === 'سكان٣') return 'scanner3';
@@ -2017,6 +2055,136 @@ export class Admin implements OnInit, OnDestroy {
         error: (err) => {
           this.doctorSaving = false;
           this.doctorModalError = err?.error?.message || 'تعذر إنشاء الحساب';
+        },
+      });
+  }
+
+  openAddLabModal() {
+    this.isLabEditMode = false;
+    this.labModalError = '';
+    this.showLabPassword = false;
+    this.currentLab = {
+      id: '',
+      name: '',
+      email: '',
+      password: '',
+      phone: '',
+      position: 'معمل',
+      status: 'active',
+      joinDate: new Date().toISOString().split('T')[0],
+    };
+    this.showLabModal = true;
+  }
+
+  openEditLabModal(lab: StaffMember) {
+    this.isLabEditMode = true;
+    this.labModalError = '';
+    this.showLabPassword = true;
+    this.currentLab = { ...lab, password: '', position: 'معمل' };
+    this.showLabModal = true;
+  }
+
+  closeLabModal() {
+    this.showLabModal = false;
+    this.showLabPassword = false;
+    this.labModalError = '';
+    this.labSaving = false;
+  }
+
+  toggleLabActive(lab: StaffMember): void {
+    if (!lab.id) return;
+    const targetActive = lab.status !== 'active';
+    this.userApi.updateUser(lab.id, { isActive: targetActive }).subscribe({
+      next: () => this.loadStaffFromApi(),
+      error: (err) => {
+        console.error(err);
+        this.labLoadError = 'تعذر تحديث حالة الحساب';
+      },
+    });
+  }
+
+  deleteLab(lab: StaffMember): void {
+    if (!lab.id) return;
+    const ok = confirm(`هل أنت متأكد من حذف حساب معمل ${lab.name} نهائياً؟`);
+    if (!ok) return;
+    this.userApi.deleteUser(lab.id).subscribe({
+      next: () => this.loadStaffFromApi(),
+      error: (err) => {
+        console.error(err);
+        this.labLoadError = 'تعذر حذف الحساب';
+      },
+    });
+  }
+
+  saveLab(): void {
+    this.labModalError = '';
+    const name = (this.currentLab.name || '').trim();
+    const email = (this.currentLab.email || '').trim();
+    const phone = (this.currentLab.phone || '').trim() || '0000000000';
+    if (!name) {
+      this.labModalError = 'يرجى إدخال اسم المعمل';
+      return;
+    }
+    if (!email) {
+      this.labModalError = 'يرجى إدخال البريد الإلكتروني';
+      return;
+    }
+
+    if (this.isLabEditMode) {
+      if (!this.currentLab.id) return;
+      const patch: Record<string, unknown> = {
+        fullName: name,
+        phone,
+        role: 'lab',
+        department: 'معمل',
+        isActive: this.currentLab.status === 'active',
+      };
+      if (this.currentLab.password?.trim()) {
+        if (this.currentLab.password.trim().length < 6) {
+          this.labModalError = 'كلمة المرور يجب ألا تقل عن 6 أحرف';
+          return;
+        }
+        patch['password'] = this.currentLab.password.trim();
+      }
+      this.labSaving = true;
+      this.userApi.updateUser(this.currentLab.id, patch).subscribe({
+        next: () => {
+          this.labSaving = false;
+          this.closeLabModal();
+          this.loadStaffFromApi();
+        },
+        error: (err) => {
+          this.labSaving = false;
+          this.labModalError = err?.error?.message || 'تعذر تحديث الحساب';
+        },
+      });
+      return;
+    }
+
+    if (!this.currentLab.password || this.currentLab.password.length < 6) {
+      this.labModalError = 'كلمة المرور يجب ألا تقل عن 6 أحرف';
+      return;
+    }
+
+    this.labSaving = true;
+    this.auth
+      .registerStaff({
+        fullName: name,
+        email: email.toLowerCase(),
+        phone,
+        password: this.currentLab.password,
+        role: 'lab',
+        department: 'معمل',
+      })
+      .subscribe({
+        next: () => {
+          this.labSaving = false;
+          this.closeLabModal();
+          this.loadStaffFromApi();
+        },
+        error: (err) => {
+          this.labSaving = false;
+          this.labModalError = err?.error?.message || 'تعذر إنشاء الحساب';
         },
       });
   }

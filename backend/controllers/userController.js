@@ -91,7 +91,7 @@ exports.updateUser = async (req, res) => {
         return res.status(403).json({ message: 'Only admin can set passwords' });
       }
       user.password = password;
-      if ((role || user.role) === 'doctor') {
+      if ((role || user.role) === 'doctor' || (role || user.role) === 'lab') {
         user.loginPasswordVisible = password;
       }
     }
@@ -206,7 +206,7 @@ exports.getUsersByRole = async (req, res) => {
   try {
     const { role } = req.params;
 
-    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor'];
+    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor', 'lab'];
 
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
