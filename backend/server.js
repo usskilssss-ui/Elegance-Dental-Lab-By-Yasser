@@ -158,24 +158,20 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   // Bind immediately so Railway can reach the process even while Mongo connects.
   await new Promise((resolve, reject) => {
-    server.listen(PORT, '0.0.0.0', (err) => {
-      if (err) return reject(err);
-      console.log(`
-╔════════════════════════════════════════╗
-║   Dental System Backend Server Ready   ║
-╠════════════════════════════════════════╣
-║   Port: ${PORT}
-║   Environment: ${process.env.NODE_ENV}
-║   Database: connecting…
-║   Socket.io: Enabled
-╚════════════════════════════════════════╝
-      `);
+    const onError = (err) => reject(err);
+    server.once('error', onError);
+    server.listen(Number(PORT), '0.0.0.0', () => {
+      server.off('error', onError);
+      console.log(
+        `Elite backend listening on 0.0.0.0:${PORT} env=${process.env.NODE_ENV || 'undefined'} mongoUriSet=${Boolean(process.env.MONGODB_URI)}`
+      );
       resolve();
     });
   });
 
   try {
-    await connectDB();
+    const { connectDBWithRetry } = require('./config/database');
+    await connectDBWithRetry(30, 3000);
 
     const PrintJob = require('./models/PrintJob');
     if (typeof PrintJob.ensurePrintJobTtlIndex === 'function') {
@@ -183,18 +179,21 @@ const startServer = async () => {
     }
     console.log('MongoDB ready');
   } catch (error) {
-    console.error('Failed to connect MongoDB after listen:', error);
-    process.exit(1);
+    // Keep process alive so Deploy Logs stay readable; API will error until Mongo works.
+    console.error('MongoDB still unavailable after retries:', error.message || error);
   }
 };
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (error) => {
   console.error('Unhandled Rejection:', error);
-  process.exit(1);
 });
 
-// Start the server
-startServer();
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+startServer().catch((error) => {
+  console.error('Fatal startServer error:', error);
+});
 
 module.exports = app;
