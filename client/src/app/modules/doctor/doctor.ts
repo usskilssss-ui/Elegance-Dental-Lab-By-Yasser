@@ -15,6 +15,7 @@ import {
 } from '../../core/utils/print-job.util';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
 
@@ -72,6 +73,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+  public readonly pwa = inject(PwaInstallService);
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];

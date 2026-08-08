@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { PwaInstallService } from '../../core/services/pwa-install.service';
 
 @Component({
   selector: 'app-login',
@@ -13,19 +14,29 @@ import { ThemeService } from '../../core/services/theme.service';
   templateUrl: './login.html',
   styleUrl: './login.css',
 })
-export class Login {
+export class Login implements OnInit {
   email = '';
   password = '';
   showPassword = false;
+  rememberEmail = true;
   loginError = '';
   submitting = false;
   public themeService = inject(ThemeService);
+  public readonly pwa = inject(PwaInstallService);
 
   constructor(
     private router: Router,
     private route: ActivatedRoute,
     private auth: AuthService
   ) {}
+
+  ngOnInit(): void {
+    const remembered = this.pwa.getRememberedEmail();
+    if (remembered) {
+      this.email = remembered;
+      this.rememberEmail = true;
+    }
+  }
 
   togglePassword(): void {
     this.showPassword = !this.showPassword;
@@ -42,6 +53,9 @@ export class Login {
     this.auth.login(email, this.password).subscribe({
       next: () => {
         this.submitting = false;
+        if (this.rememberEmail) this.pwa.setRememberedEmail(email);
+        else this.pwa.setRememberedEmail(null);
+
         const returnUrl = this.safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
         if (returnUrl) {
           void this.router.navigateByUrl(returnUrl);
@@ -57,6 +71,10 @@ export class Login {
         this.loginError = this.formatLoginError(err);
       },
     });
+  }
+
+  async installApp(): Promise<void> {
+    await this.pwa.promptInstall();
   }
 
   private formatLoginError(err: unknown): string {

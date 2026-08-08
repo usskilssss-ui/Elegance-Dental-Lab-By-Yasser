@@ -15,6 +15,38 @@
       <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
     </svg>
   </button>
+
+  @if (pwa.isInAppBrowser()) {
+    <div class="access-banner access-banner--warn" dir="rtl" role="alert">
+      <div class="access-banner-text">
+        <strong>افتح من المتصفح، مش من واتساب</strong>
+        <span>فتح اللينك من واتساب بيخلي الحساب يتشال. انسخ اللينك وافتحه من Chrome أو Safari مرة واحدة، وثبّت التطبيق على الشاشة الرئيسية.</span>
+      </div>
+      <div class="access-banner-actions">
+        <button type="button" class="access-btn" (click)="pwa.copyAppLink()">
+          {{ pwa.copied() ? 'تم النسخ ✓' : 'نسخ اللينك' }}
+        </button>
+        <button type="button" class="access-btn access-btn--primary" (click)="pwa.openInSystemBrowser()">فتح في المتصفح</button>
+      </div>
+    </div>
+  } @else if (pwa.showInstallHint() && !pwa.isStandalone()) {
+    <div class="access-banner" dir="rtl" role="status">
+      <div class="access-banner-text">
+        <strong>ثبّت التطبيق على الموبايل</strong>
+        <span>بعد تسجيل الدخول مرة واحدة، ثبّته على الشاشة الرئيسية وافتحه من الأيقونة — من غير واتساب كل مرة.</span>
+        @if (pwa.isIos()) {
+          <span class="access-ios-hint">آيفون: شارك ← Add to Home Screen</span>
+        }
+      </div>
+      <div class="access-banner-actions">
+        @if (pwa.canInstall()) {
+          <button type="button" class="access-btn access-btn--primary" (click)="installApp()">تثبيت الآن</button>
+        }
+        <button type="button" class="access-btn" (click)="pwa.dismissInstallHint()">إخفاء</button>
+      </div>
+    </div>
+  }
+
   <div class="login-shell" dir="rtl">
     <div class="login-card">
       <section class="form-panel">
@@ -90,6 +122,11 @@
               </button>
             </div>
           </div>
+
+          <label class="remember-row">
+            <input type="checkbox" name="rememberEmail" [(ngModel)]="rememberEmail" />
+            <span>تذكر البريد الإلكتروني على هذا الجهاز</span>
+          </label>
 
           <button type="submit" class="btn-login" [disabled]="submitting">
             {{ submitting ? 'جاري الدخول…' : 'تسجيل الدخول' }}
