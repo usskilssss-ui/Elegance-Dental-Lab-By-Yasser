@@ -836,12 +836,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.caseApi.createCase({ ...casePayload, autoExit: true }).subscribe({
+    this.caseApi.createCase(casePayload).subscribe({
       next: () => {
         this.saveInProgress.set(false);
-        this.flash('✅ تم حفظ الحالة وإخراجها');
+        this.flash('✅ تم حفظ الحالة');
         this.closeDialog();
-        this.activeFilter.set('exited');
         this.loadCases();
       },
       error: () => {

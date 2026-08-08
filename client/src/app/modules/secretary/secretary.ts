@@ -1109,7 +1109,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
       const ply = this.selectedPlyFile;
-      this.caseApi.createCase({ ...buildCreateCasePayload(formPayload), autoExit: true }).subscribe({
+      this.caseApi.createCase(buildCreateCasePayload(formPayload)).subscribe({
         next: (res) => {
           const caseId = String(
             (res as { case?: { _id?: string; id?: string } })?.case?._id ??
@@ -1120,26 +1120,25 @@ export class Secretary implements OnInit, OnDestroy {
             this.saveInProgress.set(false);
             this.flash(msg);
             this.closeDialog();
-            this.activeFilter.set('exited');
             this.reloadCasesFromBackend();
           };
           if (ply && caseId) {
             this.caseApi.uploadCasePly(caseId, ply).subscribe({
-              next: () => done('تمت إضافة الحالة وإخراجها ورفع ملف PLY'),
+              next: () => done('تمت إضافة الحالة ورفع ملف PLY'),
               error: (err: unknown) => {
                 this.saveInProgress.set(false);
                 const detail = this.formatCaseApiError(err);
                 this.flash(
                   detail
-                    ? `تم إنشاء الحالة وإخراجها، لكن فشل رفع PLY: ${detail}`
-                    : 'تم إنشاء الحالة وإخراجها لكن تعذر رفع ملف PLY'
+                    ? `تم إنشاء الحالة، لكن فشل رفع PLY: ${detail}`
+                    : 'تم إنشاء الحالة لكن تعذر رفع ملف PLY'
                 );
                 this.closeDialog();
                 this.reloadCasesFromBackend();
               },
             });
           } else {
-            done('تمت إضافة الحالة وإخراجها تلقائيًا');
+            done('تمت إضافة الحالة في النظام');
           }
         },
         error: (err: unknown) => {
@@ -1260,6 +1259,14 @@ export class Secretary implements OnInit, OnDestroy {
         this.flash(this.formatCaseApiError(err));
       },
     });
+  }
+
+  onExitCheckbox(c: any, event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    if (!input) return;
+    if (!input.checked) return;
+    input.checked = false;
+    this.confirmExit(c);
   }
 
   toggleMenu(id: string, ev: Event): void {
