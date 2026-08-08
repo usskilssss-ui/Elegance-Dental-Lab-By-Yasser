@@ -490,6 +490,17 @@
             <input type="text" name="workDetail" [(ngModel)]="formDraft.workDetail" autocomplete="off" />
           </label>
 
+          <div class="form-field">
+            <span>رفع ملف السكان <span class="label-optional">(اختياري — PLY)</span></span>
+            <input type="file" accept=".ply,.stl,.obj,model/*,*/*" (change)="onPlyFileSelected($event)" />
+            @if (selectedPlyFile) {
+              <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:13px;">
+                <span>{{ selectedPlyFile.name }}</span>
+                <button type="button" class="btn-secondary" style="padding:4px 10px;" (click)="clearPlyFile()">إزالة</button>
+              </div>
+            }
+          </div>
+
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
             <button type="submit" class="btn-primary">
@@ -497,6 +508,34 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  }
+
+  @if (pinSetupOpen()) {
+    <div class="modal-backdrop" role="presentation" (click)="skipPinSetup()">
+      <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()" style="max-width:420px;">
+        <h2 class="modal-title">دخولية أسرع المرة الجاية</h2>
+        <p style="margin:0 0 12px;color:#64748b;font-size:14px;line-height:1.5;">
+          اضبط رقم سري من 4–6 أرقام. بعدها تدخل بيه بدل كلمة المرور الطويلة.
+        </p>
+        <label class="form-field">
+          <span>الرقم السري</span>
+          <input type="password" inputmode="numeric" maxlength="6" [(ngModel)]="pinDraft" placeholder="••••" />
+        </label>
+        <label class="form-field">
+          <span>تأكيد الرقم السري</span>
+          <input type="password" inputmode="numeric" maxlength="6" [(ngModel)]="pinConfirm" placeholder="••••" />
+        </label>
+        @if (pinError) {
+          <p style="color:#dc2626;font-size:13px;">{{ pinError }}</p>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="skipPinSetup()" [disabled]="pinSaving">لاحقًا</button>
+          <button type="button" class="btn-primary" (click)="savePinSetup()" [disabled]="pinSaving">
+            {{ pinSaving ? 'جاري الحفظ…' : 'حفظ الرقم السري' }}
+          </button>
+        </div>
       </div>
     </div>
   }

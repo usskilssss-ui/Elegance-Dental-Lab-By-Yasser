@@ -127,7 +127,7 @@ const plyUploadMiddleware = (req, res, next) => {
 
 router.post(
   '/:id/upload-ply',
-  authorize('admin', 'secretary'),
+  authorize('admin', 'secretary', 'doctor'),
   plyUploadMiddleware,
   caseController.uploadCasePly
 );

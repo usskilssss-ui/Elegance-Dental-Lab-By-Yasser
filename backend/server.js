@@ -177,6 +177,12 @@ const startServer = async () => {
 ║   Socket.io: Enabled
 ╚════════════════════════════════════════╝
       `);
+      try {
+        const { scheduleDailyWhatsAppSummary } = require('./services/whatsappService');
+        scheduleDailyWhatsAppSummary();
+      } catch (e) {
+        console.warn('WhatsApp scheduler not started:', e.message);
+      }
     });
   } catch (error) {
     console.error('Failed to start server:', error);

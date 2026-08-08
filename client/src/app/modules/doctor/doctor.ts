@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, switchMap } from 'rxjs';
+import { Subscription, switchMap, catchError } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
@@ -106,6 +106,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
+  selectedPlyFile: File | null = null;
+
+  /** Prompt doctor to create a PIN after first password login */
+  readonly pinSetupOpen = signal(false);
+  pinDraft = '';
+  pinConfirm = '';
+  pinError = '';
+  pinSaving = false;
 
   readonly workTypeOptions = [
     'Zircon',
@@ -288,6 +296,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
         }
         this.loadNotificationsFromStorage();
         this.loadCases();
+        this.maybeOfferPinSetup();
       })
     );
     this.socketService.connect();
@@ -506,7 +515,72 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.selectedPlyFile = null;
     this.dialogOpen.set(true);
+  }
+
+  onPlyFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+    if (!file) {
+      this.selectedPlyFile = null;
+      return;
+    }
+    this.selectedPlyFile = file;
+  }
+
+  clearPlyFile(): void {
+    this.selectedPlyFile = null;
+  }
+
+  private maybeOfferPinSetup(): void {
+    if (this.isAdminView()) return;
+    const session = this.auth.getSession();
+    if (!session || session.role !== 'doctor') return;
+    if (session.hasPin) return;
+    try {
+      if (localStorage.getItem(`pin_setup_skip_${session.id}`) === '1') return;
+    } catch {
+      /* ignore */
+    }
+    this.pinSetupOpen.set(true);
+  }
+
+  skipPinSetup(): void {
+    const session = this.auth.getSession();
+    if (session?.id) {
+      try {
+        localStorage.setItem(`pin_setup_skip_${session.id}`, '1');
+      } catch {
+        /* ignore */
+      }
+    }
+    this.pinSetupOpen.set(false);
+  }
+
+  savePinSetup(): void {
+    const pin = this.pinDraft.trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      this.pinError = 'الرقم السري من 4 إلى 6 أرقام';
+      return;
+    }
+    if (pin !== this.pinConfirm.trim()) {
+      this.pinError = 'الرقمان غير متطابقين';
+      return;
+    }
+    this.pinError = '';
+    this.pinSaving = true;
+    this.auth.setPin(pin).subscribe({
+      next: () => {
+        this.pinSaving = false;
+        this.pinSetupOpen.set(false);
+        this.flash('✅ تم حفظ الرقم السري — تقدر تدخل بيه المرة الجاية');
+      },
+      error: (err: { error?: { message?: string } }) => {
+        this.pinSaving = false;
+        this.pinError = err?.error?.message || 'تعذر حفظ الرقم السري';
+      },
+    });
   }
 
   openEditFromDetail(): void {
@@ -760,11 +834,20 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.caseApi
       .createCase(casePayload)
       .pipe(
-        switchMap((res: { case?: { caseNumber?: string } }) => {
+        switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
-          return this.http.post(`${this.apiBase}/print/job`, {
+          const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
+          const ply = this.selectedPlyFile;
+          const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
+          if (ply && caseId) {
+            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+              switchMap(() => print$),
+              catchError(() => print$)
+            );
+          }
+          return print$;
         })
       )
       .subscribe({

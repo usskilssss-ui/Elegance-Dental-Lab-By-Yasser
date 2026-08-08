@@ -16,4 +16,5 @@ export interface AuthSession {
   email: string;
   role: AppRole;
   loginAt: string;
+  hasPin?: boolean;
 }

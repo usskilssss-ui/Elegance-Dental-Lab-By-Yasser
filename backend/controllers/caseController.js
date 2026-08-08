@@ -921,6 +921,16 @@ exports.scanAtStation = async (req, res) => {
     });
     emitCaseUpdated(dentalCase, req.user);
 
+    if (targetStage === 'completed' || targetStage === 'exited') {
+      try {
+        const { notifyDoctorCaseStatus } = require('../services/whatsappService');
+        notifyDoctorCaseStatus(
+          dentalCase,
+          targetStage === 'exited' ? 'exited' : 'completed'
+        ).catch(() => {});
+      } catch (_) {}
+    }
+
     return res.status(200).json({
       success: true,
       message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
@@ -983,6 +993,11 @@ exports.completeCase = async (req, res) => {
       completedBy: req.user.id,
       timestamp: new Date(),
     });
+
+    try {
+      const { notifyDoctorCaseStatus } = require('../services/whatsappService');
+      notifyDoctorCaseStatus(dentalCase, 'completed').catch(() => {});
+    } catch (_) {}
 
     res.status(200).json({
       success: true,
@@ -1129,6 +1144,11 @@ exports.exitCase = async (req, res) => {
       timestamp: new Date(),
     });
     emitCaseUpdated(dentalCase, req.user);
+
+    try {
+      const { notifyDoctorCaseStatus } = require('../services/whatsappService');
+      notifyDoctorCaseStatus(dentalCase, 'exited').catch(() => {});
+    } catch (_) {}
 
     return res.status(200).json({
       success: true,

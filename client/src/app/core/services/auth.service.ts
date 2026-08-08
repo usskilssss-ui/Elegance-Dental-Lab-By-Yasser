@@ -14,6 +14,7 @@ interface AuthUserDto {
   fullName: string;
   email: string;
   role: string;
+  hasPin?: boolean;
 }
 
 /** Body for `POST /api/auth/register` (admin creates staff). */
@@ -129,6 +130,53 @@ export class AuthService {
           return throwError(() => error);
         })
       );
+  }
+
+  loginWithPin(email: string, pin: string): Observable<void> {
+    return this.http
+      .post<{ success?: boolean; token?: string; user?: AuthUserDto }>(`${this.apiUrl}/login-pin`, {
+        email,
+        pin,
+      })
+      .pipe(
+        tap((response) => {
+          if (response?.success && response.token && response.user) {
+            this.setToken(response.token);
+            const session = this.userToSession(response.user);
+            this.setSession(session);
+            this.isAuthenticated$.next(true);
+            this.currentUser$.next(session);
+            return;
+          }
+          throw new Error('Invalid response from server');
+        }),
+        map(() => void 0),
+        catchError((error) => throwError(() => error))
+      );
+  }
+
+  checkPinStatus(email: string): Observable<boolean> {
+    const q = encodeURIComponent(email.trim().toLowerCase());
+    return this.http
+      .get<{ success?: boolean; hasPin?: boolean }>(`${this.apiUrl}/pin-status?email=${q}`)
+      .pipe(
+        map((res) => !!res?.hasPin),
+        catchError(() => of(false))
+      );
+  }
+
+  setPin(pin: string): Observable<void> {
+    return this.http.post<{ success?: boolean }>(`${this.apiUrl}/set-pin`, { pin }).pipe(
+      tap(() => {
+        const s = this.getSession();
+        if (s) {
+          const next = { ...s, hasPin: true };
+          this.setSession(next);
+          this.currentUser$.next(next);
+        }
+      }),
+      map(() => void 0)
+    );
   }
 
   logout(): Observable<void> {
@@ -314,6 +362,7 @@ export class AuthService {
       email: user.email,
       role: this.normalizeRole(user.role),
       loginAt: new Date().toISOString(),
+      hasPin: !!user.hasPin,
     };
   }
 

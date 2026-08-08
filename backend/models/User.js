@@ -28,6 +28,12 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    /** Optional 4–6 digit PIN for doctors (faster mobile login). */
+    pinHash: {
+      type: String,
+      default: '',
+      select: false,
+    },
     /** Admin-visible password copy (doctors). Auth still uses hashed `password`. */
     loginPasswordVisible: {
       type: String,
@@ -87,6 +93,11 @@ userSchema.pre('save', async function (next) {
 // Compare password method
 userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+userSchema.methods.comparePin = async function (enteredPin) {
+  if (!this.pinHash) return false;
+  return await bcrypt.compare(String(enteredPin), this.pinHash);
 };
 
 module.exports = mongoose.model('User', userSchema);
