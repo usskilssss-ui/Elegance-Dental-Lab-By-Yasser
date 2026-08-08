@@ -1470,8 +1470,29 @@ export class Secretary implements OnInit, OnDestroy {
     const deliveryDate = c.deliveryDate ? this.formatDateValue(c.deliveryDate) : null;
 
     const workTypeDisplay = this.formatWorkTypeForDisplay ? this.formatWorkTypeForDisplay(c.workType) : (c.workType || '');
+    const isLab = c.requesterType === 'lab';
     const requesterLabel =
-      c.requesterType === 'student' ? 'طالب' : c.requesterType === 'lab' ? 'معمل' : 'دكتور';
+      c.requesterType === 'student' ? 'طالب' : isLab ? 'معمل' : 'دكتور';
+    const labName = String(c.labName || '').trim();
+    const doctorName = String(c.doctor || '').trim();
+    const partySectionTitle = isLab ? 'بيانات المعمل والمريض' : 'بيانات الطبيب والمريض';
+    const partyRows = isLab
+      ? `<div class="row">
+      <span class="label">المعمل</span>
+      <span class="value">${labName || doctorName || '—'}</span>
+    </div>
+    ${
+      doctorName && labName && doctorName !== labName
+        ? `<div class="row">
+      <span class="label">الطبيب</span>
+      <span class="value">${doctorName}</span>
+    </div>`
+        : ''
+    }`
+      : `<div class="row">
+      <span class="label">الطبيب</span>
+      <span class="value">${doctorName || '—'}</span>
+    </div>`;
 
     const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -1561,11 +1582,8 @@ export class Secretary implements OnInit, OnDestroy {
   </div>
 
   <div class="section">
-    <div class="section-title">بيانات الطبيب والمريض</div>
-    <div class="row">
-      <span class="label">الطبيب</span>
-      <span class="value">${c.doctor || '—'}</span>
-    </div>
+    <div class="section-title">${partySectionTitle}</div>
+    ${partyRows}
     <div class="row">
       <span class="label">المريض</span>
       <span class="value">${c.patient || '—'}</span>
