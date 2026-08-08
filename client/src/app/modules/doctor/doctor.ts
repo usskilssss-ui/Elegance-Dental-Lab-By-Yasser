@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
@@ -69,6 +69,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private readonly sharedCases = inject(SharedCasesService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
 
@@ -77,7 +78,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private knownStatus = new Map<string, DoctorStage>();
   private notifHydrated = false;
 
-  readonly doctorName = computed(() => this.auth.getSession()?.name?.trim() || '—');
+  /** Admin viewing a specific doctor's portal via ?as=Name */
+  readonly viewingAsDoctor = signal<string | null>(null);
+  readonly isAdminView = computed(() => {
+    const role = this.auth.getSession()?.role;
+    return role === 'admin' && !!this.viewingAsDoctor();
+  });
+  readonly doctorName = computed(() => {
+    const as = this.viewingAsDoctor()?.trim();
+    if (as && this.auth.getSession()?.role === 'admin') return as;
+    return this.auth.getSession()?.name?.trim() || '—';
+  });
   readonly casesLoading = signal(true);
   readonly toast = signal<string | null>(null);
   readonly dialogOpen = signal(false);
@@ -193,7 +204,13 @@ export class DoctorComponent implements OnInit, OnDestroy {
     });
   }
 
-  readonly allCases = computed(() => this.sharedCases.cases());
+  readonly allCases = computed(() => {
+    const name = this.doctorName();
+    const rows = this.sharedCases.cases();
+    if (!name || name === '—') return rows;
+    const key = this.normalizeDoctorKey(name);
+    return rows.filter((c) => this.normalizeDoctorKey(c.doctor || '') === key);
+  });
 
   readonly stats = computed(() => {
     const all = this.allCases();
@@ -258,8 +275,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
-    this.loadNotificationsFromStorage();
-    this.loadCases();
+    this.socketSubs.push(
+      this.route.queryParamMap.subscribe((params) => {
+        const as = (params.get('as') || '').trim();
+        const role = this.auth.getSession()?.role;
+        if (role === 'admin' && as) {
+          this.viewingAsDoctor.set(as);
+        } else {
+          this.viewingAsDoctor.set(null);
+        }
+        this.loadNotificationsFromStorage();
+        this.loadCases();
+      })
+    );
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
     if (socket) {
@@ -319,6 +347,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   private notifStorageKey(): string {
     const id = this.auth.getSession()?.id || 'anon';
+    const as = this.viewingAsDoctor()?.trim();
+    if (as && this.auth.getSession()?.role === 'admin') {
+      return `doctor_portal_notifs_${id}_as_${as}`;
+    }
     return `doctor_portal_notifs_${id}`;
   }
 
@@ -742,7 +774,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    if (this.isAdminView()) {
+      this.backToAdminDoctors();
+      return;
+    }
     this.auth.performLogout(this.router);
+  }
+
+  backToAdminDoctors(): void {
+    this.router.navigate(['/admin/dashboard'], {
+      queryParams: { nav: 'doctors' },
+    });
   }
 
   private flash(msg: string): void {

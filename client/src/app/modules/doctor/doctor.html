@@ -81,11 +81,19 @@
           }
         </div>
       }
-      <button type="button" class="icon-btn" aria-label="تسجيل الخروج" (click)="logout()" title="تسجيل الخروج">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-        </svg>
-      </button>
+      @if (isAdminView()) {
+        <button type="button" class="icon-btn" aria-label="رجوع للدكاترة" (click)="backToAdminDoctors()" title="رجوع لقسم الدكاترة">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      } @else {
+        <button type="button" class="icon-btn" aria-label="تسجيل الخروج" (click)="logout()" title="تسجيل الخروج">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
+      }
     </div>
   </header>
 
@@ -93,7 +101,11 @@
     <div class="page-header">
       <div class="page-header-text">
         <h1>لوحة تتبع حالات دكتور {{ doctorName() }}</h1>
-        <p>متابعة حالاتك في المعمل وإضافة ريكويست جديد للطباعة</p>
+        @if (isAdminView()) {
+          <p>عرض كأدمن — إضافة ومتابعة ريكويستات هذا الدكتور</p>
+        } @else {
+          <p>متابعة حالاتك في المعمل وإضافة ريكويست جديد للطباعة</p>
+        }
       </div>
       <div class="case-create-actions">
         <button type="button" class="btn-primary" (click)="openDialog()" [disabled]="saveInProgress()">

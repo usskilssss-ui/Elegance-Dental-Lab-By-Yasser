@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
 import { AdminDashboardService } from '../../core/services/admin-dashboard.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -255,6 +255,7 @@ export class Admin implements OnInit, OnDestroy {
     private auth: AuthService,
     private userApi: UserApiService,
     private router: Router,
+    private route: ActivatedRoute,
     private socketService: SocketService,
     public themeService: ThemeService
   ) {}
@@ -1977,12 +1978,13 @@ export class Admin implements OnInit, OnDestroy {
     this.showDoctorModal = true;
   }
 
-  /** From doctors directory → open that doctor's account page in reports. */
+  /** From doctors directory → open that doctor's request portal (same URL as doctors use). */
   openDoctorAccountPage(doc: StaffMember): void {
     const name = (doc?.name || '').trim();
     if (!name) return;
-    this.reportDoctorFilter = name;
-    this.setNav('reports');
+    this.router.navigate(['/doctor/dashboard'], {
+      queryParams: { as: name },
+    });
   }
 
   closeDoctorModal() {
@@ -2185,7 +2187,19 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   private restoreActiveNav(): void {
-    // localStorage removed
+    const nav = (this.route.snapshot.queryParamMap.get('nav') || '').trim();
+    const allowed = new Set([
+      'dashboard',
+      'staff',
+      'doctors',
+      'financials',
+      'reports',
+      'archive',
+      'case-management',
+    ]);
+    if (nav && allowed.has(nav)) {
+      this.setNav(nav);
+    }
   }
 
   private persistActiveNav(): void {
