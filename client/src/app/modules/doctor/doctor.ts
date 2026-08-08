@@ -448,6 +448,16 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.activeFilter.set(f);
   }
 
+  private normalizeDoctorKey(name: string): string {
+    return String(name || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي');
+  }
+
   private normalizeSearch(v: string): string {
     return String(v || '')
       .toLowerCase()
