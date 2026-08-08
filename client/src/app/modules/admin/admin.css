@@ -686,6 +686,15 @@ tbody td { padding: 12px 16px; font-size: 12px; color: var(--color-text-primary)
   transform: translateY(-2px);
 }
 
+.staff-card--clickable {
+  cursor: pointer;
+}
+
+.staff-card--clickable:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
 .staff-header {
   display: flex;
   align-items: center;

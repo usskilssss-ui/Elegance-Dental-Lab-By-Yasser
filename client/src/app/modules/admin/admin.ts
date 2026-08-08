@@ -1977,6 +1977,14 @@ export class Admin implements OnInit, OnDestroy {
     this.showDoctorModal = true;
   }
 
+  /** From doctors directory → open that doctor's account page in reports. */
+  openDoctorAccountPage(doc: StaffMember): void {
+    const name = (doc?.name || '').trim();
+    if (!name) return;
+    this.reportDoctorFilter = name;
+    this.setNav('reports');
+  }
+
   closeDoctorModal() {
     this.showDoctorModal = false;
     this.showDoctorPassword = false;
