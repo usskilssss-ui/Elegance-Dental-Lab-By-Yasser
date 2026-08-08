@@ -1,64 +1,98 @@
 /**
- * WhatsApp notifications via Meta Cloud API or UltraMsg.
- * Configure ONE provider with env vars — if unset, calls no-op safely.
- *
- * Meta Cloud API:
- *   WHATSAPP_PROVIDER=meta
- *   WHATSAPP_TOKEN=...
- *   WHATSAPP_PHONE_NUMBER_ID=...
- *
- * UltraMsg:
- *   WHATSAPP_PROVIDER=ultramsg
- *   WHATSAPP_INSTANCE_ID=...
- *   WHATSAPP_TOKEN=...
+ * WhatsApp notifications via UltraMsg or Meta Cloud API.
+ * Config from: Admin UI (Mongo AppSettings) OR env vars.
  */
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
+
+/** @type {null | { enabled: boolean, provider: string, token: string, instanceId: string, phoneNumberId: string, dailyHour: number, labName: string }} */
+let cachedConfig = null;
+
+function configFromEnv() {
+  const provider = String(process.env.WHATSAPP_PROVIDER || '').toLowerCase();
+  return {
+    enabled: !!provider,
+    provider,
+    token: String(process.env.WHATSAPP_TOKEN || ''),
+    instanceId: String(process.env.WHATSAPP_INSTANCE_ID || ''),
+    phoneNumberId: String(process.env.WHATSAPP_PHONE_NUMBER_ID || ''),
+    dailyHour: Number(process.env.WHATSAPP_DAILY_HOUR || 18),
+    labName: String(process.env.WHATSAPP_LAB_NAME || 'Elegance Dental Lab'),
+  };
+}
+
+async function reloadWhatsAppConfig() {
+  try {
+    const AppSettings = require('../models/AppSettings');
+    const doc = await AppSettings.findOne({ key: 'app' }).lean();
+    if (doc?.whatsapp && (doc.whatsapp.enabled || doc.whatsapp.token)) {
+      cachedConfig = {
+        enabled: !!doc.whatsapp.enabled,
+        provider: String(doc.whatsapp.provider || 'ultramsg').toLowerCase(),
+        token: String(doc.whatsapp.token || ''),
+        instanceId: String(doc.whatsapp.instanceId || ''),
+        phoneNumberId: String(doc.whatsapp.phoneNumberId || ''),
+        dailyHour: Number(doc.whatsapp.dailyHour ?? 18),
+        labName: String(doc.whatsapp.labName || 'Elegance Dental Lab'),
+      };
+      return cachedConfig;
+    }
+  } catch (err) {
+    console.warn('[whatsapp] reload from DB failed:', err.message);
+  }
+  cachedConfig = configFromEnv();
+  return cachedConfig;
+}
+
+function getConfig() {
+  if (cachedConfig) return cachedConfig;
+  cachedConfig = configFromEnv();
+  return cachedConfig;
+}
 
 function normalizePhone(raw) {
   let p = String(raw || '').replace(/\D/g, '');
   if (!p) return '';
   if (p.startsWith('00')) p = p.slice(2);
-  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`; // Egypt local → 20…
+  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
   return p;
 }
 
 function providerConfigured() {
-  const provider = String(process.env.WHATSAPP_PROVIDER || '').toLowerCase();
-  if (provider === 'meta') {
-    return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
-  }
-  if (provider === 'ultramsg') {
-    return !!(process.env.WHATSAPP_INSTANCE_ID && process.env.WHATSAPP_TOKEN);
-  }
+  const c = getConfig();
+  // Env-only configs may have enabled inferred from provider string
+  const on = c.enabled || !!(c.token && (c.instanceId || c.phoneNumberId));
+  if (!on) return false;
+  if (c.provider === 'meta') return !!(c.token && c.phoneNumberId);
+  if (c.provider === 'ultramsg') return !!(c.token && c.instanceId);
   return false;
 }
 
 async function sendWhatsAppText(phone, body) {
+  if (!cachedConfig) await reloadWhatsAppConfig();
   if (!providerConfigured()) {
-    console.log('[whatsapp] skipped (not configured):', body.slice(0, 80));
+    console.log('[whatsapp] skipped (not configured):', String(body).slice(0, 80));
     return { ok: false, skipped: true };
   }
   const to = normalizePhone(phone);
   if (!to) return { ok: false, error: 'no-phone' };
 
-  const provider = String(process.env.WHATSAPP_PROVIDER || '').toLowerCase();
+  const c = getConfig();
+  const text = String(body);
 
   try {
-    if (provider === 'meta') {
-      const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-      const token = process.env.WHATSAPP_TOKEN;
-      const res = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    if (c.provider === 'meta') {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${c.phoneNumberId}/messages`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${c.token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
           to,
           type: 'text',
-          text: { body: String(body) },
+          text: { body: text },
         }),
       });
       if (!res.ok) {
@@ -69,15 +103,17 @@ async function sendWhatsAppText(phone, body) {
       return { ok: true };
     }
 
-    if (provider === 'ultramsg') {
-      const instance = process.env.WHATSAPP_INSTANCE_ID;
-      const token = process.env.WHATSAPP_TOKEN;
+    if (c.provider === 'ultramsg') {
+      const instance = c.instanceId.replace(/^instance/i, '');
+      const instancePath = c.instanceId.startsWith('instance')
+        ? c.instanceId
+        : `instance${instance}`;
       const params = new URLSearchParams({
-        token,
-        to: to.includes('@') ? to : `${to}@c.us`,
-        body: String(body),
+        token: c.token,
+        to: `${to}@c.us`,
+        body: text,
       });
-      const res = await fetch(`https://api.ultramsg.com/${instance}/messages/chat`, {
+      const res = await fetch(`https://api.ultramsg.com/${instancePath}/messages/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params.toString(),
@@ -111,8 +147,13 @@ async function findDoctorUserByCase(dentalCase) {
   return users.find((u) => normalizeDoctorKey(u.fullName) === key) || null;
 }
 
+function labLabel() {
+  return getConfig().labName || 'Elegance Dental Lab';
+}
+
 async function notifyDoctorCaseStatus(dentalCase, kind) {
   try {
+    if (!cachedConfig) await reloadWhatsAppConfig();
     const doctor = await findDoctorUserByCase(dentalCase);
     if (!doctor?.phone) {
       console.log('[whatsapp] no doctor phone for', dentalCase?.caseNumber);
@@ -122,11 +163,11 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
     const num = dentalCase.caseNumber || '';
     let msg = '';
     if (kind === 'completed') {
-      msg = `Elegance Dental Lab\nالحالة ${num} للمريض ${patient} أصبحت منتهية وجاهزة.`;
+      msg = `${labLabel()}\nالحالة ${num} للمريض ${patient} أصبحت منتهية وجاهزة.`;
     } else if (kind === 'exited') {
-      msg = `Elegance Dental Lab\nالحالة ${num} للمريض ${patient} تم تسليمها/خرجت من المعمل.`;
+      msg = `${labLabel()}\nالحالة ${num} للمريض ${patient} تم تسليمها/خرجت من المعمل.`;
     } else {
-      msg = `Elegance Dental Lab\nتحديث على الحالة ${num} (${patient}).`;
+      msg = `${labLabel()}\nتحديث على الحالة ${num} (${patient}).`;
     }
     await sendWhatsAppText(doctor.phone, msg);
   } catch (err) {
@@ -134,8 +175,8 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
   }
 }
 
-/** Daily: doctors with completed (ready) non-exited cases */
 async function sendDailyReadySummaries() {
+  if (!cachedConfig) await reloadWhatsAppConfig();
   if (!providerConfigured()) {
     console.log('[whatsapp] daily summary skipped (not configured)');
     return;
@@ -161,7 +202,7 @@ async function sendDailyReadySummaries() {
       const list = byDoctor.get(normalizeDoctorKey(doc.fullName)) || [];
       if (!list.length || !doc.phone) continue;
       const msg =
-        `Elegance Dental Lab — ملخص يومي\n` +
+        `${labLabel()} — ملخص يومي\n` +
         `عندك ${list.length} ${list.length === 1 ? 'حالة جاهزة' : 'حالات جاهزة'} للاستلام.\n` +
         list
           .slice(0, 8)
@@ -176,12 +217,20 @@ async function sendDailyReadySummaries() {
 }
 
 function scheduleDailyWhatsAppSummary() {
-  if (!providerConfigured()) {
-    console.log('[whatsapp] daily scheduler idle (provider not configured)');
-    return;
-  }
-  const hour = Number(process.env.WHATSAPP_DAILY_HOUR || 18); // 18:00 server time
+  reloadWhatsAppConfig()
+    .then(() => {
+      console.log(
+        providerConfigured()
+          ? `[whatsapp] ready (daily ~${getConfig().dailyHour}:00)`
+          : '[whatsapp] idle — configure from Admin → واتساب'
+      );
+    })
+    .catch(() => {});
+
   const tick = async () => {
+    await reloadWhatsAppConfig();
+    if (!providerConfigured()) return;
+    const hour = getConfig().dailyHour ?? 18;
     const now = new Date();
     if (now.getHours() === hour && now.getMinutes() < 5) {
       const key = now.toISOString().slice(0, 10);
@@ -191,7 +240,6 @@ function scheduleDailyWhatsAppSummary() {
     }
   };
   setInterval(tick, 60 * 1000);
-  console.log(`[whatsapp] daily summary scheduled around ${hour}:00`);
 }
 
 module.exports = {
@@ -200,4 +248,5 @@ module.exports = {
   sendDailyReadySummaries,
   scheduleDailyWhatsAppSummary,
   providerConfigured,
+  reloadWhatsAppConfig,
 };

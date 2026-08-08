@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
@@ -14,6 +14,7 @@ import { Subject, merge } from 'rxjs';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { environment } from '../../../environments/environment';
 
 export interface StaffMember {
   id: string;
@@ -257,6 +258,7 @@ export class Admin implements OnInit, OnDestroy {
     private router: Router,
     private route: ActivatedRoute,
     private socketService: SocketService,
+    private http: HttpClient,
     public themeService: ThemeService
   ) {}
 
@@ -1637,7 +1639,104 @@ export class Admin implements OnInit, OnDestroy {
       this.loadFinancialReportFromApi();
     } else if (nav === 'archive') {
       this.loadArchiveList();
+    } else if (nav === 'whatsapp') {
+      this.loadWhatsAppSettings();
     }
+  }
+
+  waEnabled = false;
+  waProvider: 'ultramsg' | 'meta' = 'ultramsg';
+  waInstanceId = '';
+  waPhoneNumberId = '';
+  waToken = '';
+  waDailyHour = 18;
+  waLabName = 'Elegance Dental Lab';
+  waHasToken = false;
+  waLiveConfigured = false;
+  waTestPhone = '';
+  waMsg = '';
+  waSaving = false;
+
+  loadWhatsAppSettings(): void {
+    this.waMsg = '';
+    this.http.get<{ success?: boolean; settings?: any }>(`${environment.apiUrl}/settings/whatsapp`).subscribe({
+      next: (res) => {
+        const s = res?.settings || {};
+        this.waEnabled = !!s.enabled;
+        this.waProvider = s.provider === 'meta' ? 'meta' : 'ultramsg';
+        this.waInstanceId = s.instanceId || '';
+        this.waPhoneNumberId = s.phoneNumberId || '';
+        this.waDailyHour = s.dailyHour ?? 18;
+        this.waLabName = s.labName || 'Elegance Dental Lab';
+        this.waHasToken = !!s.hasToken;
+        this.waLiveConfigured = !!s.liveConfigured;
+        this.waToken = '';
+      },
+      error: () => {
+        this.waMsg = 'تعذر تحميل إعدادات واتساب';
+      },
+    });
+  }
+
+  saveWhatsAppSettings(): void {
+    this.waSaving = true;
+    this.waMsg = '';
+    const body: Record<string, unknown> = {
+      enabled: this.waEnabled,
+      provider: this.waProvider,
+      instanceId: this.waInstanceId,
+      phoneNumberId: this.waPhoneNumberId,
+      dailyHour: this.waDailyHour,
+      labName: this.waLabName,
+    };
+    if (this.waToken.trim()) body['token'] = this.waToken.trim();
+    this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean }>(
+      `${environment.apiUrl}/settings/whatsapp`,
+      body
+    ).subscribe({
+      next: (res) => {
+        this.waSaving = false;
+        this.waLiveConfigured = !!res.liveConfigured;
+        this.waMsg = res.message || 'تم الحفظ';
+        this.waToken = '';
+        this.loadWhatsAppSettings();
+      },
+      error: (err) => {
+        this.waSaving = false;
+        this.waMsg = err?.error?.message || 'فشل الحفظ';
+      },
+    });
+  }
+
+  testWhatsApp(): void {
+    this.waMsg = '';
+    this.http
+      .post<{ success?: boolean; message?: string }>(`${environment.apiUrl}/settings/whatsapp/test`, {
+        phone: this.waTestPhone,
+      })
+      .subscribe({
+        next: (res) => {
+          this.waMsg = res.message || 'تم الإرسال';
+        },
+        error: (err) => {
+          this.waMsg = err?.error?.message || 'فشل الاختبار';
+        },
+      });
+  }
+
+  runWhatsAppDailyNow(): void {
+    this.waMsg = '';
+    this.http.post<{ success?: boolean; message?: string }>(
+      `${environment.apiUrl}/settings/whatsapp/daily-summary`,
+      {}
+    ).subscribe({
+      next: (res) => {
+        this.waMsg = res.message || 'تم إرسال الملخص';
+      },
+      error: (err) => {
+        this.waMsg = err?.error?.message || 'فشل إرسال الملخص';
+      },
+    });
   }
 
   get archiveYears(): number[] {
@@ -2195,6 +2294,7 @@ export class Admin implements OnInit, OnDestroy {
       'financials',
       'reports',
       'archive',
+      'whatsapp',
       'case-management',
     ]);
     if (nav && allowed.has(nav)) {
