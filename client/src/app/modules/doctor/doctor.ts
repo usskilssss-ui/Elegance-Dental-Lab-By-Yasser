@@ -101,7 +101,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   formDraft = emptyDraft();
   patientNameError = '';
 
-  readonly workTypeOptions = [
+  readonly defaultWorkTypeOptions = [
     'Zircon',
     'Emax',
     'Pmma Cad',
@@ -115,6 +115,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
     'Ring',
   ];
 
+  customWorkTypes: Array<{ _id: string; name: string }> = [];
+  newCustomWorkType = '';
+  customWorkTypeError = '';
+  customWorkTypeSaving = false;
+
   readonly caseTypeOptions = [
     { value: 'New', label: 'جديد' },
     { value: 'Modification', label: 'تعديل' },
@@ -127,6 +132,21 @@ export class DoctorComponent implements OnInit, OnDestroy {
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   removableDentureType: 'Acrylic' | 'Flex' | '' = '';
   workTypeError = '';
+
+  get workTypeOptions(): string[] {
+    const customs = this.customWorkTypes.map((c) => c.name).filter(Boolean);
+    const merged = [...this.defaultWorkTypeOptions];
+    for (const name of customs) {
+      if (!merged.some((x) => x.toLowerCase() === name.toLowerCase())) {
+        merged.push(name);
+      }
+    }
+    return merged;
+  }
+
+  isCustomWorkType(name: string): boolean {
+    return this.customWorkTypes.some((c) => c.name.toLowerCase() === name.toLowerCase());
+  }
 
   readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
 
@@ -269,6 +289,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadNotificationsFromStorage();
     this.loadCases();
+    this.loadCustomWorkTypes();
     this.socketService.connect();
     const socket = (this.socketService as any).socket;
     if (socket) {
@@ -472,6 +493,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.patientNameError = '';
     this.nightGuardType = '';
     this.removableDentureType = '';
+    this.newCustomWorkType = '';
+    this.customWorkTypeError = '';
+    this.loadCustomWorkTypes();
     this.dialogOpen.set(true);
   }
 
@@ -620,6 +644,75 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.updateWorkTypeString();
   }
 
+  loadCustomWorkTypes(): void {
+    this.caseApi.getCustomWorkTypes().subscribe({
+      next: (res) => {
+        this.customWorkTypes = (res?.data ?? []).map((x: any) => ({
+          _id: String(x._id),
+          name: String(x.name || '').trim(),
+        })).filter((x: { name: string }) => !!x.name);
+      },
+      error: () => {
+        this.customWorkTypes = [];
+      },
+    });
+  }
+
+  addCustomWorkType(): void {
+    const name = (this.newCustomWorkType || '').trim();
+    if (!name) {
+      this.customWorkTypeError = 'اكتب اسم نوع العمل';
+      return;
+    }
+    if (this.workTypeOptions.some((x) => x.toLowerCase() === name.toLowerCase())) {
+      this.customWorkTypeError = 'النوع موجود بالفعل';
+      return;
+    }
+    this.customWorkTypeSaving = true;
+    this.customWorkTypeError = '';
+    this.caseApi.addCustomWorkType(name).subscribe({
+      next: (res) => {
+        this.customWorkTypeSaving = false;
+        this.newCustomWorkType = '';
+        const item = res?.data;
+        if (item?._id && item?.name) {
+          if (!this.customWorkTypes.some((c) => c._id === item._id)) {
+            this.customWorkTypes = [...this.customWorkTypes, { _id: String(item._id), name: String(item.name) }];
+          }
+        } else {
+          this.loadCustomWorkTypes();
+        }
+        this.selectedWorkTypes.add(name);
+        this.workTypeQuantities[name] = this.workTypeQuantities[name] || 1;
+        this.updateWorkTypeString();
+      },
+      error: (err) => {
+        this.customWorkTypeSaving = false;
+        this.customWorkTypeError = err?.error?.message || 'تعذر إضافة نوع العمل';
+      },
+    });
+  }
+
+  removeCustomWorkType(name: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const found = this.customWorkTypes.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (!found) return;
+    if (!confirm(`حذف نوع العمل "${name}"؟`)) return;
+    this.caseApi.deleteCustomWorkType(found._id).subscribe({
+      next: () => {
+        this.customWorkTypes = this.customWorkTypes.filter((c) => c._id !== found._id);
+        if (this.selectedWorkTypes.has(name)) {
+          this.selectedWorkTypes.delete(name);
+          delete this.workTypeQuantities[name];
+          this.updateWorkTypeString();
+        }
+      },
+      error: (err) => {
+        this.customWorkTypeError = err?.error?.message || 'تعذر حذف نوع العمل';
+      },
+    });
+  }
+
   onWorkTypeQtyChange(): void {
     this.updateWorkTypeString();
   }
@@ -743,11 +836,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.caseApi.createCase(casePayload).subscribe({
+    this.caseApi.createCase({ ...casePayload, autoExit: true }).subscribe({
       next: () => {
         this.saveInProgress.set(false);
-        this.flash('✅ تم حفظ الحالة');
+        this.flash('✅ تم حفظ الحالة وإخراجها');
         this.closeDialog();
+        this.activeFilter.set('exited');
         this.loadCases();
       },
       error: () => {

@@ -122,6 +122,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/doctor-pricing', doctorPricingRoutes);
 app.use('/api/doctor-payments', doctorPaymentRoutes);
 app.use('/api/cash-entries', cashEntryRoutes);
+app.use('/api/custom-work-types', require('./routes/customWorkTypeRoutes'));
 app.use('/api/print', printRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/month-archive', monthArchiveRoutes);

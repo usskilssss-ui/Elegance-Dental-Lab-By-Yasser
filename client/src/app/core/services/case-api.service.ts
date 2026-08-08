@@ -176,4 +176,16 @@ export class CaseApiService {
   deleteCashEntry(id: string): Observable<any> {
     return this.http.delete(`${environment.apiUrl}/cash-entries/${id}`);
   }
+
+  getCustomWorkTypes(): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/custom-work-types`);
+  }
+
+  addCustomWorkType(name: string): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/custom-work-types`, { name });
+  }
+
+  deleteCustomWorkType(id: string): Observable<any> {
+    return this.http.delete(`${environment.apiUrl}/custom-work-types/${id}`);
+  }
 }

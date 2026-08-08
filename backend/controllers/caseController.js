@@ -158,6 +158,13 @@ exports.createCase = async (req, res) => {
     const notesFinal = notes ?? '';
     const referringDoctor = referringDoctorFromNotes(notesFinal);
 
+    const autoExit =
+      req.body.autoExit === true ||
+      req.body.autoExit === 'true' ||
+      req.body.autoExit === 1 ||
+      req.body.autoExit === '1';
+    const now = new Date();
+
     const newCase = new DentalCase({
       patientName,
       patientEmail,
@@ -173,8 +180,15 @@ exports.createCase = async (req, res) => {
       priority,
       dueDate: new Date(dueDate),
       createdBy: req.user.id,
-      currentStage: 'waiting',
-      status: 'waiting',
+      currentStage: autoExit ? 'exited' : 'waiting',
+      status: autoExit ? 'exited' : 'waiting',
+      ...(autoExit
+        ? {
+            stageTimestamps: {
+              exited: now,
+            },
+          }
+        : {}),
     });
 
     let lastSaveError;
@@ -206,9 +220,21 @@ exports.createCase = async (req, res) => {
           caseNumber: newCase.caseNumber,
           patientName: newCase.patientName,
           caseType: newCase.caseType,
+          autoExit: !!autoExit,
         },
       },
     });
+
+    if (autoExit) {
+      await AuditLog.create({
+        caseId: newCase._id,
+        caseNumber: newCase.caseNumber,
+        action: 'exited',
+        performedBy: req.user.id,
+        performedByName: req.user.fullName,
+        details: { reason: 'auto_exit_on_create' },
+      });
+    }
 
     // Create notification
     await Notification.create({

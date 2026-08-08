@@ -352,12 +352,32 @@ export class Secretary implements OnInit, OnDestroy {
   /** اسم ملف PLY المحفوظ مسبقاً (وضع التعديل) */
   existingPlyFileName: string | null = null;
 
-  /** Work Type chip options */
-  readonly workTypeOptions = [
+  /** Built-in work type chips; customs merge via getter */
+  readonly defaultWorkTypeOptions = [
     'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
     'Peek', 'Titanium', 'Try in', 'Mokup',
     'Night Guard', 'Removable Denture', 'Wax', 'Ring'
   ];
+  customWorkTypes: Array<{ _id: string; name: string }> = [];
+  newCustomWorkType = '';
+  customWorkTypeError = '';
+  customWorkTypeSaving = false;
+
+  get workTypeOptions(): string[] {
+    const customs = this.customWorkTypes.map((c) => c.name).filter(Boolean);
+    const merged = [...this.defaultWorkTypeOptions];
+    for (const name of customs) {
+      if (!merged.some((x) => x.toLowerCase() === name.toLowerCase())) {
+        merged.push(name);
+      }
+    }
+    return merged;
+  }
+
+  isCustomWorkType(name: string): boolean {
+    return this.customWorkTypes.some((c) => c.name.toLowerCase() === name.toLowerCase());
+  }
+
   readonly caseTypeOptions = [
     { value: 'New', label: 'جديد' },
     { value: 'Modification', label: 'تعديل' },
@@ -456,6 +476,80 @@ export class Secretary implements OnInit, OnDestroy {
   setRemovableDentureType(type: 'Acrylic' | 'Flex'): void {
     this.removableDentureType = type;
     this.updateWorkTypeString();
+  }
+
+  loadCustomWorkTypes(): void {
+    this.caseApi.getCustomWorkTypes().subscribe({
+      next: (res) => {
+        this.customWorkTypes = (res?.data ?? [])
+          .map((x: any) => ({
+            _id: String(x._id),
+            name: String(x.name || '').trim(),
+          }))
+          .filter((x: { name: string }) => !!x.name);
+      },
+      error: () => {
+        this.customWorkTypes = [];
+      },
+    });
+  }
+
+  addCustomWorkType(): void {
+    const name = (this.newCustomWorkType || '').trim();
+    if (!name) {
+      this.customWorkTypeError = 'اكتب اسم نوع العمل';
+      return;
+    }
+    if (this.workTypeOptions.some((x) => x.toLowerCase() === name.toLowerCase())) {
+      this.customWorkTypeError = 'النوع موجود بالفعل';
+      return;
+    }
+    this.customWorkTypeSaving = true;
+    this.customWorkTypeError = '';
+    this.caseApi.addCustomWorkType(name).subscribe({
+      next: (res) => {
+        this.customWorkTypeSaving = false;
+        this.newCustomWorkType = '';
+        const item = res?.data;
+        if (item?._id && item?.name) {
+          if (!this.customWorkTypes.some((c) => c._id === item._id)) {
+            this.customWorkTypes = [
+              ...this.customWorkTypes,
+              { _id: String(item._id), name: String(item.name) },
+            ];
+          }
+        } else {
+          this.loadCustomWorkTypes();
+        }
+        this.selectedWorkTypes.add(name);
+        this.workTypeQuantities[name] = 1;
+        this.updateWorkTypeString();
+      },
+      error: (err: any) => {
+        this.customWorkTypeSaving = false;
+        this.customWorkTypeError = err?.error?.message || 'تعذر إضافة نوع العمل';
+      },
+    });
+  }
+
+  removeCustomWorkType(name: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const found = this.customWorkTypes.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (!found) return;
+    if (!confirm(`حذف نوع العمل "${name}"؟`)) return;
+    this.caseApi.deleteCustomWorkType(found._id).subscribe({
+      next: () => {
+        this.customWorkTypes = this.customWorkTypes.filter((c) => c._id !== found._id);
+        if (this.selectedWorkTypes.has(name)) {
+          this.selectedWorkTypes.delete(name);
+          delete this.workTypeQuantities[name];
+          this.updateWorkTypeString();
+        }
+      },
+      error: (err: any) => {
+        this.customWorkTypeError = err?.error?.message || 'تعذر حذف نوع العمل';
+      },
+    });
   }
 
   onPatientInputChange(): void {
@@ -620,6 +714,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.reloadCasesFromBackend();
+    this.loadCustomWorkTypes();
     this.connectRealtimeUpdates();
   }
 
@@ -741,6 +836,9 @@ export class Secretary implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.removableDentureType = '';
     this.patientWarning = '';
+    this.newCustomWorkType = '';
+    this.customWorkTypeError = '';
+    this.loadCustomWorkTypes();
     this.existingPlyFileName = null;
     this.clearPlySelection();
     this.dialogOpen.set(true);
@@ -1011,7 +1109,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
       const ply = this.selectedPlyFile;
-      this.caseApi.createCase(buildCreateCasePayload(formPayload)).subscribe({
+      this.caseApi.createCase({ ...buildCreateCasePayload(formPayload), autoExit: true }).subscribe({
         next: (res) => {
           const caseId = String(
             (res as { case?: { _id?: string; id?: string } })?.case?._id ??
@@ -1022,25 +1120,26 @@ export class Secretary implements OnInit, OnDestroy {
             this.saveInProgress.set(false);
             this.flash(msg);
             this.closeDialog();
+            this.activeFilter.set('exited');
             this.reloadCasesFromBackend();
           };
           if (ply && caseId) {
             this.caseApi.uploadCasePly(caseId, ply).subscribe({
-              next: () => done('تمت إضافة الحالة ورفع ملف PLY'),
+              next: () => done('تمت إضافة الحالة وإخراجها ورفع ملف PLY'),
               error: (err: unknown) => {
                 this.saveInProgress.set(false);
                 const detail = this.formatCaseApiError(err);
                 this.flash(
                   detail
-                    ? `تم إنشاء الحالة، لكن فشل رفع PLY: ${detail}`
-                    : 'تم إنشاء الحالة لكن تعذر رفع ملف PLY'
+                    ? `تم إنشاء الحالة وإخراجها، لكن فشل رفع PLY: ${detail}`
+                    : 'تم إنشاء الحالة وإخراجها لكن تعذر رفع ملف PLY'
                 );
                 this.closeDialog();
                 this.reloadCasesFromBackend();
               },
             });
           } else {
-            done('تمت إضافة الحالة في النظام');
+            done('تمت إضافة الحالة وإخراجها تلقائيًا');
           }
         },
         error: (err: unknown) => {
@@ -1127,10 +1226,6 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   confirmDelete(c: any): void {
-    if (c.status === 'exited') {
-      this.openPasswordProtection('delete', c);
-      return;
-    }
     this.proceedWithDelete(c);
   }
 
