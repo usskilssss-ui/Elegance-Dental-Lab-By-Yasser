@@ -1103,6 +1103,91 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   /** عدد وحدات الزيركونيا الإجمالي الخارجة غير الإعادة */
+
+  private readonly materialCounterPalette = [
+    { color: '#6366f1', bg: '#eef2ff' },
+    { color: '#0ea5e9', bg: '#e0f2fe' },
+    { color: '#10b981', bg: '#ecfdf5' },
+    { color: '#f59e0b', bg: '#fffbeb' },
+    { color: '#ef4444', bg: '#fef2f2' },
+    { color: '#8b5cf6', bg: '#f5f3ff' },
+    { color: '#14b8a6', bg: '#f0fdfa' },
+    { color: '#f97316', bg: '#fff7ed' },
+    { color: '#64748b', bg: '#f8fafc' },
+    { color: '#ec4899', bg: '#fdf2f8' },
+  ];
+
+  materialCounterColor(index: number): string {
+    return this.materialCounterPalette[index % this.materialCounterPalette.length].color;
+  }
+
+  materialCounterBg(index: number): string {
+    return this.materialCounterPalette[index % this.materialCounterPalette.length].bg;
+  }
+
+  /**
+   * All material unit counters for the dashboard:
+   * current work types (defaults + custom, minus hidden) plus any old types still on exited cases.
+   */
+  get dashboardMaterialCounters(): Array<{ name: string; count: number }> {
+    const labels = [...this.reportWorkTypeOptions];
+    const labelLower = new Set(labels.map((n) => n.toLowerCase()));
+
+    // Discover old/deleted types still present on exited non-redo cases
+    const discoveryMatchers = [...labels].sort((a, b) => b.length - a.length);
+    for (const c of this.exitedNonRedoCases) {
+      const parts = (c.caseType || '').split('+').map((p) => p.trim()).filter(Boolean);
+      for (const part of parts) {
+        const cleaned = part.replace(/\(\d+\)/g, '').trim();
+        if (!cleaned) continue;
+        const lower = cleaned.toLowerCase();
+        const matchedExisting = discoveryMatchers.some(
+          (lbl) => !!lbl && lower.includes(lbl.toLowerCase())
+        );
+        if (!matchedExisting && !labelLower.has(lower)) {
+          labels.push(cleaned);
+          labelLower.add(lower);
+          discoveryMatchers.push(cleaned);
+          discoveryMatchers.sort((a, b) => b.length - a.length);
+        }
+      }
+    }
+
+    // Longest first so "German Zircon" wins over "Zircon"
+    const matchers = [...labels].sort((a, b) => b.length - a.length);
+    const counts = new Map<string, number>();
+    for (const name of labels) counts.set(name, 0);
+
+    for (const c of this.exitedNonRedoCases) {
+      const parts = (c.caseType || '').split('+').map((p) => p.trim()).filter(Boolean);
+      const meta = this.parseNotesMeta(c.rawNotes || '');
+      const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
+
+      for (const part of parts) {
+        const lowerPart = part.toLowerCase();
+        const matchQty = part.match(/\((\d+)\)/);
+        const qty = matchQty ? parseInt(matchQty[1], 10) : caseOverallQuantity;
+
+        let matchedName = '';
+        for (const label of matchers) {
+          if (label && lowerPart.includes(label.toLowerCase())) {
+            matchedName = label;
+            break;
+          }
+        }
+        if (!matchedName) {
+          const cleaned = part.replace(/\(\d+\)/g, '').trim();
+          if (cleaned && counts.has(cleaned)) matchedName = cleaned;
+        }
+        if (matchedName) {
+          counts.set(matchedName, (counts.get(matchedName) || 0) + qty);
+        }
+      }
+    }
+
+    return labels.map((name) => ({ name, count: counts.get(name) || 0 }));
+  }
+
   get zirconCount(): number {
     return this.regularZirconCount + this.germanZirconCount + this.titaniumCount + this.peekCount;
   }
