@@ -87,6 +87,18 @@ tbody td { padding: 12px 16px; font-size: 12px; color: var(--color-text-primary)
 .patient-detail-row:last-child { border-bottom: none; }
 .patient-detail-row span { color: var(--color-text-secondary); }
 .patient-detail-row strong { color: var(--color-text-primary); }
+.report-detail-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.report-detail-pair .patient-detail-row {
+  border-bottom: none;
+}
+@media (max-width: 640px) {
+  .report-detail-pair { grid-template-columns: 1fr; }
+}
 .stage-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 .stage-badge.waiting { background: var(--badge-amber-bg); color: var(--badge-amber-text); }
 .stage-badge.secretary { background: var(--accent-secondary); color: var(--accent-blue); }

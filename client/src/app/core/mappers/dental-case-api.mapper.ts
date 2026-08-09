@@ -159,8 +159,12 @@ export function buildCreateCasePayload(
     patientName: (form.patient || '').trim() || 'غير محدد',
     patientEmail: email,
     patientPhone: phone,
-    // API/DB enum is doctor|student; lab is stored in notes meta only
-    requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType:
+      form.requesterType === 'student'
+        ? 'student'
+        : form.requesterType === 'lab'
+          ? 'lab'
+          : 'doctor',
     salaryAmount: Number(form.studentPrice || 0),
     caseType: (form.workType || '').trim(),
     priority: 'normal',

@@ -546,6 +546,20 @@ export class Admin implements OnInit, OnDestroy {
     return this.normalizeDoctorName(c.accountName || c.doctorName || c.assignedTo || 'غير محدد');
   }
 
+  isLabCaseRow(c: AdminCaseRow): boolean {
+    return c.requesterType === 'lab' || !!(c.labName || '').trim();
+  }
+
+  /** True when the opened report account is a lab (show doctor + patient in case rows) */
+  get isFilteredReportAccountLab(): boolean {
+    if (!this.reportDoctorFilter) return false;
+    const filterKey = this.doctorGroupKey(this.reportDoctorFilter);
+    return this.reportCases.some((c) => {
+      if (this.doctorGroupKey(this.getReportAccountName(c)) !== filterKey) return false;
+      return this.isLabCaseRow(c);
+    });
+  }
+
   get reportWorkTypeOptions(): string[] {
     const hidden = new Set(this.hiddenDefaultWorkTypes.map((n) => n.toLowerCase()));
     const merged = this.defaultWorkTypeOptions.filter((n) => !hidden.has(n.toLowerCase()));

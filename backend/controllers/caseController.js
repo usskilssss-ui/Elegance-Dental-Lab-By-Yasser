@@ -89,8 +89,11 @@ function forceLabNameInNotes(notes, labFullName) {
     }
   }
   meta.labName = name;
-  meta.doctor = name;
   meta.requesterType = 'lab';
+  // Keep referring doctor if already set; only fall back to lab name when missing
+  if (!String(meta.doctor || meta.doctorName || '').trim()) {
+    meta.doctor = name;
+  }
   return `${prefix}${JSON.stringify(meta)}`;
 }
 
