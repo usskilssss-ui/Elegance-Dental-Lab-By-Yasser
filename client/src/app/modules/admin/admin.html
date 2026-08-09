@@ -914,7 +914,7 @@
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>اسم الطبيب</th>
+                  <th>اسم الطبيب / المعمل</th>
                   <th>عدد الحالات</th>
                   <th>إجمالي الحساب</th>
                   <th>المبلغ المدفوع</th>
@@ -987,57 +987,25 @@
             </div>
           </div>
 
-          <!-- تخصيص أسعار الطبيب -->
+          <!-- تخصيص أسعار الطبيب / المعمل (متزامن مع أنواع العمل) -->
           <div class="report-table-card" style="margin-bottom:24px; padding:20px;">
             <div style="font-weight:700;font-size:16px;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:8px;">
               <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#3b82f6;"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              تخصيص أسعار الخامات للطبيب: {{ reportDoctorFilter }}
+              تخصيص أسعار أنواع العمل: {{ reportDoctorFilter }}
             </div>
             
             <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;margin-bottom:16px;">
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Emax</label>
-                <input type="number" [(ngModel)]="customEmaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">German Zircon</label>
-                <input type="number" [(ngModel)]="customGermanZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Zircon</label>
-                <input type="number" [(ngModel)]="customZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Titanium</label>
-                <input type="number" [(ngModel)]="customTitaniumPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Peek</label>
-                <input type="number" [(ngModel)]="customPeekPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Pmma Cad</label>
-                <input type="number" [(ngModel)]="customPmmaPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Night Guard</label>
-                <input type="number" [(ngModel)]="customNightGuardPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Mokup</label>
-                <input type="number" [(ngModel)]="customMockupPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Wax</label>
-                <input type="number" [(ngModel)]="customWaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Ring</label>
-                <input type="number" [(ngModel)]="customRingPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Try in</label>
-                <input type="number" [(ngModel)]="customTryInPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
+              <div
+                class="control-card"
+                style="background:#1e293b;padding:8px 12px;border-radius:8px;"
+                *ngFor="let field of reportPriceFields"
+              >
+                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">{{ field.label }}</label>
+                <input
+                  type="number"
+                  [(ngModel)]="customWorkTypePrices[field.key]"
+                  style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;"
+                />
               </div>
             </div>
 
@@ -1049,7 +1017,7 @@
                 [disabled]="isPricingSaving"
                 (click)="saveDoctorCustomPrices()"
               >
-                {{ isPricingSaving ? 'جاري الحفظ...' : 'حفظ الأسعار لهذا الطبيب' }}
+                {{ isPricingSaving ? 'جاري الحفظ...' : 'حفظ الأسعار لهذا الحساب' }}
               </button>
               
               <span *ngIf="pricingSaveSuccess" style="color:#10b981;font-size:14px;display:flex;align-items:center;gap:4px;">
@@ -1218,7 +1186,11 @@
                 <div class="detail-section-title">ملخص الحالة</div>
                 <div class="patient-detail-row"><span>رقم الحالة</span><strong>{{ selectedReportCase.caseNumber }}</strong></div>
                 <div class="patient-detail-row"><span>المريض</span><strong>{{ selectedReportCase.patientName }}</strong></div>
+                <div class="patient-detail-row" *ngIf="selectedReportCase.labName || selectedReportCase.requesterType === 'lab'">
+                  <span>المعمل</span><strong>{{ selectedReportCase.labName || getReportAccountName(selectedReportCase) }}</strong>
+                </div>
                 <div class="patient-detail-row"><span>الطبيب</span><strong>{{ selectedReportCase.doctorName || selectedReportCase.assignedTo || 'غير محدد' }}</strong></div>
+                <div class="patient-detail-row"><span>نوع العمل</span><strong>{{ selectedReportCase.caseType || '—' }}</strong></div>
                 <div class="patient-detail-row"><span>المرحلة</span><strong>{{ selectedReportCase.currentStage }}</strong></div>
                 <div class="patient-detail-row"><span>تاريخ الاستلام</span><strong>{{ selectedReportCase.receivedDateDisplay || 'غير متوفر' }}</strong></div>
               </div>

@@ -18,14 +18,18 @@ exports.updatePricing = async (req, res) => {
 
     const normalizedName = doctorName.trim();
 
+    const incoming = prices && typeof prices === 'object' ? prices : {};
     let pricing = await DoctorPricing.findOne({ doctorName: normalizedName });
     if (pricing) {
-      pricing.prices = { ...pricing.prices, ...prices };
+      const prev =
+        pricing.prices && typeof pricing.prices === 'object' ? { ...pricing.prices } : {};
+      pricing.prices = { ...prev, ...incoming };
+      pricing.markModified('prices');
       await pricing.save();
     } else {
       pricing = await DoctorPricing.create({
         doctorName: normalizedName,
-        prices
+        prices: incoming,
       });
     }
 

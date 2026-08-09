@@ -43,9 +43,13 @@ export interface AdminCaseRow {
   caseNumber: string;
   patientName: string;
   assignedTo: string | null;
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   doctor?: string;
   doctorName?: string;
+  /** Lab name when case is a lab case */
+  labName?: string;
+  /** Name used for report grouping / pricing (lab or doctor) */
+  accountName?: string;
   clinic?: string;
   currentStage: string;
   priority: string;
@@ -170,18 +174,52 @@ export class Admin implements OnInit, OnDestroy {
   paymentFilter: 'all' | 'paid' | 'unpaid' = 'unpaid';
 
   doctorPricingsMap = new Map<string, any>();
-  
-  customEmaxPrice = 1000;
-  customGermanZirconPrice = 850;
-  customZirconPrice = 700;
-  customTitaniumPrice = 2200;
-  customPeekPrice = 1700;
-  customPmmaPrice = 250;
-  customNightGuardPrice = 300;
-  customMockupPrice = 250;
-  customWaxPrice = 0;
-  customRingPrice = 0;
-  customTryInPrice = 0;
+
+  /** Same defaults as secretary/doctor forms — merged with API customs */
+  readonly defaultWorkTypeOptions = [
+    'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
+    'Peek', 'Titanium', 'Try in', 'Mokup',
+    'Night Guard', 'Removable Denture', 'Wax', 'Ring',
+  ];
+  customWorkTypes: Array<{ _id: string; name: string }> = [];
+  hiddenDefaultWorkTypes: string[] = [];
+  /** Dynamic price inputs keyed by storage key (emax, germanZircon, ...) */
+  customWorkTypePrices: Record<string, number> = {};
+  reportPriceFields: Array<{ label: string; key: string }> = [];
+
+  private readonly defaultPriceByKey: Record<string, number> = {
+    emax: 1000,
+    germanZircon: 850,
+    zircon: 700,
+    titanium: 2200,
+    peek: 1700,
+    pmma: 250,
+    nightGuard: 300,
+    mockup: 250,
+    wax: 0,
+    ring: 0,
+    tryIn: 0,
+    removableDenture: 0,
+  };
+
+  private readonly legacyPriceKeyByName: Record<string, string> = {
+    emax: 'emax',
+    'german zircon': 'germanZircon',
+    zircon: 'zircon',
+    titanium: 'titanium',
+    peek: 'peek',
+    'pmma cad': 'pmma',
+    pmma: 'pmma',
+    'night guard': 'nightGuard',
+    nightguard: 'nightGuard',
+    mokup: 'mockup',
+    mockup: 'mockup',
+    wax: 'wax',
+    ring: 'ring',
+    'try in': 'tryIn',
+    tryin: 'tryIn',
+    'removable denture': 'removableDenture',
+  };
 
   currentPrintDate = new Date();
 
@@ -285,6 +323,7 @@ export class Admin implements OnInit, OnDestroy {
     this.restoreActiveNav();
     this.loadCasesFromApi();
     this.loadFinancialReportFromApi();
+    this.loadReportWorkTypes();
     this.loadDoctorPricings();
     this.loadStaffFromApi();
     if (this.activeNav === 'staff') {
@@ -497,17 +536,85 @@ export class Admin implements OnInit, OnDestroy {
     return true;
   }
 
+  /** Account shown in report list: lab name for lab cases, doctor otherwise */
+  getReportAccountName(c: AdminCaseRow): string {
+    const lab = (c.labName || '').trim();
+    const isLab = c.requesterType === 'lab' || !!lab;
+    if (isLab) {
+      return this.normalizeDoctorName(lab || c.accountName || c.doctorName || c.assignedTo || 'غير محدد');
+    }
+    return this.normalizeDoctorName(c.accountName || c.doctorName || c.assignedTo || 'غير محدد');
+  }
+
+  get reportWorkTypeOptions(): string[] {
+    const hidden = new Set(this.hiddenDefaultWorkTypes.map((n) => n.toLowerCase()));
+    const merged = this.defaultWorkTypeOptions.filter((n) => !hidden.has(n.toLowerCase()));
+    for (const c of this.customWorkTypes) {
+      if (c.name && !merged.some((x) => x.toLowerCase() === c.name.toLowerCase())) {
+        merged.push(c.name);
+      }
+    }
+    return merged;
+  }
+
+  workTypeToPriceKey(name: string): string {
+    const lower = String(name || '').toLowerCase().trim();
+    if (!lower) return '';
+    if (this.legacyPriceKeyByName[lower]) return this.legacyPriceKeyByName[lower];
+    return lower
+      .replace(/[^a-z0-9]+(.)/g, (_m, c: string) => c.toUpperCase())
+      .replace(/[^a-zA-Z0-9]/g, '');
+  }
+
+  private rebuildReportPriceFields(): void {
+    this.reportPriceFields = this.reportWorkTypeOptions.map((label) => ({
+      label,
+      key: this.workTypeToPriceKey(label),
+    }));
+  }
+
+  loadReportWorkTypes(): void {
+    this.caseApi.getCustomWorkTypes().subscribe({
+      next: (res) => {
+        this.customWorkTypes = (res?.data ?? [])
+          .map((x: any) => ({
+            _id: String(x._id),
+            name: String(x.name || '').trim(),
+          }))
+          .filter((x: { name: string }) => !!x.name);
+        this.hiddenDefaultWorkTypes = (res?.hiddenDefaults ?? [])
+          .map((n: any) => String(n || '').trim())
+          .filter(Boolean);
+        this.rebuildReportPriceFields();
+        if (this.reportDoctorFilter) {
+          this.loadCustomPricesForDoctor(this.reportDoctorFilter);
+        }
+      },
+      error: () => {
+        this.customWorkTypes = [];
+        this.hiddenDefaultWorkTypes = [];
+        this.rebuildReportPriceFields();
+      },
+    });
+  }
+
   get reportFilteredCases(): AdminCaseRow[] {
     const search = this.reportSearch.toLowerCase().trim();
     return this.reportCases.filter(c => {
       let match = this.matchesReportPeriod(c);
       if (search) {
-        match = match && [c.caseNumber, c.patientName, c.doctorName || c.assignedTo || '', c.currentStage]
-          .some(value => value?.toLowerCase().includes(search));
+        match = match && [
+          c.caseNumber,
+          c.patientName,
+          this.getReportAccountName(c),
+          c.doctorName || '',
+          c.labName || '',
+          c.assignedTo || '',
+          c.currentStage,
+        ].some(value => value?.toLowerCase().includes(search));
       }
       if (this.reportDoctorFilter) {
-        const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
-        const key = this.doctorGroupKey(name);
+        const key = this.doctorGroupKey(this.getReportAccountName(c));
         const filterKey = this.doctorGroupKey(this.reportDoctorFilter);
         match = match && (key === filterKey);
       }
@@ -524,7 +631,7 @@ export class Admin implements OnInit, OnDestroy {
   get reportDoctors(): string[] {
     const doctors = new Map<string, string>();
     this.reportCases.forEach(c => {
-      const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
+      const name = this.getReportAccountName(c);
       const key = this.doctorGroupKey(name);
       if (!doctors.has(key)) {
         doctors.set(key, name);
@@ -546,7 +653,7 @@ export class Admin implements OnInit, OnDestroy {
       if (String(c.currentStage) !== 'exited') return;
       if (!this.matchesReportPeriod(c)) return;
 
-      const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
+      const name = this.getReportAccountName(c);
       const key = this.doctorGroupKey(name);
 
       const cost = this.calculateCaseCost(c);
@@ -1187,9 +1294,16 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
+  private priceForKey(custom: Record<string, any> | undefined, priceKey: string): number {
+    const raw = custom?.[priceKey];
+    if (raw !== undefined && raw !== null && Number.isFinite(Number(raw))) {
+      return Number(raw);
+    }
+    return this.defaultPriceByKey[priceKey] ?? 0;
+  }
+
   calculateCaseCost(c: AdminCaseRow): number {
-    const doctor = c.doctorName || c.assignedTo || 'غير محدد';
-    const normalizedDoc = doctor.toLowerCase();
+    const account = this.getReportAccountName(c);
 
     const ct = (c.caseType || '').toLowerCase();
     const isExcluded = ct.includes('redo') || ct.includes('remake') ||
@@ -1198,21 +1312,16 @@ export class Admin implements OnInit, OnDestroy {
                        ct.includes('غير معروف') || ct.includes('unknown');
     if (isExcluded) return 0;
 
-    const key = this.doctorGroupKey(doctor);
-    const custom = this.doctorPricingsMap.get(key);
-    const prices = {
-      emax: custom?.emax ?? 1000,
-      germanZircon: custom?.germanZircon ?? 850,
-      zircon: custom?.zircon ?? 700,
-      titanium: custom?.titanium ?? 2200,
-      peek: custom?.peek ?? 1700,
-      pmma: custom?.pmma ?? 250,
-      nightGuard: custom?.nightGuard ?? 300,
-      mockup: custom?.mockup ?? 250,
-      wax: custom?.wax ?? 0,
-      ring: custom?.ring ?? 0,
-      tryIn: custom?.tryIn ?? 0
-    };
+    const key = this.doctorGroupKey(account);
+    const custom = this.doctorPricingsMap.get(key) || {};
+
+    // Longer names first so "German Zircon" wins over "Zircon"
+    const typeMatchers = [...this.reportWorkTypeOptions]
+      .sort((a, b) => b.length - a.length)
+      .map((label) => ({
+        needle: label.toLowerCase(),
+        priceKey: this.workTypeToPriceKey(label),
+      }));
 
     let total = 0;
     const parts = (c.caseType || '').split('+').map(p => p.trim());
@@ -1224,28 +1333,32 @@ export class Admin implements OnInit, OnDestroy {
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
 
-      if (lowerPart.includes('emax')) {
-        total += qty * prices.emax;
-      } else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
-        total += qty * prices.germanZircon;
-      } else if (lowerPart.includes('zircon')) {
-        total += qty * prices.zircon;
-      } else if (lowerPart.includes('titanium')) {
-        total += qty * prices.titanium;
-      } else if (lowerPart.includes('peek')) {
-        total += qty * prices.peek;
-      } else if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
-        total += qty * prices.pmma;
-      } else if (lowerPart.includes('night guard') || lowerPart.includes('nightguard') || lowerPart.includes('guard')) {
-        total += qty * prices.nightGuard;
-      } else if (lowerPart.includes('mokup') || lowerPart.includes('mockup') || lowerPart.includes('mock up') || lowerPart.includes('موكب')) {
-        total += qty * prices.mockup;
-      } else if (lowerPart.includes('wax')) {
-        total += qty * prices.wax;
-      } else if (lowerPart.includes('ring')) {
-        total += qty * prices.ring;
-      } else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-        total += qty * prices.tryIn;
+      let matchedKey = '';
+      for (const m of typeMatchers) {
+        if (m.needle && lowerPart.includes(m.needle)) {
+          matchedKey = m.priceKey;
+          break;
+        }
+      }
+
+      // Fallback for deleted/hidden types still present on old cases
+      if (!matchedKey) {
+        if (lowerPart.includes('emax')) matchedKey = 'emax';
+        else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) matchedKey = 'germanZircon';
+        else if (lowerPart.includes('zircon')) matchedKey = 'zircon';
+        else if (lowerPart.includes('titanium')) matchedKey = 'titanium';
+        else if (lowerPart.includes('peek')) matchedKey = 'peek';
+        else if (lowerPart.includes('pmma')) matchedKey = 'pmma';
+        else if (lowerPart.includes('night guard') || lowerPart.includes('nightguard')) matchedKey = 'nightGuard';
+        else if (lowerPart.includes('mokup') || lowerPart.includes('mockup') || lowerPart.includes('موكب')) matchedKey = 'mockup';
+        else if (lowerPart.includes('removable denture')) matchedKey = 'removableDenture';
+        else if (lowerPart.includes('wax')) matchedKey = 'wax';
+        else if (lowerPart.includes('ring')) matchedKey = 'ring';
+        else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) matchedKey = 'tryIn';
+      }
+
+      if (matchedKey) {
+        total += qty * this.priceForKey(custom, matchedKey);
       }
     }
     return total;
@@ -1426,14 +1539,28 @@ export class Admin implements OnInit, OnDestroy {
     const createdAt = this.normalizeDate(doc['createdAt']);
     const dueDate = this.normalizeDate(doc['dueDate']);
 
+    const labName = String(parsedMeta['labName'] ?? '').trim();
+    const doctorName = String(parsedMeta['doctor'] ?? parsedMeta['doctorName'] ?? '').trim();
+    const requesterRaw = String(parsedMeta['requesterType'] ?? doc['requesterType'] ?? 'doctor').toLowerCase();
+    const requesterType: AdminCaseRow['requesterType'] =
+      requesterRaw === 'lab' || labName
+        ? 'lab'
+        : requesterRaw === 'student'
+          ? 'student'
+          : 'doctor';
+    const accountName =
+      requesterType === 'lab' ? labName || doctorName : doctorName;
+
     return {
       id: String(doc['_id'] ?? ''),
       caseNumber: String(doc['caseNumber'] ?? ''),
       patientName: String(doc['patientName'] ?? ''),
       assignedTo: assignedTo && assignedTo['fullName'] ? String(assignedTo['fullName']) : null,
-      requesterType: String(doc['requesterType'] ?? 'doctor') === 'student' ? 'student' : 'doctor',
-      doctor: String(parsedMeta['doctor'] ?? ''),
-      doctorName: String(parsedMeta['doctor'] ?? ''),
+      requesterType,
+      doctor: doctorName,
+      doctorName,
+      labName,
+      accountName,
       clinic: '',
       currentStage: forcedCompleted ? 'completed' : String(doc['currentStage'] ?? 'waiting'),
       priority: String(doc['priority'] ?? 'normal'),
@@ -1476,14 +1603,30 @@ export class Admin implements OnInit, OnDestroy {
     const notes = String(row['notes'] ?? '');
     const parsedMeta = this.parseNotesMeta(notes);
 
+    const labName = String(row['labName'] ?? parsedMeta['labName'] ?? '').trim();
+    const doctorName = String(row['doctorName'] ?? parsedMeta['doctor'] ?? '').trim();
+    const requesterRaw = String(row['requesterType'] ?? parsedMeta['requesterType'] ?? 'doctor').toLowerCase();
+    const requesterType: AdminCaseRow['requesterType'] =
+      requesterRaw === 'lab' || labName
+        ? 'lab'
+        : requesterRaw === 'student'
+          ? 'student'
+          : 'doctor';
+    const accountName = String(
+      row['accountName'] ??
+        (requesterType === 'lab' ? labName || doctorName : doctorName)
+    ).trim();
+
     return {
       id: String(row['id'] ?? ''),
       caseNumber: String(row['caseNumber'] ?? ''),
       patientName: String(row['patientName'] ?? ''),
       assignedTo: String(row['assignedTo'] ?? '') || null,
-      requesterType: String(row['requesterType'] ?? 'doctor') === 'student' ? 'student' : 'doctor',
-      doctor: String(row['doctorName'] ?? ''),
-      doctorName: String(row['doctorName'] ?? ''),
+      requesterType,
+      doctor: doctorName,
+      doctorName,
+      labName,
+      accountName,
       clinic: '',
       currentStage: String(row['currentStage'] ?? 'completed'),
       priority: 'normal',
@@ -1622,6 +1765,8 @@ export class Admin implements OnInit, OnDestroy {
     if (nav === 'staff' || nav === 'doctors' || nav === 'labs') {
       this.loadStaffFromApi();
     } else if (nav === 'reports') {
+      this.loadReportWorkTypes();
+      this.loadDoctorPricings();
       this.loadFinancialReportFromApi();
     } else if (nav === 'financials') {
       this.ensureCashFiltersInitialized();
@@ -2339,35 +2484,16 @@ export class Admin implements OnInit, OnDestroy {
 
   loadCustomPricesForDoctor(doctorName: string): void {
     const key = this.doctorGroupKey(doctorName);
-    const custom = this.doctorPricingsMap.get(key);
+    const custom = this.doctorPricingsMap.get(key) || {};
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
-    
-    if (custom) {
-      this.customEmaxPrice = custom.emax ?? 1000;
-      this.customGermanZirconPrice = custom.germanZircon ?? 850;
-      this.customZirconPrice = custom.zircon ?? 700;
-      this.customTitaniumPrice = custom.titanium ?? 2200;
-      this.customPeekPrice = custom.peek ?? 1700;
-      this.customPmmaPrice = custom.pmma ?? 250;
-      this.customNightGuardPrice = custom.nightGuard ?? 300;
-      this.customMockupPrice = custom.mockup ?? 250;
-      this.customWaxPrice = custom.wax ?? 0;
-      this.customRingPrice = custom.ring ?? 0;
-      this.customTryInPrice = custom.tryIn ?? 0;
-    } else {
-      this.customEmaxPrice = 1000;
-      this.customGermanZirconPrice = 850;
-      this.customZirconPrice = 700;
-      this.customTitaniumPrice = 2200;
-      this.customPeekPrice = 1700;
-      this.customPmmaPrice = 250;
-      this.customNightGuardPrice = 300;
-      this.customMockupPrice = 250;
-      this.customWaxPrice = 0;
-      this.customRingPrice = 0;
-      this.customTryInPrice = 0;
+    this.rebuildReportPriceFields();
+
+    const prices: Record<string, number> = {};
+    for (const field of this.reportPriceFields) {
+      prices[field.key] = this.priceForKey(custom, field.key);
     }
+    this.customWorkTypePrices = prices;
   }
 
   saveDoctorCustomPrices(): void {
@@ -2376,28 +2502,21 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
 
-    const prices = {
-      emax: this.customEmaxPrice,
-      germanZircon: this.customGermanZirconPrice,
-      zircon: this.customZirconPrice,
-      titanium: this.customTitaniumPrice,
-      peek: this.customPeekPrice,
-      pmma: this.customPmmaPrice,
-      nightGuard: this.customNightGuardPrice,
-      mockup: this.customMockupPrice,
-      wax: this.customWaxPrice,
-      ring: this.customRingPrice,
-      tryIn: this.customTryInPrice
-    };
+    const prices: Record<string, number> = {};
+    for (const field of this.reportPriceFields) {
+      const raw = this.customWorkTypePrices[field.key];
+      prices[field.key] = Number.isFinite(Number(raw)) ? Number(raw) : this.defaultPriceByKey[field.key] ?? 0;
+    }
 
     this.caseApi.updateDoctorPricing(this.reportDoctorFilter, prices).subscribe({
-      next: (res) => {
+      next: () => {
         this.isPricingSaving = false;
         this.pricingSaveSuccess = true;
-        
+
         const key = this.doctorGroupKey(this.reportDoctorFilter);
-        this.doctorPricingsMap.set(key, prices);
-        
+        const prev = this.doctorPricingsMap.get(key) || {};
+        this.doctorPricingsMap.set(key, { ...prev, ...prices });
+
         this.loadFinancialReportFromApi();
       },
       error: (err) => {

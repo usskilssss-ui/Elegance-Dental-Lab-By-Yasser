@@ -7,19 +7,24 @@ const DoctorPricingSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  // Mixed so custom / added work types can store prices as dynamic keys
   prices: {
-    emax: { type: Number, default: 1000 },
-    germanZircon: { type: Number, default: 850 },
-    zircon: { type: Number, default: 700 },
-    titanium: { type: Number, default: 2200 },
-    peek: { type: Number, default: 1700 },
-    pmma: { type: Number, default: 250 },
-    nightGuard: { type: Number, default: 300 },
-    mockup: { type: Number, default: 250 },
-    wax: { type: Number, default: 0 },
-    ring: { type: Number, default: 0 },
-    tryIn: { type: Number, default: 0 }
-  }
+    type: mongoose.Schema.Types.Mixed,
+    default: () => ({
+      emax: 1000,
+      germanZircon: 850,
+      zircon: 700,
+      titanium: 2200,
+      peek: 1700,
+      pmma: 250,
+      nightGuard: 300,
+      mockup: 250,
+      wax: 0,
+      ring: 0,
+      tryIn: 0,
+      removableDenture: 0,
+    }),
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DoctorPricing', DoctorPricingSchema);

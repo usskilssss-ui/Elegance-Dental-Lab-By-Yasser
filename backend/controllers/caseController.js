@@ -402,6 +402,15 @@ exports.getFinancialReport = async (req, res) => {
           (doc.assignedTo && doc.assignedTo.fullName) ||
           'غير محدد';
         const doctorName = String(doctorNameRaw).trim() || 'غير محدد';
+        const labName = String(notesMeta.labName || '').trim();
+        const requesterRaw = String(
+          notesMeta.requesterType || doc.requesterType || 'doctor'
+        ).toLowerCase();
+        const requesterType =
+          requesterRaw === 'lab' ? 'lab' : requesterRaw === 'student' ? 'student' : 'doctor';
+        const isLab = requesterType === 'lab' || !!labName;
+        // Group/list by lab for lab cases; keep referring doctorName for details
+        const accountName = isLab ? labName || doctorName : doctorName;
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
         const salaryAmount = Number(doc.salaryAmount || 0);
@@ -413,6 +422,9 @@ exports.getFinancialReport = async (req, res) => {
           patientName: String(doc.patientName || ''),
           caseType: String(doc.caseType || 'General'),
           doctorName,
+          labName,
+          accountName,
+          requesterType: isLab ? 'lab' : requesterType,
           assignedTo: doc.assignedTo ? String(doc.assignedTo.fullName || '') : null,
           currentStage: String(doc.currentStage || ''),
           salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
@@ -420,15 +432,20 @@ exports.getFinancialReport = async (req, res) => {
           paidAt: doc.paidAt || null,
           receivedAt: createdAt,
           receivedDateDisplay: createdAt.toISOString(),
-          dueDate: doc.dueDate || null, notes: doc.notes || '', exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+          dueDate: doc.dueDate || null,
+          notes: doc.notes || '',
+          exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
         };
       })
       .filter((row) => {
         const rowDate = new Date(row.receivedAt);
         if (year && Number(year) !== rowDate.getFullYear()) return false;
         if (month && Number(month) !== rowDate.getMonth() + 1) return false;
-        if (doctor && !row.doctorName.toLowerCase().includes(String(doctor).toLowerCase().trim()))
-          return false;
+        if (doctor) {
+          const q = String(doctor).toLowerCase().trim();
+          const hay = `${row.accountName} ${row.doctorName} ${row.labName}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
         return true;
       });
 
