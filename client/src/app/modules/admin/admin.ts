@@ -1130,7 +1130,11 @@ export class Admin implements OnInit, OnDestroy {
    * current work types (defaults + custom, minus hidden) plus any old types still on exited cases.
    */
   get dashboardMaterialCounters(): Array<{ name: string; count: number }> {
-    const labels = [...this.reportWorkTypeOptions];
+    const labels = [
+      'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
+      'Peek', 'Titanium', 'Try in', 'Mokup',
+      'Night Guard', 'Removable Denture', 'Wax', 'Ring', 'PFM',
+    ];
     const labelLower = new Set(labels.map((n) => n.toLowerCase()));
 
     // Discover old/deleted types still present on exited non-redo cases
