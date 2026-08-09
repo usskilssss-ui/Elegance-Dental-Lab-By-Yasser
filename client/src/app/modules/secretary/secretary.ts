@@ -851,10 +851,6 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openEdit(c: any): void {
-    if (c.status === 'exited') {
-      this.openPasswordProtection('edit', c);
-      return;
-    }
     this.proceedWithEdit(c);
   }
 
@@ -1479,16 +1475,12 @@ export class Secretary implements OnInit, OnDestroy {
     const partyRows = isLab
       ? `<div class="row">
       <span class="label">المعمل</span>
-      <span class="value">${labName || doctorName || '—'}</span>
+      <span class="value">${labName || '—'}</span>
     </div>
-    ${
-      doctorName && labName && doctorName !== labName
-        ? `<div class="row">
+    <div class="row">
       <span class="label">الطبيب</span>
-      <span class="value">${doctorName}</span>
+      <span class="value">${doctorName || '—'}</span>
     </div>`
-        : ''
-    }`
       : `<div class="row">
       <span class="label">الطبيب</span>
       <span class="value">${doctorName || '—'}</span>
@@ -1587,10 +1579,6 @@ export class Secretary implements OnInit, OnDestroy {
     <div class="row">
       <span class="label">المريض</span>
       <span class="value">${c.patient || '—'}</span>
-    </div>
-    <div class="row">
-      <span class="label">الفرع</span>
-      <span class="value">${c.branch || '—'}</span>
     </div>
   </div>
 
