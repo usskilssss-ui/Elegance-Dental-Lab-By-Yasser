@@ -2689,6 +2689,7 @@ export class Admin implements OnInit, OnDestroy {
         this.newPaymentAmount = null;
         this.newPaymentNotes = '';
         this.loadDoctorPayments();
+        this.loadCashEntries();
       },
       error: (err) => {
         this.paymentSaving = false;
@@ -2703,6 +2704,7 @@ export class Admin implements OnInit, OnDestroy {
     this.caseApi.deleteDoctorPayment(id).subscribe({
       next: () => {
         this.loadDoctorPayments();
+        this.loadCashEntries();
       },
       error: (err) => {
         alert('تعذر حذف الدفعة: ' + (err.error?.message || err.message));

@@ -1,4 +1,5 @@
 const CashEntry = require('../models/CashEntry');
+const { syncDoctorPaymentsToCash } = require('./doctorPaymentController');
 
 function startOfDay(d) {
   const x = new Date(d);
@@ -14,6 +15,13 @@ function endOfDay(d) {
 
 exports.getEntries = async (req, res) => {
   try {
+    // Ensure doctor/lab account payments appear in finance income
+    try {
+      await syncDoctorPaymentsToCash(req.user?.id || req.user?._id || null);
+    } catch (syncErr) {
+      console.error('cash sync from doctor payments failed:', syncErr);
+    }
+
     const { from, to, type } = req.query;
     const filter = {};
 

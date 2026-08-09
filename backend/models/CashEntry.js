@@ -32,6 +32,13 @@ const CashEntrySchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    /** When set, this income row was auto-created from a doctor/lab account payment */
+    doctorPaymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DoctorPayment',
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );
