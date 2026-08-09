@@ -116,9 +116,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
   ];
 
   customWorkTypes: Array<{ _id: string; name: string }> = [];
+  hiddenDefaultWorkTypes: string[] = [];
   newCustomWorkType = '';
   customWorkTypeError = '';
   customWorkTypeSaving = false;
+  workTypesEditMode = false;
 
   readonly caseTypeOptions = [
     { value: 'New', label: 'جديد' },
@@ -134,11 +136,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
   workTypeError = '';
 
   get workTypeOptions(): string[] {
-    const customs = this.customWorkTypes.map((c) => c.name).filter(Boolean);
-    const merged = [...this.defaultWorkTypeOptions];
-    for (const name of customs) {
-      if (!merged.some((x) => x.toLowerCase() === name.toLowerCase())) {
-        merged.push(name);
+    const hidden = new Set(this.hiddenDefaultWorkTypes.map((n) => n.toLowerCase()));
+    const merged = this.defaultWorkTypeOptions.filter((n) => !hidden.has(n.toLowerCase()));
+    for (const c of this.customWorkTypes) {
+      if (c.name && !merged.some((x) => x.toLowerCase() === c.name.toLowerCase())) {
+        merged.push(c.name);
       }
     }
     return merged;
@@ -146,6 +148,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   isCustomWorkType(name: string): boolean {
     return this.customWorkTypes.some((c) => c.name.toLowerCase() === name.toLowerCase());
+  }
+
+  isDefaultWorkType(name: string): boolean {
+    return this.defaultWorkTypeOptions.some((d) => d.toLowerCase() === name.toLowerCase());
   }
 
   readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
@@ -647,13 +653,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
   loadCustomWorkTypes(): void {
     this.caseApi.getCustomWorkTypes().subscribe({
       next: (res) => {
-        this.customWorkTypes = (res?.data ?? []).map((x: any) => ({
-          _id: String(x._id),
-          name: String(x.name || '').trim(),
-        })).filter((x: { name: string }) => !!x.name);
+        this.customWorkTypes = (res?.data ?? [])
+          .map((x: any) => ({
+            _id: String(x._id),
+            name: String(x.name || '').trim(),
+          }))
+          .filter((x: { name: string }) => !!x.name);
+        this.hiddenDefaultWorkTypes = (res?.hiddenDefaults ?? [])
+          .map((n: any) => String(n || '').trim())
+          .filter(Boolean);
       },
       error: () => {
         this.customWorkTypes = [];
+        this.hiddenDefaultWorkTypes = [];
       },
     });
   }
@@ -674,13 +686,22 @@ export class DoctorComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.customWorkTypeSaving = false;
         this.newCustomWorkType = '';
-        const item = res?.data;
-        if (item?._id && item?.name) {
-          if (!this.customWorkTypes.some((c) => c._id === item._id)) {
-            this.customWorkTypes = [...this.customWorkTypes, { _id: String(item._id), name: String(item.name) }];
-          }
+        if (res?.restoredDefault) {
+          this.hiddenDefaultWorkTypes = this.hiddenDefaultWorkTypes.filter(
+            (n) => n.toLowerCase() !== name.toLowerCase()
+          );
         } else {
-          this.loadCustomWorkTypes();
+          const item = res?.data;
+          if (item?._id && item?.name) {
+            if (!this.customWorkTypes.some((c) => c._id === item._id)) {
+              this.customWorkTypes = [
+                ...this.customWorkTypes,
+                { _id: String(item._id), name: String(item.name) },
+              ];
+            }
+          } else {
+            this.loadCustomWorkTypes();
+          }
         }
         this.selectedWorkTypes.add(name);
         this.workTypeQuantities[name] = this.workTypeQuantities[name] || 1;
@@ -693,24 +714,47 @@ export class DoctorComponent implements OnInit, OnDestroy {
     });
   }
 
-  removeCustomWorkType(name: string, ev?: Event): void {
+  removeWorkTypeOption(name: string, ev?: Event): void {
     ev?.stopPropagation();
-    const found = this.customWorkTypes.find((c) => c.name.toLowerCase() === name.toLowerCase());
-    if (!found) return;
-    if (!confirm(`حذف نوع العمل "${name}"؟`)) return;
-    this.caseApi.deleteCustomWorkType(found._id).subscribe({
-      next: () => {
-        this.customWorkTypes = this.customWorkTypes.filter((c) => c._id !== found._id);
-        if (this.selectedWorkTypes.has(name)) {
-          this.selectedWorkTypes.delete(name);
-          delete this.workTypeQuantities[name];
-          this.updateWorkTypeString();
-        }
-      },
-      error: (err) => {
-        this.customWorkTypeError = err?.error?.message || 'تعذر حذف نوع العمل';
-      },
-    });
+    if (!confirm(`حذف نوع العمل "${name}" من القائمة؟`)) return;
+
+    const custom = this.customWorkTypes.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (custom) {
+      this.caseApi.deleteCustomWorkType(custom._id).subscribe({
+        next: () => {
+          this.customWorkTypes = this.customWorkTypes.filter((c) => c._id !== custom._id);
+          this.clearSelectedWorkType(name);
+        },
+        error: (err) => {
+          this.customWorkTypeError = err?.error?.message || 'تعذر حذف نوع العمل';
+        },
+      });
+      return;
+    }
+
+    if (this.isDefaultWorkType(name)) {
+      this.caseApi.hideDefaultWorkType(name).subscribe({
+        next: () => {
+          if (!this.hiddenDefaultWorkTypes.some((n) => n.toLowerCase() === name.toLowerCase())) {
+            this.hiddenDefaultWorkTypes = [...this.hiddenDefaultWorkTypes, name];
+          }
+          this.clearSelectedWorkType(name);
+        },
+        error: (err) => {
+          this.customWorkTypeError = err?.error?.message || 'تعذر حذف نوع العمل';
+        },
+      });
+    }
+  }
+
+  private clearSelectedWorkType(name: string): void {
+    if (this.selectedWorkTypes.has(name)) {
+      this.selectedWorkTypes.delete(name);
+      delete this.workTypeQuantities[name];
+      if (name === 'Night Guard') this.nightGuardType = '';
+      if (name === 'Removable Denture') this.removableDentureType = '';
+      this.updateWorkTypeString();
+    }
   }
 
   onWorkTypeQtyChange(): void {

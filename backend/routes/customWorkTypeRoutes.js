@@ -8,6 +8,7 @@ router.use(authorize('admin', 'secretary', 'doctor', 'lab'));
 
 router.get('/', customWorkTypeController.list);
 router.post('/', customWorkTypeController.create);
+router.post('/hide-default', customWorkTypeController.hideDefault);
 router.delete('/:id', customWorkTypeController.remove);
 
 module.exports = router;

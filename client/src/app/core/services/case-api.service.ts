@@ -185,6 +185,10 @@ export class CaseApiService {
     return this.http.post(`${environment.apiUrl}/custom-work-types`, { name });
   }
 
+  hideDefaultWorkType(name: string): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/custom-work-types/hide-default`, { name });
+  }
+
   deleteCustomWorkType(id: string): Observable<any> {
     return this.http.delete(`${environment.apiUrl}/custom-work-types/${id}`);
   }
