@@ -2,6 +2,7 @@ const DentalCase = require('../models/DentalCase');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const CashEntry = require('../models/CashEntry');
 const { validationResult } = require('express-validator');
 const { emitToAll } = require('../services/socketService');
 
@@ -1474,7 +1475,45 @@ exports.updateCaseFinancials = async (req, res) => {
       }
     }
 
+    const becamePaid = paymentStatus === 'paid';
+    const becameUnpaid = paymentStatus === 'unpaid';
+
     await dentalCase.save();
+
+    try {
+      if (becamePaid) {
+        const amount = Number(dentalCase.salaryAmount) || 0;
+        if (amount > 0) {
+          const existing = await CashEntry.findOne({ caseId: dentalCase._id, type: 'income' });
+          const account =
+            String(dentalCase.referringDoctor || '').trim() ||
+            String(dentalCase.patientName || '').trim() ||
+            'account';
+          const note = 'Case ' + dentalCase.caseNumber + ' — ' + account;
+          if (existing) {
+            existing.amount = amount;
+            existing.date = dentalCase.paidAt || new Date();
+            existing.notes = note;
+            existing.category = 'case_payment';
+            await existing.save();
+          } else {
+            await CashEntry.create({
+              type: 'income',
+              amount,
+              date: dentalCase.paidAt || new Date(),
+              category: 'case_payment',
+              notes: note,
+              createdBy: req.user?.id || null,
+              caseId: dentalCase._id,
+            });
+          }
+        }
+      } else if (becameUnpaid) {
+        await CashEntry.deleteMany({ caseId: dentalCase._id, type: 'income' });
+      }
+    } catch (cashErr) {
+      console.error('Failed to sync case payment to cash ledger:', cashErr);
+    }
 
     await AuditLog.create({
       caseId: dentalCase._id,

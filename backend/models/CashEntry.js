@@ -39,6 +39,12 @@ const CashEntrySchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    caseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DentalCase',
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );
