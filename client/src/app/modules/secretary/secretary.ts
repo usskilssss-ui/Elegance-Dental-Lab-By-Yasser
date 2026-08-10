@@ -347,6 +347,81 @@ export class Secretary implements OnInit, OnDestroy {
       this.showDoctorSuggestions.set(false);
     }
   }
+
+  // Autocomplete Lab logic (same pattern as doctors)
+  readonly uniqueLabs = computed(() => {
+    const allCases = this.sharedCases.cases();
+    const labs = allCases
+      .map((c) => c.labName?.trim())
+      .filter((name): name is string => !!name);
+    return Array.from(new Set(labs)).sort();
+  });
+
+  readonly labSearchQuery = signal('');
+  readonly showLabSuggestions = signal(false);
+  readonly activeLabSuggestionIndex = signal(-1);
+
+  readonly filteredLabs = computed(() => {
+    const input = this.labSearchQuery();
+    const unique = this.uniqueLabs();
+    const normalizedInput = this.normalizeArabic(input);
+    if (!normalizedInput) {
+      return unique.slice(0, 10);
+    }
+    return unique.filter((lab) => this.normalizeArabic(lab).includes(normalizedInput));
+  });
+
+  onLabInputChange(): void {
+    this.labSearchQuery.set(this.formDraft.labName || '');
+    this.activeLabSuggestionIndex.set(-1);
+    this.showLabSuggestions.set(true);
+  }
+
+  onLabInputFocus(): void {
+    this.labSearchQuery.set(this.formDraft.labName || '');
+    this.showLabSuggestions.set(true);
+    this.activeLabSuggestionIndex.set(-1);
+  }
+
+  onLabInputBlur(): void {
+    setTimeout(() => {
+      this.showLabSuggestions.set(false);
+    }, 200);
+  }
+
+  selectLab(lab: string): void {
+    this.formDraft.labName = lab;
+    this.labSearchQuery.set(lab);
+    this.showLabSuggestions.set(false);
+    this.activeLabSuggestionIndex.set(-1);
+  }
+
+  onLabInputKeydown(event: KeyboardEvent): void {
+    const list = this.filteredLabs();
+    if (!this.showLabSuggestions() || list.length === 0) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIdx = (this.activeLabSuggestionIndex() + 1) % list.length;
+      this.activeLabSuggestionIndex.set(nextIdx);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prevIdx = (this.activeLabSuggestionIndex() - 1 + list.length) % list.length;
+      this.activeLabSuggestionIndex.set(prevIdx);
+    } else if (event.key === 'Enter') {
+      const activeIdx = this.activeLabSuggestionIndex();
+      if (activeIdx >= 0 && activeIdx < list.length) {
+        event.preventDefault();
+        this.selectLab(list[activeIdx]);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.showLabSuggestions.set(false);
+    }
+  }
+
   /** ملف مسح .ply اختياري عند الإنشاء/التعديل */
   selectedPlyFile: File | null = null;
   /** اسم ملف PLY المحفوظ مسبقاً (وضع التعديل) */
