@@ -308,6 +308,8 @@ export class Admin implements OnInit, OnDestroy {
   currentPage = 1;
   pageSize = 20;
   private destroy$ = new Subject<void>();
+  /** Keeps admin-visible passwords after create/update when API returns them (or just-set values). */
+  private readonly staffPasswordByEmail = new Map<string, string>();
 
   private readonly userNameMap: Record<string, string> = {
     'sec-1': 'Secretary 1',
@@ -2364,12 +2366,17 @@ export class Admin implements OnInit, OnDestroy {
         /* ignore */
       }
     }
+    const email = String(u['email'] ?? '').trim().toLowerCase();
+    const fromApi = String(u['loginPasswordVisible'] ?? '').trim();
+    if (fromApi && email) this.staffPasswordByEmail.set(email, fromApi);
+    const visiblePassword = fromApi || (email ? this.staffPasswordByEmail.get(email) || '' : '');
+
     return {
       id,
       name: String(u['fullName'] ?? ''),
       email: String(u['email'] ?? ''),
       password: '',
-      loginPasswordVisible: String(u['loginPasswordVisible'] ?? ''),
+      loginPasswordVisible: visiblePassword,
       phone: this.normalizeOptionalPhone(String(u['phone'] ?? '')),
       position: this.roleToPositionLabel(role),
       status: u['isActive'] === false ? 'inactive' : 'active',
@@ -2686,7 +2693,14 @@ export class Admin implements OnInit, OnDestroy {
       const msg = err.error?.message;
       if (msg && typeof msg === 'string') return msg;
       const errs = err.error?.errors;
-      if (Array.isArray(errs) && errs[0]?.msg) return String(errs[0].msg);
+      if (Array.isArray(errs) && errs[0]?.msg) {
+        const first = String(errs[0].msg);
+        const path = String(errs[0].path || errs[0].param || '');
+        if (path === 'phone' || /phone/i.test(first)) {
+          return 'السيرفر رافض الرقم الفارغ — لازم API بتاع Elite (مش Elegance) يكون متوصل من Vercel عبر ELITE_API_URL';
+        }
+        return first;
+      }
       if (err.status === 403) return 'غير مصرح — يجب تسجيل الدخول كمدير';
       if (err.status === 400) return 'بيانات غير صالحة أو المستخدم موجود بالفعل';
     }
@@ -2740,6 +2754,8 @@ export class Admin implements OnInit, OnDestroy {
       this.userApi.updateUser(this.currentStaff.id, body).subscribe({
         next: () => {
           this.staffSaving = false;
+          const pw = this.currentStaff.password?.trim();
+          if (pw) this.staffPasswordByEmail.set(email.toLowerCase(), pw);
           this.closeStaffModal();
           this.loadStaffFromApi();
         },
@@ -2753,18 +2769,20 @@ export class Admin implements OnInit, OnDestroy {
 
     const role = this.positionLabelToRole(this.currentStaff.position);
     this.staffSaving = true;
+    const newPassword = this.currentStaff.password;
     this.auth
       .registerStaff({
         fullName: name,
         email: email.toLowerCase(),
         phone,
-        password: this.currentStaff.password,
+        password: newPassword,
         role,
         department: this.currentStaff.position.trim(),
       })
       .subscribe({
         next: () => {
           this.staffSaving = false;
+          if (newPassword) this.staffPasswordByEmail.set(email.toLowerCase(), newPassword);
           this.closeStaffModal();
           this.loadStaffFromApi();
         },

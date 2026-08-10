@@ -153,8 +153,19 @@ export class AuthService {
 
   /** POST /auth/register — admin only; persists user in MongoDB. */
   registerStaff(payload: RegisterStaffPayload): Observable<void> {
+    const body: Record<string, unknown> = {
+      fullName: payload.fullName,
+      email: payload.email,
+      password: payload.password,
+      role: payload.role,
+    };
+    if (payload.department) body['department'] = payload.department;
+    const phone = String(payload.phone || '').trim();
+    // Phone is optional — never send placeholder zeros
+    if (phone && !/^0+$/.test(phone)) body['phone'] = phone;
+
     return this.http
-      .post<{ success?: boolean; message?: string }>(`${this.apiUrl}/register`, payload)
+      .post<{ success?: boolean; message?: string }>(`${this.apiUrl}/register`, body)
       .pipe(
         tap((res) => {
           if (res && res.success === false) {
