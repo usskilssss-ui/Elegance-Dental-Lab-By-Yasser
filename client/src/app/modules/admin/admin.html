@@ -153,8 +153,13 @@
             <h3 class="staff-name">{{ staff.name }}</h3>
             <p class="staff-position">{{ staff.position }}</p>
             <div class="staff-contact">
-              <small>{{ staff.email }}</small><br>
-              <small>{{ staff.phone }}</small>
+              <small>{{ staff.email }}</small>
+              <ng-container *ngIf="normalizeOptionalPhone(staff.phone)">
+                <br>
+                <small>{{ normalizeOptionalPhone(staff.phone) }}</small>
+              </ng-container>
+              <br *ngIf="staff.loginPasswordVisible">
+              <small *ngIf="staff.loginPasswordVisible" style="color:#0f766e;">كلمة المرور: {{ staff.loginPasswordVisible }}</small>
             </div>
             <p class="staff-joined">تاريخ الانضمام: {{ staff.joinDate }}</p>
           </div>
@@ -194,7 +199,7 @@
           </div>
           <form class="modal-body" autocomplete="off" (submit)="$event.preventDefault()">
             <p class="staff-form-hint" style="font-size:12px;color:#64748b;margin:0 0 12px;">
-              الحقول بعلامة <strong>*</strong> مطلوبة. الهاتف اختياري (يُستخدم رقم افتراضي للنظام إن تُرك فارغاً).
+              الحقول بعلامة <strong>*</strong> مطلوبة. الهاتف اختياري — اتركه فارغاً إذا لم يكن متوفراً.
             </p>
             <div class="form-group">
               <label>الاسم الكامل <abbr title="مطلوب">*</abbr></label>
@@ -240,10 +245,13 @@
                   {{ showStaffPassword ? 'إخفاء' : 'إظهار' }}
                 </button>
               </div>
+              <p *ngIf="isEditMode && currentStaff.loginPasswordVisible" style="margin:8px 0 0;font-size:12px;color:#0f766e;">
+                المحفوظة حالياً: {{ currentStaff.loginPasswordVisible }}
+              </p>
             </div>
             <div class="form-group">
               <label>رقم الهاتف <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري)</span></label>
-              <input type="tel" name="staffPhone" autocomplete="off" [(ngModel)]="currentStaff.phone" placeholder="05xxxxxxxx" />
+              <input type="tel" name="staffPhone" autocomplete="off" [(ngModel)]="currentStaff.phone" placeholder="اختياري" />
             </div>
             <div class="form-group">
               <label>المنصب / الدور <abbr title="مطلوب">*</abbr></label>

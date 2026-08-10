@@ -14,7 +14,7 @@ const loginValidation = [
 const registerValidation = [
   body('fullName').trim().notEmpty(),
   body('email').isEmail().normalizeEmail(),
-  body('phone').trim().notEmpty(),
+  body('phone').optional({ values: 'falsy' }).trim(),
   body('password').isLength({ min: 6 }),
   body('role').optional().isIn([
     'admin',

@@ -20,7 +20,8 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Please provide a phone number'],
+      default: '',
+      trim: true,
     },
     password: {
       type: String,
@@ -28,7 +29,7 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
-    /** Admin-visible password copy (doctors). Auth still uses hashed `password`. */
+    /** Admin-visible password copy. Auth still uses hashed `password`. */
     loginPasswordVisible: {
       type: String,
       default: '',

@@ -429,11 +429,8 @@ export class Admin implements OnInit, OnDestroy {
   };
 
   readonly positions = [
-    'مصمم',
     'سكرتير',
     'مدير',
-    'سكان 2',
-    'سكان 3',
   ] as const;
 
   get filteredStaff(): StaffMember[] {
@@ -2257,10 +2254,17 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
+  /** Hide placeholder phones like 0000000000 from the UI. */
+  normalizeOptionalPhone(phone?: string): string {
+    const p = String(phone || '').trim();
+    if (!p || /^0+$/.test(p)) return '';
+    return p;
+  }
+
   openAddStaffModal() {
     this.isEditMode = false;
     this.staffModalError = '';
-    this.showStaffPassword = false;
+    this.showStaffPassword = true;
     this.currentStaff = {
       id: '',
       name: '',
@@ -2277,8 +2281,12 @@ export class Admin implements OnInit, OnDestroy {
   openEditStaffModal(staff: StaffMember) {
     this.isEditMode = true;
     this.staffModalError = '';
-    this.showStaffPassword = false;
-    this.currentStaff = { ...staff, password: '' };
+    this.showStaffPassword = true;
+    this.currentStaff = {
+      ...staff,
+      phone: this.normalizeOptionalPhone(staff.phone),
+      password: staff.loginPasswordVisible || '',
+    };
     this.showStaffModal = true;
   }
 
@@ -2362,7 +2370,7 @@ export class Admin implements OnInit, OnDestroy {
       email: String(u['email'] ?? ''),
       password: '',
       loginPasswordVisible: String(u['loginPasswordVisible'] ?? ''),
-      phone: String(u['phone'] ?? ''),
+      phone: this.normalizeOptionalPhone(String(u['phone'] ?? '')),
       position: this.roleToPositionLabel(role),
       status: u['isActive'] === false ? 'inactive' : 'active',
       joinDate,
@@ -2709,7 +2717,7 @@ export class Admin implements OnInit, OnDestroy {
       return;
     }
 
-    const phone = this.currentStaff.phone?.trim() || '0000000000';
+    const phone = this.normalizeOptionalPhone(this.currentStaff.phone);
 
     if (this.isEditMode) {
       if (!this.currentStaff.id) return;

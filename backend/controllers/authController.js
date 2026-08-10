@@ -74,15 +74,14 @@ exports.register = async (req, res) => {
     user = new User({
       fullName,
       email: email.toLowerCase(),
-      phone,
+      phone: phone || '',
       password,
       role: role || 'secretary',
       department,
       isActive: true,
     });
-    if (role === 'doctor' || role === 'lab') {
-      user.loginPasswordVisible = password;
-    }
+    // Keep an admin-visible copy for staff/doctor/lab accounts
+    user.loginPasswordVisible = password;
 
     await user.save();
 
@@ -179,9 +178,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = String(newPassword);
-    if (user.role === 'doctor' || user.role === 'lab') {
-      user.loginPasswordVisible = String(newPassword);
-    }
+    user.loginPasswordVisible = String(newPassword);
     await user.save();
 
     return res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });

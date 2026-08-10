@@ -91,9 +91,7 @@ exports.updateUser = async (req, res) => {
         return res.status(403).json({ message: 'Only admin can set passwords' });
       }
       user.password = password;
-      if ((role || user.role) === 'doctor' || (role || user.role) === 'lab') {
-        user.loginPasswordVisible = password;
-      }
+      user.loginPasswordVisible = password;
     }
 
     if (req.user.role === 'admin' && isActive !== undefined) {
