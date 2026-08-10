@@ -1,15 +1,12 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
-const { isHiddenUserEmail, hiddenUserFilter } = require('../utils/hiddenUsers');
 
 // Get all users (admin). Pass includeInactive=true to list deactivated accounts too.
 exports.getAllUsers = async (req, res) => {
   try {
     const { role, status, includeInactive } = req.query;
 
-    const filter = {
-      ...hiddenUserFilter(),
-    };
+    const filter = {};
     if (includeInactive !== 'true') {
       filter.isActive = true;
     }
@@ -39,7 +36,7 @@ exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
 
-    if (!user || isHiddenUserEmail(user.email)) {
+    if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -72,21 +69,13 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (isHiddenUserEmail(user.email)) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
     // Only admin can change roles
     if (role && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Only admin can change user roles' });
     }
 
     if (fullName) user.fullName = fullName;
-    if (phone !== undefined && phone !== null) {
-      const normalizedPhone = String(phone).trim();
-      // Treat placeholder zeros / blanks as no phone
-      user.phone = !normalizedPhone || /^0+$/.test(normalizedPhone) ? '' : normalizedPhone;
-    }
+    if (phone !== undefined && phone !== null) user.phone = phone;
     if (department !== undefined) user.department = department;
     if (role && req.user.role === 'admin') user.role = role;
 
@@ -95,7 +84,9 @@ exports.updateUser = async (req, res) => {
         return res.status(403).json({ message: 'Only admin can set passwords' });
       }
       user.password = password;
-      user.loginPasswordVisible = password;
+      if ((role || user.role) === 'doctor') {
+        user.loginPasswordVisible = password;
+      }
     }
 
     if (req.user.role === 'admin' && isActive !== undefined) {
@@ -180,15 +171,11 @@ exports.updateUserStatus = async (req, res) => {
 // Delete user (soft delete)
 exports.deleteUser = async (req, res) => {
   try {
-    const existing = await User.findById(req.params.id);
-    if (!existing) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    if (isHiddenUserEmail(existing.email)) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const user = await User.findByIdAndDelete(req.params.id);
 
-    await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     res.status(200).json({
       success: true,
@@ -208,15 +195,13 @@ exports.getUsersByRole = async (req, res) => {
   try {
     const { role } = req.params;
 
-    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor', 'lab'];
+    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor'];
 
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
 
-    const users = await User.find({ role, isActive: true, ...hiddenUserFilter() })
-      .select('-password')
-      .sort({ fullName: 1 });
+    const users = await User.find({ role, isActive: true }).select('-password').sort({ fullName: 1 });
 
     res.status(200).json({
       success: true,
