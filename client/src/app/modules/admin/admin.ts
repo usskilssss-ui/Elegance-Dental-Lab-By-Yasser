@@ -1457,6 +1457,10 @@ export class Admin implements OnInit, OnDestroy {
 
   }
 
+  get dashboardMaterialTotal(): number {
+    return this.dashboardMaterialCounters.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+  }
+
   get zirconCount(): number {
     return this.regularZirconCount + this.germanZirconCount + this.titaniumCount + this.peekCount;
   }

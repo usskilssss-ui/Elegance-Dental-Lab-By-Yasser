@@ -81,17 +81,34 @@
         </div>
       </div>
 
-      <!-- إجمالي تكلفة الحالات لجميع الأطباء -->
-      
       <div class="material-section">
         <div class="material-section-head">
-          <h3 class="material-section-title">عدادات الماتريال</h3>
-          <p class="material-section-sub">وحدات الحالات الخارجة فقط (بدون إعادة أو تعديل)</p>
+          <div class="material-section-copy">
+            <h3 class="material-section-title">عدادات الماتريال</h3>
+            <p class="material-section-sub">وحدات الحالات الخارجة فقط — بدون إعادة أو تعديل</p>
+          </div>
+          <div class="material-total-pill" title="مجموع كل الوحدات المعروضة">
+            <span class="material-total-label">الإجمالي</span>
+            <strong class="material-total-value">{{ dashboardMaterialTotal }}</strong>
+            <span class="material-total-unit">وحدة</span>
+          </div>
         </div>
         <div class="material-counters-grid">
-          <div class="material-card" *ngFor="let item of dashboardMaterialCounters">
-            <div class="material-card-name">{{ item.name }}</div>
-            <div class="material-card-count">{{ item.count }}</div>
+          <div
+            class="material-card"
+            *ngFor="let item of dashboardMaterialCounters; let i = index"
+            [class.is-active]="item.count > 0"
+            [class.is-empty]="item.count === 0"
+            [style.animation-delay.ms]="i * 35"
+          >
+            <div class="material-card-top">
+              <span class="material-card-name">{{ item.name }}</span>
+              <span class="material-card-dot" aria-hidden="true"></span>
+            </div>
+            <div class="material-card-bottom">
+              <span class="material-card-count">{{ item.count }}</span>
+              <span class="material-card-unit">وحدة</span>
+            </div>
           </div>
         </div>
       </div>
