@@ -1,7 +1,7 @@
 /**
- * Elite-only production env writer.
- * Reads NG_APP_API_URL or ELITE_API_URL from the build environment (Vercel)
- * and writes environment.prod.ts — never defaults to Elegance.
+ * Elite production env writer.
+ * If ELITE_API_URL or NG_APP_API_URL is set in Vercel, overwrite environment.prod.ts.
+ * If not set, leave the committed file as-is (so previews don't break).
  */
 const fs = require('fs');
 const path = require('path');
@@ -14,12 +14,17 @@ function normalizeApi(raw) {
 }
 
 const apiUrl =
-  normalizeApi(process.env.NG_APP_API_URL) ||
   normalizeApi(process.env.ELITE_API_URL) ||
-  'https://YOUR-ELITE-RAILWAY-URL.up.railway.app/api';
+  normalizeApi(process.env.NG_APP_API_URL);
+
+const target = path.join(__dirname, '..', 'src', 'environments', 'environment.prod.ts');
+
+if (!apiUrl) {
+  console.log('[elite] No ELITE_API_URL/NG_APP_API_URL — keeping committed environment.prod.ts');
+  process.exit(0);
+}
 
 const socketUrl = apiUrl.replace(/\/api$/i, '');
-
 const out = `export const environment = {
   production: true,
   apiUrl: '${apiUrl}',
@@ -27,6 +32,5 @@ const out = `export const environment = {
 };
 `;
 
-const target = path.join(__dirname, '..', 'src', 'environments', 'environment.prod.ts');
 fs.writeFileSync(target, out, 'utf8');
 console.log(`[elite] wrote environment.prod.ts → apiUrl=${apiUrl}`);
