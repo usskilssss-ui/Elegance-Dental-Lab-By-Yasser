@@ -348,9 +348,6 @@ export class Admin implements OnInit, OnDestroy {
       this.ensureCashFiltersInitialized();
       this.loadCashEntries();
     }
-    if (this.activeNav === 'whatsapp') {
-      this.loadWhatsAppSettings();
-    }
     this.connectCaseRealtime();
   }
 
@@ -1957,7 +1954,7 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   setNav(nav: string) {
-    if (nav === 'ai') {
+    if (nav === 'ai' || nav === 'whatsapp') {
       nav = 'dashboard';
     }
     this.activeNav = nav;
@@ -1973,8 +1970,6 @@ export class Admin implements OnInit, OnDestroy {
       this.loadCashEntries();
     } else if (nav === 'archive') {
       this.loadArchiveList();
-    } else if (nav === 'whatsapp') {
-      this.loadWhatsAppSettings();
     }
   }
 
