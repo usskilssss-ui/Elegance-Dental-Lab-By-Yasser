@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
@@ -14,6 +14,7 @@ import { Subject, merge } from 'rxjs';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { environment } from '../../../environments/environment';
 
 export interface StaffMember {
   id: string;
@@ -175,6 +176,19 @@ export class Admin implements OnInit, OnDestroy {
 
   doctorPricingsMap = new Map<string, any>();
 
+  /** Bound in admin.html report pricing grid */
+  customEmaxPrice = 1000;
+  customGermanZirconPrice = 850;
+  customZirconPrice = 700;
+  customTitaniumPrice = 2200;
+  customPeekPrice = 1700;
+  customPmmaPrice = 250;
+  customNightGuardPrice = 300;
+  customMockupPrice = 250;
+  customWaxPrice = 0;
+  customRingPrice = 0;
+  customTryInPrice = 0;
+
   /** Same defaults as secretary/doctor forms — merged with API customs */
   readonly defaultWorkTypeOptions = [
     'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
@@ -312,6 +326,7 @@ export class Admin implements OnInit, OnDestroy {
     private userApi: UserApiService,
     private router: Router,
     private socketService: SocketService,
+    private http: HttpClient,
     public themeService: ThemeService
   ) {}
 
@@ -332,6 +347,9 @@ export class Admin implements OnInit, OnDestroy {
     if (this.activeNav === 'financials') {
       this.ensureCashFiltersInitialized();
       this.loadCashEntries();
+    }
+    if (this.activeNav === 'whatsapp') {
+      this.loadWhatsAppSettings();
     }
     this.connectCaseRealtime();
   }
@@ -1955,7 +1973,108 @@ export class Admin implements OnInit, OnDestroy {
       this.loadCashEntries();
     } else if (nav === 'archive') {
       this.loadArchiveList();
+    } else if (nav === 'whatsapp') {
+      this.loadWhatsAppSettings();
     }
+  }
+
+  waEnabled = false;
+  waProvider: 'ultramsg' | 'meta' = 'ultramsg';
+  waInstanceId = '';
+  waPhoneNumberId = '';
+  waToken = '';
+  waDailyHour = 18;
+  waLabName = 'Elite Dental Lab';
+  waHasToken = false;
+  waLiveConfigured = false;
+  waTestPhone = '';
+  waMsg = '';
+  waSaving = false;
+
+  loadWhatsAppSettings(): void {
+    this.waMsg = '';
+    this.http.get<{ success?: boolean; settings?: any }>(`${environment.apiUrl}/settings/whatsapp`).subscribe({
+      next: (res) => {
+        const s = res?.settings || {};
+        this.waEnabled = !!s.enabled;
+        this.waProvider = s.provider === 'meta' ? 'meta' : 'ultramsg';
+        this.waInstanceId = s.instanceId || '';
+        this.waPhoneNumberId = s.phoneNumberId || '';
+        this.waDailyHour = s.dailyHour ?? 18;
+        this.waLabName = s.labName || 'Elite Dental Lab';
+        this.waHasToken = !!s.hasToken;
+        this.waLiveConfigured = !!s.liveConfigured;
+        this.waToken = '';
+      },
+      error: () => {
+        this.waMsg = 'تعذر تحميل إعدادات واتساب';
+      },
+    });
+  }
+
+  saveWhatsAppSettings(): void {
+    this.waSaving = true;
+    this.waMsg = '';
+    const body: Record<string, unknown> = {
+      enabled: this.waEnabled,
+      provider: this.waProvider,
+      instanceId: this.waInstanceId,
+      phoneNumberId: this.waPhoneNumberId,
+      dailyHour: this.waDailyHour,
+      labName: this.waLabName,
+    };
+    if (this.waToken.trim()) body['token'] = this.waToken.trim();
+    this.http
+      .put<{ success?: boolean; message?: string; liveConfigured?: boolean }>(
+        `${environment.apiUrl}/settings/whatsapp`,
+        body
+      )
+      .subscribe({
+        next: (res) => {
+          this.waSaving = false;
+          this.waLiveConfigured = !!res.liveConfigured;
+          this.waMsg = res.message || 'تم الحفظ';
+          this.waToken = '';
+          this.loadWhatsAppSettings();
+        },
+        error: (err) => {
+          this.waSaving = false;
+          this.waMsg = err?.error?.message || 'فشل الحفظ';
+        },
+      });
+  }
+
+  testWhatsApp(): void {
+    this.waMsg = '';
+    this.http
+      .post<{ success?: boolean; message?: string }>(`${environment.apiUrl}/settings/whatsapp/test`, {
+        phone: this.waTestPhone,
+      })
+      .subscribe({
+        next: (res) => {
+          this.waMsg = res.message || 'تم الإرسال';
+        },
+        error: (err) => {
+          this.waMsg = err?.error?.message || 'فشل الاختبار';
+        },
+      });
+  }
+
+  runWhatsAppDailyNow(): void {
+    this.waMsg = '';
+    this.http
+      .post<{ success?: boolean; message?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/daily-summary`,
+        {}
+      )
+      .subscribe({
+        next: (res) => {
+          this.waMsg = res.message || 'تم إرسال الملخص';
+        },
+        error: (err) => {
+          this.waMsg = err?.error?.message || 'فشل إرسال الملخص';
+        },
+      });
   }
 
   get archiveYears(): number[] {
@@ -2304,6 +2423,15 @@ export class Admin implements OnInit, OnDestroy {
     this.showDoctorPassword = true;
     this.currentDoctor = { ...doc, password: '', position: 'دكتور' };
     this.showDoctorModal = true;
+  }
+
+  /** From doctors directory → open that doctor's request portal (same URL as doctors use). */
+  openDoctorAccountPage(doc: StaffMember): void {
+    const name = (doc?.name || '').trim();
+    if (!name) return;
+    this.router.navigate(['/doctor/dashboard'], {
+      queryParams: { as: name },
+    });
   }
 
   closeDoctorModal() {
@@ -2676,6 +2804,35 @@ export class Admin implements OnInit, OnDestroy {
       prices[field.key] = this.priceForKey(custom, field.key);
     }
     this.customWorkTypePrices = prices;
+
+    this.customEmaxPrice = this.priceForKey(custom, 'emax');
+    this.customGermanZirconPrice = this.priceForKey(custom, 'germanZircon');
+    this.customZirconPrice = this.priceForKey(custom, 'zircon');
+    this.customTitaniumPrice = this.priceForKey(custom, 'titanium');
+    this.customPeekPrice = this.priceForKey(custom, 'peek');
+    this.customPmmaPrice = this.priceForKey(custom, 'pmma');
+    this.customNightGuardPrice = this.priceForKey(custom, 'nightGuard');
+    this.customMockupPrice = this.priceForKey(custom, 'mockup');
+    this.customWaxPrice = this.priceForKey(custom, 'wax');
+    this.customRingPrice = this.priceForKey(custom, 'ring');
+    this.customTryInPrice = this.priceForKey(custom, 'tryIn');
+  }
+
+  private syncTemplatePricesIntoMap(): void {
+    this.customWorkTypePrices = {
+      ...this.customWorkTypePrices,
+      emax: Number(this.customEmaxPrice),
+      germanZircon: Number(this.customGermanZirconPrice),
+      zircon: Number(this.customZirconPrice),
+      titanium: Number(this.customTitaniumPrice),
+      peek: Number(this.customPeekPrice),
+      pmma: Number(this.customPmmaPrice),
+      nightGuard: Number(this.customNightGuardPrice),
+      mockup: Number(this.customMockupPrice),
+      wax: Number(this.customWaxPrice),
+      ring: Number(this.customRingPrice),
+      tryIn: Number(this.customTryInPrice),
+    };
   }
 
   saveDoctorCustomPrices(): void {
@@ -2684,11 +2841,27 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
 
+    this.syncTemplatePricesIntoMap();
+
     const prices: Record<string, number> = {};
     for (const field of this.reportPriceFields) {
       const raw = this.customWorkTypePrices[field.key];
       prices[field.key] = Number.isFinite(Number(raw)) ? Number(raw) : this.defaultPriceByKey[field.key] ?? 0;
     }
+    // Ensure template-bound defaults are always persisted even if report fields lag
+    Object.assign(prices, {
+      emax: Number(this.customEmaxPrice),
+      germanZircon: Number(this.customGermanZirconPrice),
+      zircon: Number(this.customZirconPrice),
+      titanium: Number(this.customTitaniumPrice),
+      peek: Number(this.customPeekPrice),
+      pmma: Number(this.customPmmaPrice),
+      nightGuard: Number(this.customNightGuardPrice),
+      mockup: Number(this.customMockupPrice),
+      wax: Number(this.customWaxPrice),
+      ring: Number(this.customRingPrice),
+      tryIn: Number(this.customTryInPrice),
+    });
 
     this.caseApi.updateDoctorPricing(this.reportDoctorFilter, prices).subscribe({
       next: () => {
@@ -2884,6 +3057,102 @@ export class Admin implements OnInit, OnDestroy {
   getDoctorPaymentsList(doctorName: string): any[] {
     const key = this.doctorGroupKey(doctorName);
     return this.doctorPayments.filter(p => this.doctorGroupKey(p.doctorName) === key);
+  }
+
+  printDoctorReceipt(): void {
+    if (!this.reportDoctorFilter) return;
+
+    const now = new Date();
+    const dateStr =
+      now.toLocaleDateString('en-GB') +
+      ' ' +
+      now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const doctorName = this.reportDoctorFilter;
+    const totalDue = this.getDoctorTotalDue(doctorName);
+    const totalPaid = this.getDoctorTotalPaid(doctorName);
+    const remaining = totalDue - totalPaid;
+    const casesCount = this.reportFilteredCases.length;
+    const payments = this.getDoctorPaymentsList(doctorName);
+    const fmt = (n: number) =>
+      n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    let paymentsRows = '';
+    if (payments.length === 0) {
+      paymentsRows = `<tr><td colspan="3" style="text-align:center;font-style:italic;">لا توجد دفعات مسجلة</td></tr>`;
+    } else {
+      payments.forEach((p: any) => {
+        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-GB') : '—';
+        const note = p.notes || '—';
+        paymentsRows += `<tr>
+          <td style="text-align:right;">${fmt(p.amount)} EGP</td>
+          <td style="text-align:center;">${note}</td>
+          <td style="text-align:left;">${pDate}</td>
+        </tr>`;
+      });
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>كشف حساب — د. ${doctorName}</title>
+  <style>
+    @page { margin: 2mm; size: 80mm auto; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+    body { width: 100%; max-width: 72mm; margin: 0 auto; padding: 4px 8px; font-size: 11px; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .dash { border-top: 1px dashed #555; margin: 6px 0; }
+    .solid { border-top: 2px solid #000; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    th { padding: 4px; font-weight: bold; border-bottom: 1px solid #000; }
+    td { padding: 3px 4px; }
+    .val-col { text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="center bold" style="font-size:14px;">Elite Lab</div>
+  <div class="center" style="font-size:10px;">Precision Dental Laboratories</div>
+  <div class="solid"></div>
+  <div class="center bold">كشف حساب — د. ${doctorName}</div>
+  <div class="solid"></div>
+  <table>
+    <thead><tr><th>البيان</th><th class="val-col">القيمة</th></tr></thead>
+    <tbody>
+      <tr><td>عدد الحالات الخارجة</td><td class="val-col">${casesCount}</td></tr>
+      <tr><td>إجمالي الحساب</td><td class="val-col">${fmt(totalDue)} EGP</td></tr>
+      <tr><td>المبلغ المدفوع</td><td class="val-col">${fmt(totalPaid)} EGP</td></tr>
+      <tr><td class="bold">المبلغ المستحق</td><td class="val-col bold">${fmt(remaining)} EGP</td></tr>
+    </tbody>
+  </table>
+  <div class="dash"></div>
+  <div class="center bold">سجل الدفعات</div>
+  <table>
+    <thead><tr><th>المبلغ</th><th>ملاحظات</th><th>تاريخ الدفع</th></tr></thead>
+    <tbody>${paymentsRows}</tbody>
+  </table>
+  <div class="solid"></div>
+  <table>
+    <tr><td class="bold">إجمالي المتبقي</td><td class="val-col bold">${fmt(remaining)} EGP</td></tr>
+    <tr><td>تاريخ طباعة الوصل</td><td class="val-col">${dateStr}</td></tr>
+  </table>
+  <div class="dash"></div>
+  <div class="center" style="font-size:10px;">شكراً لتعاملكم معنا — Elite Dental Lab</div>
+  <script>
+    window.onload = function() {
+      window.print();
+      window.onafterprint = function() { window.close(); };
+    };
+  </script>
+</body>
+</html>`;
+
+    const popup = window.open('', '_blank', 'width=380,height=650,toolbar=0,menubar=0,scrollbars=0');
+    if (popup) {
+      popup.document.write(html);
+      popup.document.close();
+    }
   }
 
   async saveDoctorReceiptPdf(): Promise<void> {
