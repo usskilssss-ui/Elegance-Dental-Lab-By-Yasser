@@ -20,7 +20,7 @@ interface AuthUserDto {
 export interface RegisterStaffPayload {
   fullName: string;
   email: string;
-  phone: string;
+  phone?: string;
   password: string;
   role: AppRole;
   department?: string;

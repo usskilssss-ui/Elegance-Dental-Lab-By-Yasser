@@ -82,7 +82,11 @@ exports.updateUser = async (req, res) => {
     }
 
     if (fullName) user.fullName = fullName;
-    if (phone !== undefined && phone !== null) user.phone = phone;
+    if (phone !== undefined && phone !== null) {
+      const normalizedPhone = String(phone).trim();
+      // Treat placeholder zeros / blanks as no phone
+      user.phone = !normalizedPhone || /^0+$/.test(normalizedPhone) ? '' : normalizedPhone;
+    }
     if (department !== undefined) user.department = department;
     if (role && req.user.role === 'admin') user.role = role;
 

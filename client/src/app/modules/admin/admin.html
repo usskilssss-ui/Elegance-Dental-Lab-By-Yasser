@@ -330,8 +330,11 @@
             <h3 class="staff-name">{{ doc.name }}</h3>
             <p class="staff-position">دكتور</p>
             <div class="staff-contact">
-              <small>{{ doc.email }}</small><br>
-              <small>{{ doc.phone }}</small>
+              <small>{{ doc.email }}</small>
+              <ng-container *ngIf="normalizeOptionalPhone(doc.phone)">
+                <br>
+                <small>{{ normalizeOptionalPhone(doc.phone) }}</small>
+              </ng-container>
               <br *ngIf="doc.loginPasswordVisible">
               <small *ngIf="doc.loginPasswordVisible" style="color:#0f766e;">كلمة المرور: {{ doc.loginPasswordVisible }}</small>
             </div>

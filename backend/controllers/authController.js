@@ -70,17 +70,20 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    const normalizedPhone = String(phone || '').trim();
+    const safePhone = !normalizedPhone || /^0+$/.test(normalizedPhone) ? '' : normalizedPhone;
+
     // Create user
     user = new User({
       fullName,
       email: email.toLowerCase(),
-      phone: phone || '',
+      phone: safePhone,
       password,
       role: role || 'secretary',
       department,
       isActive: true,
     });
-    // Keep an admin-visible copy for staff/doctor/lab accounts
+    // Keep an admin-visible copy for all accounts
     user.loginPasswordVisible = password;
 
     await user.save();

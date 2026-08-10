@@ -2410,7 +2410,7 @@ export class Admin implements OnInit, OnDestroy {
   openAddDoctorModal() {
     this.isDoctorEditMode = false;
     this.doctorModalError = '';
-    this.showDoctorPassword = false;
+    this.showDoctorPassword = true;
     this.currentDoctor = {
       id: '',
       name: '',
@@ -2428,7 +2428,12 @@ export class Admin implements OnInit, OnDestroy {
     this.isDoctorEditMode = true;
     this.doctorModalError = '';
     this.showDoctorPassword = true;
-    this.currentDoctor = { ...doc, password: '', position: 'دكتور' };
+    this.currentDoctor = {
+      ...doc,
+      phone: this.normalizeOptionalPhone(doc.phone),
+      password: doc.loginPasswordVisible || '',
+      position: 'دكتور',
+    };
     this.showDoctorModal = true;
   }
 
@@ -2477,7 +2482,7 @@ export class Admin implements OnInit, OnDestroy {
     this.doctorModalError = '';
     const name = (this.currentDoctor.name || '').trim();
     const email = (this.currentDoctor.email || '').trim();
-    const phone = (this.currentDoctor.phone || '').trim() || '0000000000';
+    const phone = this.normalizeOptionalPhone(this.currentDoctor.phone);
     if (!name) {
       this.doctorModalError = 'يرجى إدخال اسم الدكتور';
       return;
@@ -2607,7 +2612,7 @@ export class Admin implements OnInit, OnDestroy {
     this.labModalError = '';
     const name = (this.currentLab.name || '').trim();
     const email = (this.currentLab.email || '').trim();
-    const phone = (this.currentLab.phone || '').trim() || '0000000000';
+    const phone = this.normalizeOptionalPhone(this.currentLab.phone);
     if (!name) {
       this.labModalError = 'يرجى إدخال اسم المعمل';
       return;
