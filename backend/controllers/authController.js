@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
 const { generateToken } = require('../config/jwt');
 const { validationResult } = require('express-validator');
 
@@ -15,7 +14,7 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Find only active user
-    const user = await User.findOne({ email: email.toLowerCase(), isActive: true }).select('+password +pinHash');
+    const user = await User.findOne({ email: email.toLowerCase(), isActive: true }).select('+password');
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -44,7 +43,6 @@ exports.login = async (req, res) => {
         phone: user.phone,
         role: user.role,
         department: user.department,
-        hasPin: !!user.pinHash,
       },
     });
   } catch (error) {
@@ -72,19 +70,21 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    const normalizedPhone = String(phone || '').trim();
+    const safePhone = !normalizedPhone || /^0+$/.test(normalizedPhone) ? '' : normalizedPhone;
+
     // Create user
     user = new User({
       fullName,
       email: email.toLowerCase(),
-      phone,
+      phone: safePhone,
       password,
       role: role || 'secretary',
       department,
       isActive: true,
     });
-    if (role === 'doctor') {
-      user.loginPasswordVisible = password;
-    }
+    // Keep an admin-visible copy for all accounts
+    user.loginPasswordVisible = password;
 
     await user.save();
 
@@ -131,7 +131,7 @@ exports.logout = async (req, res) => {
 // Get Current User
 exports.getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('+pinHash');
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -148,7 +148,6 @@ exports.getCurrentUser = async (req, res) => {
         status: user.status,
         department: user.department,
         lastSeen: user.lastSeen,
-        hasPin: !!user.pinHash,
       },
     });
   } catch (error) {
@@ -157,106 +156,6 @@ exports.getCurrentUser = async (req, res) => {
       message: 'Failed to fetch user',
       error: error.message,
     });
-  }
-};
-
-// Doctor/admin: set or change 4–6 digit PIN for faster mobile login
-exports.setPin = async (req, res) => {
-  try {
-    const pin = String(req.body?.pin || '').trim();
-    if (!/^\d{4,6}$/.test(pin)) {
-      return res.status(400).json({
-        success: false,
-        message: 'الرقم السري يجب أن يكون من 4 إلى 6 أرقام',
-      });
-    }
-
-    const user = await User.findById(req.user.id).select('+pinHash');
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    if (!['doctor', 'admin'].includes(user.role)) {
-      return res.status(403).json({ success: false, message: 'PIN متاح لحسابات الدكاترة' });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    user.pinHash = await bcrypt.hash(pin, salt);
-    await user.save();
-
-    return res.json({ success: true, message: 'تم حفظ الرقم السري' });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to set PIN',
-      error: error.message,
-    });
-  }
-};
-
-// Public: login with email + PIN (doctors)
-exports.loginWithPin = async (req, res) => {
-  try {
-    const email = String(req.body?.email || '').toLowerCase().trim();
-    const pin = String(req.body?.pin || '').trim();
-    if (!email || !/^\d{4,6}$/.test(pin)) {
-      return res.status(400).json({
-        success: false,
-        message: 'أدخل البريد والرقم السري (4–6 أرقام)',
-      });
-    }
-
-    const user = await User.findOne({ email, isActive: true }).select('+pinHash');
-    if (!user || !user.pinHash) {
-      return res.status(401).json({ message: 'الرقم السري غير صحيح أو غير مفعّل' });
-    }
-    if (!['doctor', 'admin'].includes(user.role)) {
-      return res.status(403).json({ message: 'الدخول بالرقم السري متاح للدكاترة فقط' });
-    }
-
-    const ok = await user.comparePin(pin);
-    if (!ok) {
-      return res.status(401).json({ message: 'الرقم السري غير صحيح' });
-    }
-
-    const token = generateToken(user._id, user.role);
-    await User.findByIdAndUpdate(user._id, { lastSeen: new Date(), status: 'online' });
-
-    return res.status(200).json({
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        department: user.department,
-        hasPin: true,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: 'Login with PIN failed',
-      error: error.message,
-    });
-  }
-};
-
-// Check if email has a PIN (for login UI) — no sensitive data
-exports.pinStatus = async (req, res) => {
-  try {
-    const email = String(req.query?.email || '').toLowerCase().trim();
-    if (!email) {
-      return res.json({ success: true, hasPin: false });
-    }
-    const user = await User.findOne({ email, isActive: true }).select('+pinHash role');
-    return res.json({
-      success: true,
-      hasPin: !!(user?.pinHash && ['doctor', 'admin'].includes(user.role)),
-    });
-  } catch (error) {
-    return res.json({ success: true, hasPin: false });
   }
 };
 
@@ -282,9 +181,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = String(newPassword);
-    if (user.role === 'doctor') {
-      user.loginPasswordVisible = String(newPassword);
-    }
+    user.loginPasswordVisible = String(newPassword);
     await user.save();
 
     return res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });

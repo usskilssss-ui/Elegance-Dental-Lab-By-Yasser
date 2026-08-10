@@ -14,7 +14,7 @@ const loginValidation = [
 const registerValidation = [
   body('fullName').trim().notEmpty(),
   body('email').isEmail().normalizeEmail(),
-  body('phone').trim().notEmpty(),
+  body('phone').optional({ values: 'falsy' }).trim(),
   body('password').isLength({ min: 6 }),
   body('role').optional().isIn([
     'admin',
@@ -23,6 +23,7 @@ const registerValidation = [
     'finisher',
     'requester',
     'doctor',
+    'lab',
     'scanner1',
     'scanner2',
     'scanner3',
@@ -32,13 +33,6 @@ const registerValidation = [
 
 // Public routes
 router.post('/login', loginValidation, authController.login);
-router.post(
-  '/login-pin',
-  body('email').isEmail().normalizeEmail(),
-  body('pin').isLength({ min: 4, max: 6 }),
-  authController.loginWithPin
-);
-router.get('/pin-status', authController.pinStatus);
 
 // Protected routes
 router.post(
@@ -50,12 +44,6 @@ router.post(
 );
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.getCurrentUser);
-router.post(
-  '/set-pin',
-  authenticate,
-  body('pin').isLength({ min: 4, max: 6 }),
-  authController.setPin
-);
 router.post(
   '/change-password',
   authenticate,
