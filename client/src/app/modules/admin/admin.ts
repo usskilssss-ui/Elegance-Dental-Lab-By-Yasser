@@ -1123,21 +1123,38 @@ export class Admin implements OnInit, OnDestroy {
     return this.countUnitsByKeywords(['peek']);
   }
 
-  /** عدادات كل الماتريال الخارجة (غير إعادة/تعديل) */
+  /** عدادات الماتريال الخارجة — بدون زيركون/إيماكس، وبدون تعديل/إعادة/غير معروف */
   get exitedMaterialCounters(): { label: string; qty: number; color: string }[] {
+    const cases = this.exitedMaterialEligibleCases;
     return [
-      { label: 'Zircon', qty: this.countUnitsByKeywords(['zircon'], ['german']), color: '#6366f1' },
-      { label: 'German Zircon', qty: this.countUnitsByKeywords(['german zircon', 'german']), color: '#4f46e5' },
-      { label: 'Emax', qty: this.countUnitsByKeywords(['emax']), color: '#0ea5e9' },
-      { label: 'Pmma Cad', qty: this.countUnitsByKeywords(['pmma cad', 'pmma']), color: '#14b8a6' },
-      { label: 'Peek', qty: this.countUnitsByKeywords(['peek']), color: '#10b981' },
-      { label: 'Titanium', qty: this.countUnitsByKeywords(['titanium']), color: '#64748b' },
-      { label: 'Try in', qty: this.countUnitsByKeywords(['try in', 'tryin']), color: '#f59e0b' },
-      { label: 'Mokup', qty: this.countUnitsByKeywords(['mokup', 'mockup', 'mock up', 'موكب']), color: '#ec4899' },
-      { label: 'Night Guard', qty: this.countUnitsByKeywords(['night guard', 'nightguard', 'guard']), color: '#8b5cf6' },
-      { label: 'Wax', qty: this.countUnitsByKeywords(['wax']), color: '#a16207' },
-      { label: 'Ring', qty: this.countUnitsByKeywords(['ring']), color: '#ef4444' },
+      { label: 'Pmma Cad', qty: this.countUnitsByKeywordsFromCases(cases, ['pmma cad', 'pmma'], []), color: '#14b8a6' },
+      { label: 'Peek', qty: this.countUnitsByKeywordsFromCases(cases, ['peek'], []), color: '#10b981' },
+      { label: 'Titanium', qty: this.countUnitsByKeywordsFromCases(cases, ['titanium'], []), color: '#64748b' },
+      { label: 'Try in', qty: this.countUnitsByKeywordsFromCases(cases, ['try in', 'tryin'], []), color: '#f59e0b' },
+      { label: 'Mokup', qty: this.countUnitsByKeywordsFromCases(cases, ['mokup', 'mockup', 'mock up', 'موكب'], []), color: '#ec4899' },
+      { label: 'Night Guard', qty: this.countUnitsByKeywordsFromCases(cases, ['night guard', 'nightguard', 'guard'], []), color: '#8b5cf6' },
+      { label: 'Wax', qty: this.countUnitsByKeywordsFromCases(cases, ['wax'], []), color: '#a16207' },
+      { label: 'Ring', qty: this.countUnitsByKeywordsFromCases(cases, ['ring'], []), color: '#ef4444' },
     ];
+  }
+
+  /** حالات خارجة تُحسب في عدادات الماتريال (بدون تعديل/إعادة/غير معروف) */
+  get exitedMaterialEligibleCases(): AdminCaseRow[] {
+    return this.adminCases.filter(c => {
+      if (String(c.currentStage) !== 'exited') return false;
+      const ct = (c.caseType || '').toLowerCase();
+      const isExcluded =
+        ct.includes('redo') ||
+        ct.includes('remake') ||
+        ct.includes('modification') ||
+        ct.includes('تعديل') ||
+        ct.includes('اعاده') ||
+        ct.includes('إعادة') ||
+        ct.includes('empty') ||
+        ct.includes('غير معروف') ||
+        ct.includes('unknown');
+      return !isExcluded;
+    });
   }
 
   get financialCostEligibleCases(): AdminCaseRow[] {
