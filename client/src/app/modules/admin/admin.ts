@@ -338,7 +338,6 @@ export class Admin implements OnInit, OnDestroy {
   };
 
   readonly positions = [
-    'مصمم',
     'سكرتير',
     'مدير',
     'سكان 2',
