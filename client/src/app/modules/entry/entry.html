@@ -296,6 +296,19 @@
             }
           </label>
 
+          <!-- Branch: right after doctor + patient -->
+          <label class="form-field">
+            <span>الفرع <abbr title="مطلوب">*</abbr></span>
+            <input
+              type="text"
+              name="branch"
+              [(ngModel)]="formDraft.branch"
+              placeholder="اسم الفرع"
+              required
+              autocomplete="off"
+            />
+          </label>
+
           <div class="form-field intake-type-field">
             <span>نوع الاستلام <abbr title="مطلوب">*</abbr></span>
             <div class="intake-checkboxes">
@@ -336,19 +349,6 @@
               }
             </label>
           }
-
-          <!-- Branch (kept for print form) -->
-          <label class="form-field">
-            <span>الفرع <abbr title="مطلوب">*</abbr></span>
-            <input
-              type="text"
-              name="branch"
-              [(ngModel)]="formDraft.branch"
-              placeholder="اسم الفرع"
-              required
-              autocomplete="off"
-            />
-          </label>
 
           <!-- Case Type -->
           <label class="form-field">
