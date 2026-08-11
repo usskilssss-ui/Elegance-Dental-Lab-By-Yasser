@@ -1343,187 +1343,49 @@ export class Secretary implements OnInit, OnDestroy {
     return `${String(hour).padStart(2, '0')}:${minute}:00`;
   }
 
-  printCaseCard(c: any): void {
-    const now = new Date();
-    const printDate = now.toLocaleDateString('en-GB') + '  ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-
-    const receivedDate = c.receivedDate ? this.formatDateValue(c.receivedDate) : { date: '', time: '' };
-    const deliveryDate = c.deliveryDate ? this.formatDateValue(c.deliveryDate) : null;
-
-    const workTypeDisplay = this.formatWorkTypeForDisplay ? this.formatWorkTypeForDisplay(c.workType) : (c.workType || '');
-    const requesterLabel = c.requesterType === 'student' ? 'طالب' : 'دكتور';
-
-    const html = `<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>طباعة حالة — ${c.caseNumber}</title>
-  <style>
-    @page { margin: 15mm 20mm; size: A4; }
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    html { height: 100%; }
-    body {
-      margin: 0; padding: 0;
-      background: #fff; color: #000;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      font-size: 19px;
+  /** إعادة طباعة عبر Print Agent بنفس تفاصيل الحالة ورقم الكيس — بدون نافذة متصفح */
+  reprintCase(c: {
+    caseNumber?: string;
+    doctor?: string;
+    patient?: string;
+    branch?: string;
+    clinic?: string;
+    workType?: string;
+    workDetail?: string;
+    color?: string;
+    quantity?: number;
+    priority?: string;
+    intakeType?: 'impression' | 'scan';
+    receivedDate?: string;
+  }): void {
+    const caseNumber = String(c.caseNumber || '').trim();
+    if (!caseNumber) {
+      this.flash('لا يوجد رقم كيس لهذه الحالة');
+      return;
     }
-    .page-content { flex: 1; }
-    .header { text-align: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #000; }
-    .header h1 { font-size: 34px; font-weight: bold; margin: 0 0 6px 0; letter-spacing: 2px; }
-    .header p { font-size: 15px; color: #555; margin: 0; }
-    .case-ref {
-      display: flex; justify-content: space-between; align-items: center;
-      background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px;
-      padding: 14px 20px; margin: 22px 0;
-    }
-    .case-ref .num { font-size: 26px; font-weight: bold; }
-    .case-ref .badge { background: #222; color: #fff; border-radius: 4px; padding: 5px 16px; font-size: 16px; }
-    .section { margin: 22px 0; }
-    .section-title {
-      font-size: 17px; font-weight: bold;
-      border-right: 4px solid #000; padding-right: 12px;
-      margin-bottom: 12px; color: #222;
-    }
-    .row {
-      display: flex; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid #eee;
-      font-size: 18px;
-    }
-    .row:last-child { border-bottom: none; }
-    .label { color: #666; }
-    .value { font-weight: bold; text-align: left; }
-    .footer {
-      margin-top: 30px; padding-top: 14px;
-      border-top: 2px solid #000;
-      display: flex; justify-content: space-between;
-      font-size: 15px; color: #555;
-    }
-    /* Teeth chart */
-    .teeth-section { margin-top: 36px; }
-    .teeth-title {
-      font-size: 17px; font-weight: bold;
-      border-right: 4px solid #000; padding-right: 12px;
-      margin-bottom: 14px; color: #222;
-    }
-    .teeth-table {
-      width: 100%; border-collapse: collapse;
-      font-size: 17px;
-    }
-    .teeth-table th {
-      background: #2980b9; color: #fff;
-      text-align: center; padding: 8px 0;
-      font-size: 18px; font-weight: bold;
-      width: 50%;
-    }
-    .teeth-table td {
-      text-align: center; padding: 10px 2px;
-      font-size: 18px; font-weight: bold;
-      width: 6.25%;
-    }
-    .teeth-table .divider td { border-top: 2px solid #333; padding: 0; height: 0; }
-    .jaw-row td { border-bottom: none; }
-    .center-line { border-right: 2px solid #333; }
-  </style>
-</head>
-<body>
-<div class="page-content">
-  <div class="header">
-    <h1>Elegance Lab</h1>
-    <p>Precision Dental Laboratories</p>
-  </div>
 
-  <div class="case-ref">
-    <span class="num">${c.caseNumber || ''}</span>
-    <span class="badge">${requesterLabel}</span>
-  </div>
-
-  <div class="section">
-    <div class="section-title">بيانات الطبيب والمريض</div>
-    <div class="row">
-      <span class="label">الطبيب</span>
-      <span class="value">${c.doctor || '—'}</span>
-    </div>
-    <div class="row">
-      <span class="label">المريض</span>
-      <span class="value">${c.patient || '—'}</span>
-    </div>
-    <div class="row">
-      <span class="label">الفرع</span>
-      <span class="value">${c.branch || '—'}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">تفاصيل العمل</div>
-    <div class="row">
-      <span class="label">نوع العمل</span>
-      <span class="value">${workTypeDisplay || '—'}</span>
-    </div>
-    ${c.workDetail ? `<div class="row"><span class="label">ملاحظات العمل</span><span class="value">${c.workDetail}</span></div>` : ''}
-    <div class="row">
-      <span class="label">اللون</span>
-      <span class="value">${c.color || '—'}</span>
-    </div>
-    <div class="row">
-      <span class="label">الكمية</span>
-      <span class="value">${c.quantity || '—'}</span>
-    </div>
-    ${c.size ? `<div class="row"><span class="label">الحجم</span><span class="value">${c.size}</span></div>` : ''}
-  </div>
-
-  <div class="section">
-    <div class="section-title">التواريخ</div>
-    <div class="row">
-      <span class="label">تاريخ الاستلام</span>
-      <span class="value">${receivedDate.date}${receivedDate.time ? ' — ' + receivedDate.time : ''}</span>
-    </div>
-    ${deliveryDate ? `<div class="row"><span class="label">تاريخ التسليم</span><span class="value">${deliveryDate.date}${deliveryDate.time ? ' — ' + deliveryDate.time : ''}</span></div>` : ''}
-  </div>
-
-  <div class="teeth-section">
-    <div class="teeth-title">مخطط الأسنان</div>
-    <table class="teeth-table" dir="ltr">
-      <thead>
-        <tr>
-          <th colspan="8">R</th>
-          <th colspan="8" style="border-right: none;">L</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr class="jaw-row">
-          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
-          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
-        </tr>
-        <tr class="divider"><td colspan="16"></td></tr>
-        <tr class="jaw-row">
-          <td>8</td><td>7</td><td>6</td><td>5</td><td>4</td><td>3</td><td>2</td><td class="center-line">1</td>
-          <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="footer">
-    <span>تاريخ الطباعة: ${printDate}</span>
-    <span>Elegance Dental Lab</span>
-  </div>
-</div>
-  <script>
-    window.onload = function() {
-      window.print();
-      window.onafterprint = function() { window.close(); };
+    const caseType = this.getCaseTypeFromWorkType(c.workType || '');
+    const printDraft = {
+      doctor: String(c.doctor || '').trim(),
+      patient: String(c.patient || '').trim(),
+      branch: String(c.branch || c.clinic || '').trim(),
+      caseType,
+      workType: String(c.workType || '').trim(),
+      workDetail: String(c.workDetail || '').trim(),
+      color: String(c.color || '').trim(),
+      quantity: caseType === 'Empty' ? 0 : Number(c.quantity) || 1,
+      date: c.receivedDate,
+      urgent: c.priority === 'emergency',
+      intakeType: c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : undefined,
     };
-  </script>
-</body>
-</html>`;
 
-    const popup = window.open('', '_blank', 'width=380,height=600,toolbar=0,menubar=0,scrollbars=0');
-    if (popup) {
-      popup.document.write(html);
-      popup.document.close();
-    }
+    this.http
+      .post(`${this.apiBase}/print/job`, {
+        printData: buildPrintData(printDraft, caseNumber),
+      })
+      .subscribe({
+        next: () => this.flash('تم إرسال إعادة الطباعة بنفس رقم الكيس'),
+        error: () => this.flash('فشل إعادة الطباعة — تحقق من اتصال الطابعة/الـ Agent'),
+      });
   }
 }
