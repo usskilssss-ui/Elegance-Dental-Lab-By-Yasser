@@ -283,12 +283,6 @@ export class Secretary implements OnInit, OnDestroy {
       .replace(/\s+/g, ' ');
   }
 
-  private isAccountDoctor(name: string): boolean {
-    const key = this.normalizeArabic(name);
-    if (!key) return false;
-    return this.accountDoctors().some((d) => this.normalizeArabic(d) === key);
-  }
-
   private loadAccountDoctors(): void {
     this.userApi.getUsersByRole('doctor').subscribe({
       next: (res) => {
@@ -891,10 +885,6 @@ export class Secretary implements OnInit, OnDestroy {
 
     if (!d.doctor.trim()) {
       this.flash('يرجى تعبئة اسم الطبيب');
-      return;
-    }
-    if (!this.isAccountDoctor(d.doctor)) {
-      this.flash('اختَر طبيبًا له أكونت على السيستم من القائمة');
       return;
     }
     if (!d.patient?.trim()) {
