@@ -387,6 +387,28 @@
             <input type="text" name="branch" [(ngModel)]="formDraft.branch" placeholder="اسم الفرع" required autocomplete="off" />
           </label>
 
+          <div class="form-field intake-type-field">
+            <span>نوع الاستلام <abbr title="مطلوب">*</abbr></span>
+            <div class="intake-checkboxes">
+              <label class="intake-check">
+                <input
+                  type="checkbox"
+                  [checked]="intakeType === 'impression'"
+                  (change)="setIntakeType('impression')"
+                />
+                <span>امبرشن</span>
+              </label>
+              <label class="intake-check">
+                <input
+                  type="checkbox"
+                  [checked]="intakeType === 'scan'"
+                  (change)="setIntakeType('scan')"
+                />
+                <span>سكان</span>
+              </label>
+            </div>
+          </div>
+
           <label class="urgent-check">
             <input type="checkbox" name="urgent" [(ngModel)]="formDraft.urgent" />
             <span>مستعجل — يظهر فورًا في السكرتارية</span>
@@ -489,17 +511,6 @@
             <span>تفاصيل <span class="label-optional">(اختياري)</span></span>
             <input type="text" name="workDetail" [(ngModel)]="formDraft.workDetail" autocomplete="off" />
           </label>
-
-          <div class="form-field">
-            <span>رفع ملف السكان <span class="label-optional">(اختياري — PLY)</span></span>
-            <input type="file" accept=".ply,.stl,.obj,model/*,*/*" (change)="onPlyFileSelected($event)" />
-            @if (selectedPlyFile) {
-              <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:13px;">
-                <span>{{ selectedPlyFile.name }}</span>
-                <button type="button" class="btn-secondary" style="padding:4px 10px;" (click)="clearPlyFile()">إزالة</button>
-              </div>
-            }
-          </div>
 
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>

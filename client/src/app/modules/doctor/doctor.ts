@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, switchMap, catchError } from 'rxjs';
+import { Subscription, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
@@ -106,7 +106,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
-  selectedPlyFile: File | null = null;
+  intakeType: 'impression' | 'scan' | '' = '';
 
   /** Prompt doctor to create a PIN after first password login */
   readonly pinSetupOpen = signal(false);
@@ -515,22 +515,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
-    this.selectedPlyFile = null;
+    this.intakeType = '';
     this.dialogOpen.set(true);
   }
 
-  onPlyFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] || null;
-    if (!file) {
-      this.selectedPlyFile = null;
-      return;
-    }
-    this.selectedPlyFile = file;
-  }
-
-  clearPlyFile(): void {
-    this.selectedPlyFile = null;
+  setIntakeType(type: 'impression' | 'scan'): void {
+    this.intakeType = this.intakeType === type ? '' : type;
   }
 
   private maybeOfferPinSetup(): void {
@@ -618,6 +608,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.intakeType =
+      c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
     this.dialogOpen.set(true);
   }
@@ -781,6 +773,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.flash('يرجى إدخال الفرع');
       return;
     }
+    if (!this.intakeType) {
+      this.flash('اختَر امبرشن أو سكان');
+      return;
+    }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
@@ -808,6 +804,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
       quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
       date: todayYmd(),
       urgent: !!d.urgent,
+      intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
+        ? this.intakeType
+        : undefined) as 'impression' | 'scan' | undefined,
     };
 
     const casePayload = buildCasePayloadFromPrintForm(draft, {
@@ -837,18 +836,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
       .pipe(
         switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
-          const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
-          const ply = this.selectedPlyFile;
-          const print$ = this.http.post(`${this.apiBase}/print/job`, {
+          return this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
-          if (ply && caseId) {
-            return this.caseApi.uploadCasePly(caseId, ply).pipe(
-              switchMap(() => print$),
-              catchError(() => print$)
-            );
-          }
-          return print$;
         })
       )
       .subscribe({
