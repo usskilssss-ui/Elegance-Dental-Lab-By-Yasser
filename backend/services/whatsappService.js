@@ -9,6 +9,8 @@ const DEFAULT_MSG_COMPLETED =
   '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
 const DEFAULT_MSG_EXITED =
   '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
+const DEFAULT_MSG_DAILY =
+  '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
 const OLD_MSG_COMPLETED =
   '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
 const OLD_MSG_EXITED =
