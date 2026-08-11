@@ -1672,8 +1672,15 @@ export class Admin implements OnInit, OnDestroy {
         this.waLiveConfigured = !!s.liveConfigured;
         this.waToken = '';
       },
-      error: () => {
-        this.waMsg = 'تعذر تحميل إعدادات واتساب';
+      error: (err: any) => {
+        const status = err?.status;
+        if (status === 404) {
+          this.waMsg = 'تعذر تحميل إعدادات واتساب — الباكند قديم أو مش متحدث (مسار /settings/whatsapp غير موجود)';
+        } else if (status === 401 || status === 403) {
+          this.waMsg = 'تعذر تحميل إعدادات واتساب — صلاحية الأدمن مطلوبة';
+        } else {
+          this.waMsg = 'تعذر تحميل إعدادات واتساب';
+        }
       },
     });
   }
