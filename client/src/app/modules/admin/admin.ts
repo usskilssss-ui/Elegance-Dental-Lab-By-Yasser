@@ -1123,6 +1123,23 @@ export class Admin implements OnInit, OnDestroy {
     return this.countUnitsByKeywords(['peek']);
   }
 
+  /** عدادات كل الماتريال الخارجة (غير إعادة/تعديل) */
+  get exitedMaterialCounters(): { label: string; qty: number; color: string }[] {
+    return [
+      { label: 'Zircon', qty: this.countUnitsByKeywords(['zircon'], ['german']), color: '#6366f1' },
+      { label: 'German Zircon', qty: this.countUnitsByKeywords(['german zircon', 'german']), color: '#4f46e5' },
+      { label: 'Emax', qty: this.countUnitsByKeywords(['emax']), color: '#0ea5e9' },
+      { label: 'Pmma Cad', qty: this.countUnitsByKeywords(['pmma cad', 'pmma']), color: '#14b8a6' },
+      { label: 'Peek', qty: this.countUnitsByKeywords(['peek']), color: '#10b981' },
+      { label: 'Titanium', qty: this.countUnitsByKeywords(['titanium']), color: '#64748b' },
+      { label: 'Try in', qty: this.countUnitsByKeywords(['try in', 'tryin']), color: '#f59e0b' },
+      { label: 'Mokup', qty: this.countUnitsByKeywords(['mokup', 'mockup', 'mock up', 'موكب']), color: '#ec4899' },
+      { label: 'Night Guard', qty: this.countUnitsByKeywords(['night guard', 'nightguard', 'guard']), color: '#8b5cf6' },
+      { label: 'Wax', qty: this.countUnitsByKeywords(['wax']), color: '#a16207' },
+      { label: 'Ring', qty: this.countUnitsByKeywords(['ring']), color: '#ef4444' },
+    ];
+  }
+
   get financialCostEligibleCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;

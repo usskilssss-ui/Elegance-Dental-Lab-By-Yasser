@@ -48,6 +48,12 @@ body { background: transparent; }
 .action-btn:hover { background: #0f4e92; }
 .export-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 12px; color: var(--color-text-secondary); background: var(--color-background-primary); cursor: pointer; }
 .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.materials-exit-grid {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.material-exit-card {
+  min-height: 110px;
+}
 .stat-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
 .stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .stat-label { font-size: 11px; color: var(--color-text-secondary); }
