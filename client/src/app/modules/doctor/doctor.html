@@ -6,8 +6,8 @@
   @if (pwa.isInAppBrowser()) {
     <div class="doctor-access-banner doctor-access-banner--warn" role="alert">
       <div>
-        <strong>ثبّت التطبيق</strong>
-        <p>اضغط تثبيت عشان يتحمّل على موبايلك.</p>
+        <strong>تثبيت التطبيق</strong>
+        <p>اضغط الزر مرة واحدة فقط.</p>
       </div>
       <div class="doctor-access-actions">
         <button type="button" class="btn-primary" (click)="pwa.installApp()" [disabled]="pwa.installing()">
@@ -18,12 +18,23 @@
   } @else if (pwa.showInstallHint() && !pwa.isStandalone() && !isAdminView()) {
     <div class="doctor-access-banner" role="status">
       <div>
-        <strong>ثبّت التطبيق</strong>
-        <p>اضغط تثبيت وهيتحمّل على الشاشة الرئيسية.</p>
+        <strong>تثبيت التطبيق</strong>
+        <p>اضغط تثبيت مرة واحدة وهيتحمّل على موبايلك.</p>
       </div>
       <div class="doctor-access-actions">
-        <button type="button" class="btn-primary" (click)="pwa.installApp()" [disabled]="pwa.installing()">
-          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="pwa.installApp()"
+          [disabled]="pwa.installing() || (pwa.preparingInstall() && !pwa.canInstall() && pwa.isAndroid())"
+        >
+          @if (pwa.installing()) {
+            جاري التثبيت…
+          } @else if (pwa.preparingInstall() && !pwa.canInstall() && pwa.isAndroid()) {
+            تحضير…
+          } @else {
+            تثبيت
+          }
         </button>
         <button type="button" class="btn-secondary" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>

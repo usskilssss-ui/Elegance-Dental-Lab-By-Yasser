@@ -19,24 +19,35 @@
   @if (pwa.isInAppBrowser()) {
     <div class="access-banner access-banner--warn" dir="rtl" role="alert">
       <div class="access-banner-text">
-        <strong>ثبّت التطبيق</strong>
-        <span>اضغط تثبيت عشان يفتح في المتصفح ويتحمّل على موبايلك.</span>
+        <strong>تثبيت التطبيق</strong>
+        <span>اضغط الزر مرة واحدة فقط.</span>
       </div>
       <div class="access-banner-actions">
-        <button type="button" class="access-btn access-btn--primary" (click)="installApp()" [disabled]="pwa.installing()">
+        <button type="button" class="access-btn access-btn--primary access-btn--install" (click)="installApp()" [disabled]="pwa.installing()">
           {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
         </button>
       </div>
     </div>
   } @else if (pwa.showInstallHint() && !pwa.isStandalone()) {
-    <div class="access-banner" dir="rtl" role="status">
+    <div class="access-banner access-banner--install" dir="rtl" role="status">
       <div class="access-banner-text">
-        <strong>ثبّت التطبيق على الموبايل</strong>
-        <span>اضغط تثبيت وهيتحمّل على الشاشة الرئيسية.</span>
+        <strong>تثبيت التطبيق</strong>
+        <span>اضغط تثبيت مرة واحدة وهيتحمّل على موبايلك.</span>
       </div>
       <div class="access-banner-actions">
-        <button type="button" class="access-btn access-btn--primary" (click)="installApp()" [disabled]="pwa.installing()">
-          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
+        <button
+          type="button"
+          class="access-btn access-btn--primary access-btn--install"
+          (click)="installApp()"
+          [disabled]="pwa.installing() || (pwa.preparingInstall() && !pwa.canInstall() && pwa.isAndroid())"
+        >
+          @if (pwa.installing()) {
+            جاري التثبيت…
+          } @else if (pwa.preparingInstall() && !pwa.canInstall() && pwa.isAndroid()) {
+            تحضير…
+          } @else {
+            تثبيت
+          }
         </button>
         <button type="button" class="access-btn" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>

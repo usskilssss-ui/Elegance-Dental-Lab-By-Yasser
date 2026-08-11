@@ -17,6 +17,8 @@ export class PwaInstallService {
   readonly showInstallHint = signal(false);
   readonly copied = signal(false);
   readonly installing = signal(false);
+  /** True while waiting for Chrome to offer the native install event */
+  readonly preparingInstall = signal(false);
 
   private deferredPrompt: BeforeInstallPromptEvent | null = null;
 
@@ -27,27 +29,50 @@ export class PwaInstallService {
     this.isInAppBrowser.set(this.detectInAppBrowser());
 
     const dismissed = localStorage.getItem(INSTALL_HINT_DISMISSED_KEY) === '1';
-    this.showInstallHint.set(!this.isStandalone() && !dismissed && this.isMobile());
+    const wantHint = !this.isStandalone() && !dismissed && this.isMobile();
+    this.showInstallHint.set(wantHint);
 
-    // Capture install event as soon as Chrome offers it
+    // Coming from WhatsApp → Chrome with ?install=1 : force show install CTA
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('install') === '1' && wantHint) {
+        this.showInstallHint.set(true);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    if (wantHint && this.isAndroid() && !this.isInAppBrowser()) {
+      this.preparingInstall.set(true);
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.deferredPrompt = e as BeforeInstallPromptEvent;
       this.canInstall.set(true);
+      this.preparingInstall.set(false);
       if (!dismissed) this.showInstallHint.set(true);
     });
 
     window.addEventListener('appinstalled', () => {
       this.deferredPrompt = null;
       this.canInstall.set(false);
+      this.preparingInstall.set(false);
       this.showInstallHint.set(false);
       this.isStandalone.set(true);
       this.installing.set(false);
+      this.clearInstallQuery();
     });
 
-    // Ensure SW is ready ASAP (needed for beforeinstallprompt on Android)
     if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker.ready.catch(() => undefined);
+      void navigator.serviceWorker.ready
+        .then(() => {
+          // Give Chrome a moment to fire beforeinstallprompt after SW is ready
+          window.setTimeout(() => {
+            if (!this.deferredPrompt) this.preparingInstall.set(false);
+          }, 12000);
+        })
+        .catch(() => this.preparingInstall.set(false));
     }
   }
 
@@ -79,8 +104,10 @@ export class PwaInstallService {
 
   isIos(): boolean {
     if (typeof navigator === 'undefined') return false;
-    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return (
+      /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
   }
 
   isAndroid(): boolean {
@@ -97,6 +124,13 @@ export class PwaInstallService {
     return typeof location !== 'undefined' ? `${location.origin}/login` : '';
   }
 
+  /** Chrome URL that auto-opens the install banner flow */
+  installDeepLink(): string {
+    const url = new URL(this.appUrl());
+    url.searchParams.set('install', '1');
+    return url.toString();
+  }
+
   async copyAppLink(): Promise<void> {
     const url = this.appUrl();
     try {
@@ -109,19 +143,18 @@ export class PwaInstallService {
   }
 
   openInSystemBrowser(): void {
-    const url = this.appUrl();
+    const target = this.installDeepLink();
     if (this.isAndroid()) {
-      const hostPath = url.replace(/^https?:\/\//, '');
+      const hostPath = target.replace(/^https?:\/\//, '');
       window.location.href =
-        `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+        `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(target)};end`;
       return;
     }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(target, '_blank', 'noopener,noreferrer');
   }
 
   /**
-   * Install must stay in the same user-gesture turn as the click.
-   * Never await long work before deferredPrompt.prompt().
+   * One doctor tap → native Android install sheet (must stay in user gesture).
    */
   async installApp(): Promise<boolean> {
     if (this.isStandalone()) {
@@ -129,7 +162,7 @@ export class PwaInstallService {
       return true;
     }
 
-    // WhatsApp/Facebook webview cannot install — jump to Chrome first
+    // Inside WhatsApp: jump to Chrome with ?install=1 (one tap from doctor)
     if (this.isInAppBrowser()) {
       this.openInSystemBrowser();
       return false;
@@ -138,17 +171,19 @@ export class PwaInstallService {
     const promptEvent = this.deferredPrompt;
     if (promptEvent) {
       this.installing.set(true);
+      // Keep event until prompt succeeds; clear after calling prompt()
       this.deferredPrompt = null;
       this.canInstall.set(false);
       try {
-        // Must call promptly after click (user gesture)
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
         this.installing.set(false);
         if (choice.outcome === 'accepted') {
           this.showInstallHint.set(false);
+          this.clearInstallQuery();
           return true;
         }
+        // If dismissed, Chrome won't re-fire event — hide noisy spinner
         return false;
       } catch {
         this.installing.set(false);
@@ -156,28 +191,27 @@ export class PwaInstallService {
       }
     }
 
-    // iOS / Safari: open share sheet (includes Add to Home Screen)
+    // Not ready yet on Android Chrome — open same page fresh (helps SW/prompt)
+    if (this.isAndroid()) {
+      this.preparingInstall.set(true);
+      window.location.href = this.installDeepLink();
+      return false;
+    }
+
+    // iOS: share sheet (system UI includes Add to Home Screen)
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       this.installing.set(true);
       try {
         await navigator.share({
           title: 'Elegance Dental Lab',
-          text: 'Elegance Dental Lab',
           url: this.appUrl(),
         });
         this.installing.set(false);
         return true;
       } catch {
         this.installing.set(false);
-        // user cancelled share
         return false;
       }
-    }
-
-    // Android Chrome without prompt yet: open clean Chrome tab of the app
-    if (this.isAndroid()) {
-      this.openInSystemBrowser();
-      return false;
     }
 
     this.installing.set(false);
@@ -187,6 +221,17 @@ export class PwaInstallService {
   /** @deprecated use installApp */
   async promptInstall(): Promise<boolean> {
     return this.installApp();
+  }
+
+  private clearInstallQuery(): void {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('install')) return;
+      url.searchParams.delete('install');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    } catch {
+      /* ignore */
+    }
   }
 
   private detectStandalone(): boolean {

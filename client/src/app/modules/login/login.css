@@ -469,6 +469,24 @@ body.dark-theme .input-wrap input::placeholder,
   color: #fff;
 }
 
+.access-btn--install {
+  min-width: 140px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.access-banner--install {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.access-banner--install .access-btn--primary {
+  background: #059669;
+  border-color: #059669;
+}
+
 .access-banner--warn .access-btn--primary {
   background: #c2410c;
   border-color: #c2410c;
