@@ -5,7 +5,14 @@
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
 
-/** @type {null | { enabled: boolean, provider: string, token: string, instanceId: string, phoneNumberId: string, dailyHour: number, labName: string }} */
+const DEFAULT_MSG_COMPLETED =
+  '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+const DEFAULT_MSG_EXITED =
+  '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
+const DEFAULT_MSG_DAILY =
+  '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+
+/** @type {null | { enabled: boolean, provider: string, token: string, instanceId: string, phoneNumberId: string, dailyHour: number, labName: string, msgCompleted: string, msgExited: string, msgDaily: string }} */
 let cachedConfig = null;
 
 function configFromEnv() {
@@ -18,7 +25,18 @@ function configFromEnv() {
     phoneNumberId: String(process.env.WHATSAPP_PHONE_NUMBER_ID || ''),
     dailyHour: Number(process.env.WHATSAPP_DAILY_HOUR || 18),
     labName: String(process.env.WHATSAPP_LAB_NAME || 'Elegance Dental Lab'),
+    msgCompleted: DEFAULT_MSG_COMPLETED,
+    msgExited: DEFAULT_MSG_EXITED,
+    msgDaily: DEFAULT_MSG_DAILY,
   };
+}
+
+function applyTemplate(template, vars) {
+  let out = String(template || '');
+  for (const [key, value] of Object.entries(vars || {})) {
+    out = out.split(`{${key}}`).join(String(value ?? ''));
+  }
+  return out;
 }
 
 async function reloadWhatsAppConfig() {
@@ -34,6 +52,9 @@ async function reloadWhatsAppConfig() {
         phoneNumberId: String(doc.whatsapp.phoneNumberId || ''),
         dailyHour: Number(doc.whatsapp.dailyHour ?? 18),
         labName: String(doc.whatsapp.labName || 'Elegance Dental Lab'),
+        msgCompleted: String(doc.whatsapp.msgCompleted || DEFAULT_MSG_COMPLETED),
+        msgExited: String(doc.whatsapp.msgExited || DEFAULT_MSG_EXITED),
+        msgDaily: String(doc.whatsapp.msgDaily || DEFAULT_MSG_DAILY),
       };
       return cachedConfig;
     }
@@ -161,13 +182,15 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
     }
     const patient = dentalCase.patientName || '—';
     const num = dentalCase.caseNumber || '';
+    const c = getConfig();
+    const vars = { lab: labLabel(), caseNumber: num, patient, count: '', list: '' };
     let msg = '';
     if (kind === 'completed') {
-      msg = `${labLabel()}\nالحالة ${num} للمريض ${patient} أصبحت منتهية وجاهزة.`;
+      msg = applyTemplate(c.msgCompleted || DEFAULT_MSG_COMPLETED, vars);
     } else if (kind === 'exited') {
-      msg = `${labLabel()}\nالحالة ${num} للمريض ${patient} تم تسليمها/خرجت من المعمل.`;
+      msg = applyTemplate(c.msgExited || DEFAULT_MSG_EXITED, vars);
     } else {
-      msg = `${labLabel()}\nتحديث على الحالة ${num} (${patient}).`;
+      msg = applyTemplate('{lab}\nتحديث على الحالة {caseNumber} ({patient}).', vars);
     }
     await sendWhatsAppText(doctor.phone, msg);
   } catch (err) {
@@ -201,14 +224,18 @@ async function sendDailyReadySummaries() {
     for (const doc of doctors) {
       const list = byDoctor.get(normalizeDoctorKey(doc.fullName)) || [];
       if (!list.length || !doc.phone) continue;
-      const msg =
-        `${labLabel()} — ملخص يومي\n` +
-        `عندك ${list.length} ${list.length === 1 ? 'حالة جاهزة' : 'حالات جاهزة'} للاستلام.\n` +
+      const listText =
         list
           .slice(0, 8)
           .map((c) => `• ${c.caseNumber} — ${c.patientName}`)
-          .join('\n') +
-        (list.length > 8 ? `\n… و${list.length - 8} أخرى` : '');
+          .join('\n') + (list.length > 8 ? `\n… و${list.length - 8} أخرى` : '');
+      const msg = applyTemplate(getConfig().msgDaily || DEFAULT_MSG_DAILY, {
+        lab: labLabel(),
+        caseNumber: '',
+        patient: '',
+        count: String(list.length),
+        list: listText,
+      });
       await sendWhatsAppText(doc.phone, msg);
     }
   } catch (err) {

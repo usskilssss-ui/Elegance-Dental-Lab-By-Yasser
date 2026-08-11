@@ -1220,6 +1220,24 @@
             <input type="text" [(ngModel)]="waLabName" />
           </div>
 
+          <div class="control-card" style="margin-bottom:12px;">
+            <label>رسالة الحالة المنتهية</label>
+            <textarea rows="3" [(ngModel)]="waMsgCompleted" style="width:100%;resize:vertical;"></textarea>
+            <small style="color:#94a3b8;" ngNonBindable>المتغيرات: {lab} {caseNumber} {patient}</small>
+          </div>
+
+          <div class="control-card" style="margin-bottom:12px;">
+            <label>رسالة خروج الحالة</label>
+            <textarea rows="3" [(ngModel)]="waMsgExited" style="width:100%;resize:vertical;"></textarea>
+            <small style="color:#94a3b8;" ngNonBindable>المتغيرات: {lab} {caseNumber} {patient}</small>
+          </div>
+
+          <div class="control-card" style="margin-bottom:12px;">
+            <label>رسالة الملخص اليومي</label>
+            <textarea rows="4" [(ngModel)]="waMsgDaily" style="width:100%;resize:vertical;"></textarea>
+            <small style="color:#94a3b8;" ngNonBindable>المتغيرات: {lab} {count} {list}</small>
+          </div>
+
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider === 'ultramsg'">
             <label>Instance ID (مثال: instance12345 أو 12345)</label>
             <input type="text" [(ngModel)]="waInstanceId" placeholder="instanceXXXX" autocomplete="off" />

@@ -1651,6 +1651,9 @@ export class Admin implements OnInit, OnDestroy {
   waToken = '';
   waDailyHour = 18;
   waLabName = 'Elegance Dental Lab';
+  waMsgCompleted = '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+  waMsgExited = '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
+  waMsgDaily = '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
   waHasToken = false;
   waLiveConfigured = false;
   waTestPhone = '';
@@ -1668,6 +1671,14 @@ export class Admin implements OnInit, OnDestroy {
         this.waPhoneNumberId = s.phoneNumberId || '';
         this.waDailyHour = s.dailyHour ?? 18;
         this.waLabName = s.labName || 'Elegance Dental Lab';
+        this.waMsgCompleted =
+          s.msgCompleted ||
+          '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+        this.waMsgExited =
+          s.msgExited ||
+          '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
+        this.waMsgDaily =
+          s.msgDaily || '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
         this.waHasToken = !!s.hasToken;
         this.waLiveConfigured = !!s.liveConfigured;
         this.waToken = '';
@@ -1695,6 +1706,9 @@ export class Admin implements OnInit, OnDestroy {
       phoneNumberId: this.waPhoneNumberId,
       dailyHour: this.waDailyHour,
       labName: this.waLabName,
+      msgCompleted: this.waMsgCompleted,
+      msgExited: this.waMsgExited,
+      msgDaily: this.waMsgDaily,
     };
     if (this.waToken.trim()) body['token'] = this.waToken.trim();
     this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean }>(

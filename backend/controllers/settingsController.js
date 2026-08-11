@@ -27,6 +27,15 @@ exports.getWhatsAppSettings = async (req, res) => {
         phoneNumberId: wa.phoneNumberId || '',
         dailyHour: wa.dailyHour ?? 18,
         labName: wa.labName || 'Elegance Dental Lab',
+        msgCompleted:
+          wa.msgCompleted ||
+          '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.',
+        msgExited:
+          wa.msgExited ||
+          '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.',
+        msgDaily:
+          wa.msgDaily ||
+          '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
         // never send full token — only whether set
         hasToken: !!(wa.token && String(wa.token).trim()),
         liveConfigured: providerConfigured(),
@@ -52,6 +61,15 @@ exports.updateWhatsAppSettings = async (req, res) => {
       wa.dailyHour = Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 18;
     }
     if (body.labName !== undefined) wa.labName = String(body.labName || '').trim() || 'Elegance Dental Lab';
+    if (body.msgCompleted !== undefined) {
+      wa.msgCompleted = String(body.msgCompleted || '').trim() || wa.msgCompleted;
+    }
+    if (body.msgExited !== undefined) {
+      wa.msgExited = String(body.msgExited || '').trim() || wa.msgExited;
+    }
+    if (body.msgDaily !== undefined) {
+      wa.msgDaily = String(body.msgDaily || '').trim() || wa.msgDaily;
+    }
     // Only update token if non-empty string sent (keep existing otherwise)
     if (typeof body.token === 'string' && body.token.trim()) {
       wa.token = body.token.trim();

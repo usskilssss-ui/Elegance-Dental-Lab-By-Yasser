@@ -20,6 +20,20 @@ const appSettingsSchema = new mongoose.Schema(
       phoneNumberId: { type: String, default: '' }, // Meta
       dailyHour: { type: Number, default: 18 },
       labName: { type: String, default: 'Elegance Dental Lab' },
+      // Message templates — placeholders: {lab} {caseNumber} {patient} {count} {list}
+      msgCompleted: {
+        type: String,
+        default: '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.',
+      },
+      msgExited: {
+        type: String,
+        default: '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.',
+      },
+      msgDaily: {
+        type: String,
+        default:
+          '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
+      },
     },
   },
   { timestamps: true }
