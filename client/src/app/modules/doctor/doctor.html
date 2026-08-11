@@ -409,6 +409,25 @@
             </div>
           </div>
 
+          @if (intakeType === 'scan') {
+            <label class="form-field form-field--ply">
+              <span>رفع ملف السكان (.ply) <span class="label-optional">(اختياري)</span></span>
+              <input
+                id="doctorPlyInput"
+                class="ply-file-input"
+                type="file"
+                accept=".ply,application/octet-stream"
+                (change)="onPlyFileSelected($event)"
+              />
+              @if (selectedPlyFile) {
+                <p class="ply-picked">
+                  تم اختيار: <strong>{{ selectedPlyFile.name }}</strong>
+                  <button type="button" class="btn-text" (click)="clearPlySelection()">إزالة</button>
+                </p>
+              }
+            </label>
+          }
+
           <label class="urgent-check">
             <input type="checkbox" name="urgent" [(ngModel)]="formDraft.urgent" />
             <span>مستعجل — يظهر فورًا في السكرتارية</span>

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, switchMap } from 'rxjs';
+import { Subscription, switchMap, catchError } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
@@ -107,6 +107,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   formDraft = emptyDraft();
   patientNameError = '';
   intakeType: 'impression' | 'scan' | '' = '';
+  selectedPlyFile: File | null = null;
 
   /** Prompt doctor to create a PIN after first password login */
   readonly pinSetupOpen = signal(false);
@@ -516,11 +517,40 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.patientNameError = '';
     this.nightGuardType = '';
     this.intakeType = '';
+    this.clearPlySelection();
     this.dialogOpen.set(true);
   }
 
   setIntakeType(type: 'impression' | 'scan'): void {
-    this.intakeType = this.intakeType === type ? '' : type;
+    if (this.intakeType === type) {
+      this.intakeType = '';
+      this.clearPlySelection();
+      return;
+    }
+    this.intakeType = type;
+    if (type === 'impression') this.clearPlySelection();
+  }
+
+  onPlyFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      this.selectedPlyFile = null;
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.ply')) {
+      this.flash('يُسمح فقط بملفات بصيغة .ply');
+      input.value = '';
+      this.selectedPlyFile = null;
+      return;
+    }
+    this.selectedPlyFile = file;
+  }
+
+  clearPlySelection(): void {
+    this.selectedPlyFile = null;
+    const el = document.getElementById('doctorPlyInput') as HTMLInputElement | null;
+    if (el) el.value = '';
   }
 
   private maybeOfferPinSetup(): void {
@@ -610,6 +640,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.intakeType =
       c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
+    this.clearPlySelection();
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
     this.dialogOpen.set(true);
   }
@@ -662,6 +693,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
     this.editingId = null;
+    this.clearPlySelection();
   }
 
   onCaseTypeChange(): void {
@@ -790,6 +822,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.updateWorkTypeString();
     const isEdit = this.dialogMode() === 'edit' && !!this.editingId;
     const editId = this.editingId;
+    const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
     this.closeDialog();
     this.saveInProgress.set(true);
 
@@ -818,9 +851,23 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (isEdit && editId) {
       this.caseApi.updateCase(editId, casePayload).subscribe({
         next: () => {
-          this.saveInProgress.set(false);
-          this.flash('✅ تم تحديث الريكويست');
-          this.loadCases();
+          const done = () => {
+            this.saveInProgress.set(false);
+            this.flash('✅ تم تحديث الريكويست');
+            this.loadCases();
+          };
+          if (ply) {
+            this.caseApi.uploadCasePly(editId, ply).subscribe({
+              next: () => done(),
+              error: () => {
+                this.saveInProgress.set(false);
+                this.flash('تم التحديث لكن تعذر رفع ملف السكان');
+                this.loadCases({ silent: true });
+              },
+            });
+          } else {
+            done();
+          }
         },
         error: (err) => {
           this.saveInProgress.set(false);
@@ -836,9 +883,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
       .pipe(
         switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
-          return this.http.post(`${this.apiBase}/print/job`, {
+          const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
+          const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
+          if (ply && caseId) {
+            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+              switchMap(() => print$),
+              catchError(() => print$)
+            );
+          }
+          return print$;
         })
       )
       .subscribe({
