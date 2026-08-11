@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, of, switchMap } from 'rxjs';
+import { catchError, of, Subscription, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -16,11 +16,9 @@ import {
 import { buildPrintData } from '../../core/utils/print-job.util';
 import { environment } from '../../../environments/environment';
 
-import { Subscription } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { CaseDraft, SecretaryService } from './secretary.service';
 import { PatientLabelPipe } from './patient-label.pipe';
-import { SizeFormatPipe } from './size-format.pipe';
 import { ThemeService } from '../../core/services/theme.service';
 
 function emptyDraft(): CaseDraft {
@@ -998,43 +996,55 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
-      this.caseApi.createCase(buildCreateCasePayload(formPayload)).subscribe({
-        next: (res) => {
-          const caseId = String(
-            (res as { case?: { _id?: string; id?: string } })?.case?._id ??
-              (res as { case?: { id?: string } })?.case?.id ??
-              ''
-          );
-          const done = (msg: string) => {
+      const printDraft = {
+        doctor: docName,
+        patient: patientName,
+        branch: '',
+        caseType: (['New', 'Modification', 'Redo', 'Empty'].includes(String(d.caseType))
+          ? d.caseType
+          : 'New') as 'New' | 'Modification' | 'Redo' | 'Empty',
+        workType: d.workType.trim(),
+        workDetail: (d.workDetail || '').trim(),
+        color: (d.color || '').trim(),
+        quantity:
+          d.caseType === 'Empty'
+            ? 0
+            : d.quantity !== '' && d.quantity !== null && !isNaN(Number(d.quantity))
+              ? Number(d.quantity)
+              : 1,
+        date: d.date,
+      };
+
+      this.caseApi
+        .createCase(buildCreateCasePayload(formPayload))
+        .pipe(
+          switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
+            const caseNumber = String(res?.case?.caseNumber ?? '');
+            const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
+            const print$ = this.http.post(`${this.apiBase}/print/job`, {
+              printData: buildPrintData(printDraft, caseNumber),
+            });
+            if (ply && caseId) {
+              return this.caseApi.uploadCasePly(caseId, ply).pipe(
+                switchMap(() => print$),
+                catchError(() => print$)
+              );
+            }
+            return print$;
+          })
+        )
+        .subscribe({
+          next: () => {
             this.saveInProgress.set(false);
-            this.flash(msg);
+            this.flash('تم حفظ الحالة وإرسالها للطباعة');
             this.closeDialog();
             this.reloadCasesFromBackend();
-          };
-          if (ply && caseId) {
-            this.caseApi.uploadCasePly(caseId, ply).subscribe({
-              next: () => done('تمت إضافة الحالة ورفع ملف PLY'),
-              error: (err: unknown) => {
-                this.saveInProgress.set(false);
-                const detail = this.formatCaseApiError(err);
-                this.flash(
-                  detail
-                    ? `تم إنشاء الحالة، لكن فشل رفع PLY: ${detail}`
-                    : 'تم إنشاء الحالة لكن تعذر رفع ملف PLY'
-                );
-                this.closeDialog();
-                this.reloadCasesFromBackend();
-              },
-            });
-          } else {
-            done('تمت إضافة الحالة في النظام');
-          }
-        },
-        error: (err: unknown) => {
-          this.saveInProgress.set(false);
-          this.flash(this.formatCaseApiError(err));
-        },
-      });
+          },
+          error: (err: unknown) => {
+            this.saveInProgress.set(false);
+            this.flash(this.formatCaseApiError(err) || 'فشل الحفظ أو الطباعة');
+          },
+        });
       return;
     }
 
