@@ -114,9 +114,10 @@ body.dark-theme .input-wrap input::placeholder,
 
 .brand-icon {
   display: flex;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   color: var(--primary);
+  flex-shrink: 0;
 }
 
 .brand-icon svg {
@@ -125,10 +126,11 @@ body.dark-theme .input-wrap input::placeholder,
 }
 
 .brand-name {
-  font-size: 1.35rem;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--primary);
+  white-space: nowrap;
 }
 
 .title {
