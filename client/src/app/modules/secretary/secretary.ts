@@ -6,6 +6,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
+import { UserApiService } from '../../core/services/user-api.service';
 import {
   buildCreateCasePayload,
   mapApiCaseToDentalCase,
@@ -99,6 +100,7 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly sharedCases = inject(SharedCasesService);
   private readonly auth = inject(AuthService);
   private readonly caseApi = inject(CaseApiService);
+  private readonly userApi = inject(UserApiService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
@@ -257,18 +259,19 @@ export class Secretary implements OnInit, OnDestroy {
   editingId: string | null = null;
   formDraft: any = emptyDraft();
 
-  // Autocomplete Doctor logic
+  // Autocomplete Doctor logic — فقط دكاترة لهم أكونت نشط على السيستم
+  readonly accountDoctors = signal<string[]>([]);
+
   readonly uniqueDoctors = computed(() => {
-    const allCases = this.sharedCases.cases();
-    const doctors = allCases
-      .map(c => c.doctor?.trim())
-      .filter((name): name is string => !!name);
-    return Array.from(new Set(doctors)).sort();
+    return [...this.accountDoctors()].sort((a, b) => a.localeCompare(b, 'ar'));
   });
 
   readonly doctorSearchQuery = signal('');
   readonly showDoctorSuggestions = signal(false);
   readonly activeSuggestionIndex = signal(-1);
+
+  /** امبرشن أو سكان */
+  intakeType: 'impression' | 'scan' | '' = '';
 
   normalizeArabic(text: string): string {
     if (!text) return '';
@@ -278,6 +281,39 @@ export class Secretary implements OnInit, OnDestroy {
       .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
       .replace(/\s+/g, ' ');
+  }
+
+  private isAccountDoctor(name: string): boolean {
+    const key = this.normalizeArabic(name);
+    if (!key) return false;
+    return this.accountDoctors().some((d) => this.normalizeArabic(d) === key);
+  }
+
+  private loadAccountDoctors(): void {
+    this.userApi.getUsersByRole('doctor').subscribe({
+      next: (res) => {
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const names = rows
+          .map((u: any) => String(u?.fullName || '').trim())
+          .filter((n: string) => !!n);
+        this.accountDoctors.set(Array.from(new Set(names)));
+      },
+      error: () => {
+        this.accountDoctors.set([]);
+      },
+    });
+  }
+
+  setIntakeType(type: 'impression' | 'scan'): void {
+    if (this.intakeType === type) {
+      this.intakeType = '';
+      this.clearPlySelection();
+      return;
+    }
+    this.intakeType = type;
+    if (type === 'impression') {
+      this.clearPlySelection();
+    }
   }
 
   readonly filteredDoctors = computed(() => {
@@ -451,26 +487,25 @@ export class Secretary implements OnInit, OnDestroy {
   onPatientInputChange(): void {
     const name = (this.formDraft.patient || '').trim();
     const doc = (this.formDraft.doctor || '').trim();
-    
+
     if (!name) {
       this.patientWarning = '';
       return;
     }
-    
+
     const parts = name.split(/\s+/).filter((p: string) => p);
-    const isSingleWord = parts.length === 1;
-    
-    const exists = this.sharedCases.cases().some(c => 
-      c.status !== 'exited' &&
-      c.doctor?.trim().toLowerCase() === doc.toLowerCase() &&
-      c.patient?.trim().toLowerCase() === name.toLowerCase() &&
-      c.id !== this.editingId
+    const isSingleWord = parts.length < 2;
+
+    const exists = this.sharedCases.cases().some(
+      (c) =>
+        c.status !== 'exited' &&
+        c.doctor?.trim().toLowerCase() === doc.toLowerCase() &&
+        c.patient?.trim().toLowerCase() === name.toLowerCase() &&
+        c.id !== this.editingId
     );
-    
-    if (isSingleWord && exists) {
-      this.patientWarning = 'يرجى كتابة الاسم ثنائي. يوجد مريض بنفس الاسم لنفس الدكتور وسيتم ترقيمه تلقائياً.';
-    } else if (isSingleWord) {
-      this.patientWarning = 'يرجى كتابة الاسم ثنائي (مثال: محمد أحمد).';
+
+    if (isSingleWord) {
+      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
     } else if (exists) {
       this.patientWarning = 'تنبيه: يوجد مريض بنفس الاسم لنفس الدكتور.';
     } else {
@@ -598,6 +633,7 @@ export class Secretary implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.reloadCasesFromBackend();
     this.connectRealtimeUpdates();
+    this.loadAccountDoctors();
   }
 
   ngOnDestroy(): void {
@@ -716,6 +752,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.workTypeError = '';
     this.nightGuardType = '';
     this.patientWarning = '';
+    this.intakeType = '';
     this.existingPlyFileName = null;
     this.clearPlySelection();
     this.dialogOpen.set(true);
@@ -735,6 +772,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.editingId = c.id;
     this.existingPlyFileName = c.plyFileName || null;
     this.clearPlySelection();
+    this.intakeType = c.intakeType === 'scan' || c.plyScanUrl ? 'scan' : c.intakeType === 'impression' ? 'impression' : '';
     const delivery = String(c.deliveryDate || '');
     const dateMatch = delivery.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(.+))?$/);
     const currentCaseType = this.getCaseTypeFromWorkType(c.workType);
@@ -855,8 +893,26 @@ export class Secretary implements OnInit, OnDestroy {
       this.flash('يرجى تعبئة اسم الطبيب');
       return;
     }
+    if (!this.isAccountDoctor(d.doctor)) {
+      this.flash('اختَر طبيبًا له أكونت على السيستم من القائمة');
+      return;
+    }
     if (!d.patient?.trim()) {
       this.flash('يرجى إدخال اسم المريض');
+      return;
+    }
+    const patientParts = d.patient.trim().split(/\s+/).filter((p: string) => p);
+    if (patientParts.length < 2) {
+      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
+      this.flash('اسم المريض يجب أن يكون ثنائيًا على الأقل');
+      return;
+    }
+    if (!this.intakeType) {
+      this.flash('اختَر امبرشن أو سكان');
+      return;
+    }
+    if (this.intakeType === 'scan' && !this.selectedPlyFile && !this.existingPlyFileName) {
+      this.flash('ارفع ملف السكان (.ply) لأن النوع سكان');
       return;
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
@@ -871,41 +927,6 @@ export class Secretary implements OnInit, OnDestroy {
 
     let patientName = d.patient.trim();
     const docName = d.doctor.trim();
-    
-    const parts = patientName.split(/\s+/).filter((p: string) => p);
-    const isSingleWord = parts.length === 1;
-    
-    if (isSingleWord) {
-      const existingCases = this.sharedCases.cases().filter(c => 
-        c.status !== 'exited' &&
-        c.doctor?.trim().toLowerCase() === docName.toLowerCase() &&
-        c.id !== this.editingId
-      );
-      
-      const matchPattern = new RegExp(`^${this.escapeRegExp(patientName)}(?:\\s+(\\d+))?$`, 'i');
-      
-      let maxNumber = 1;
-      let duplicateExists = false;
-      
-      for (const c of existingCases) {
-        const pName = (c.patient || '').trim();
-        const match = pName.match(matchPattern);
-        if (match) {
-          duplicateExists = true;
-          if (match[1]) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNumber) {
-              maxNumber = num;
-            }
-          }
-        }
-      }
-      
-      if (duplicateExists) {
-        patientName = `${patientName} ${maxNumber + 1}`;
-        d.patient = patientName; // Update local form field
-      }
-    }
 
     const formPayload = {
       requesterType: isStudentCase ? ('student' as const) : ('doctor' as const),
@@ -940,10 +961,11 @@ export class Secretary implements OnInit, OnDestroy {
       deliveryDate: d.deliveryDate || '',
       deliveryTime: d.deliveryTime || '',
       exitedAt: d.exitedAt || undefined,
+      intakeType: this.intakeType === 'scan' || this.intakeType === 'impression' ? this.intakeType : undefined,
     };
 
     const plyPreserveMeta =
-      this.dialogMode() === 'edit' && existing?.plyScanUrl
+      this.intakeType === 'scan' && this.dialogMode() === 'edit' && existing?.plyScanUrl
         ? (() => {
             const scanPath = toStoredCaseImagePath(existing.plyScanUrl);
             return scanPath
@@ -957,7 +979,7 @@ export class Secretary implements OnInit, OnDestroy {
 
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
-      const ply = this.selectedPlyFile;
+      const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
       this.caseApi.createCase(buildCreateCasePayload(formPayload)).subscribe({
         next: (res) => {
           const caseId = String(
@@ -1000,7 +1022,7 @@ export class Secretary implements OnInit, OnDestroy {
 
     if (this.editingId) {
       this.saveInProgress.set(true);
-      const ply = this.selectedPlyFile;
+      const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
       this.caseApi
         .updateCase(this.editingId, buildCreateCasePayload(formPayload, plyPreserveMeta))
         .subscribe({

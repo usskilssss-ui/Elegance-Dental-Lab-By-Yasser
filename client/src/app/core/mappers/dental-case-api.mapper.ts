@@ -62,6 +62,8 @@ export type CaseMeta = {
   uiStatusOverride?: 'in-progress' | 'under-khart' | 'needs-revision';
   plyScanPath?: string;
   plyFileName?: string;
+  /** طريقة استلام الشغل من العيادة */
+  intakeType?: 'impression' | 'scan';
 };
 
 export type SecretaryCaseFormPayload = {
@@ -81,6 +83,7 @@ export type SecretaryCaseFormPayload = {
   deliveryTime?: string;
   branch?: string;
   exitedAt?: string;
+  intakeType?: 'impression' | 'scan';
 };
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
@@ -115,6 +118,9 @@ export function buildSecretaryNotes(
     deliveryTime: form.deliveryTime || '',
     receivedDate: form.date,
   };
+  if (form.intakeType === 'impression' || form.intakeType === 'scan') {
+    meta.intakeType = form.intakeType;
+  }
   const path = plyPreserve?.plyScanPath?.trim();
   if (path) {
     meta.plyScanPath = path;
@@ -244,6 +250,9 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const plyScanPath = typeof plyPathRaw === 'string' ? plyPathRaw : '';
   const plyFileName = String(meta['plyFileName'] ?? '');
   const plyScanUrl = plyScanPath ? normalizeCaseImageUrl(plyScanPath) : '';
+  const intakeRaw = String(meta['intakeType'] ?? '').toLowerCase();
+  const intakeType: 'impression' | 'scan' | undefined =
+    intakeRaw === 'scan' ? 'scan' : intakeRaw === 'impression' ? 'impression' : undefined;
   const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
   const requesterType: 'doctor' | 'student' =
     requesterTypeRaw === 'student' ? 'student' : 'doctor';
@@ -298,6 +307,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     finishingNotes,
     plyScanUrl: plyScanUrl || undefined,
     plyFileName: plyFileName || undefined,
+    intakeType,
     exitedAt: exitedDisplay || undefined,
     exitedAtRaw: exitedAtRaw ? String(exitedAtRaw) : undefined,
   };

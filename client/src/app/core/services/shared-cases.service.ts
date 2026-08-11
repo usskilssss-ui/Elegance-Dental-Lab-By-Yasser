@@ -43,6 +43,8 @@ export interface DentalCase {
   plyScanUrl?: string;
   /** اسم الملف الأصلي للمسح */
   plyFileName?: string;
+  /** امبرشن أو سكان */
+  intakeType?: 'impression' | 'scan';
   exitedAt?: string;
   exitedAtRaw?: string;
   /** القيمة الخام لتاريخ الاستلام من قاعدة البيانات (لضمان عدم تغييره عند التعديل) */
