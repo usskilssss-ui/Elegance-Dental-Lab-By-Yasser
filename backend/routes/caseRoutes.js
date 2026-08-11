@@ -106,14 +106,14 @@ router.put('/:id/move-stage', moveStageValidation, caseController.moveStage);
 // Upload case image (designer / finisher / admin)
 router.post('/:id/upload-image', authorize('admin', 'designer', 'finisher'), uploadCaseImage.single('image'), caseController.uploadCaseImage);
 
-// Upload secretary 3D scan (.ply) — saved into case notes meta
+// Upload 3D scan (.ply / .stl / .obj) — saved into case notes meta
 const plyUploadMiddleware = (req, res, next) => {
   uploadCasePly.single('ply')(req, res, (err) => {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
-          message: 'File exceeds maximum allowed size for PLY uploads (100 MB).',
+          message: 'File exceeds maximum allowed size for scan uploads (100 MB).',
         });
       }
       return res.status(400).json({

@@ -7,6 +7,8 @@ if (!fs.existsSync(uploadRoot)) {
   fs.mkdirSync(uploadRoot, { recursive: true });
 }
 
+const SCAN_EXTS = ['.ply', '.stl', '.obj'];
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadRoot),
   filename: (_req, file, cb) => {
@@ -32,8 +34,10 @@ const uploadCaseImage = multer({
 
 const plyStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadRoot),
-  filename: (_req, _file, cb) => {
-    cb(null, `ply-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ply`);
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safeExt = SCAN_EXTS.includes(ext) ? ext : '.ply';
+    cb(null, `scan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${safeExt}`);
   },
 });
 
@@ -45,10 +49,10 @@ const plyFileFilter = (_req, file, cb) => {
       .pop()
       ?.trim()
       ?.replace(/^\uFEFF/, '') ?? '';
-  if (/\.ply$/i.test(base)) {
+  if (SCAN_EXTS.some((ext) => base.toLowerCase().endsWith(ext))) {
     return cb(null, true);
   }
-  return cb(new Error('Only .ply scan files are allowed (.ply suffix on file name).'));
+  return cb(new Error('Only 3D scan files are allowed (.ply, .stl, .obj).'));
 };
 
 const uploadCasePly = multer({
