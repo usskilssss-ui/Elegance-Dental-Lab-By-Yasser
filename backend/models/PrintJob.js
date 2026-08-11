@@ -13,6 +13,7 @@ const printJobSchema = new mongoose.Schema(
       quantity:   { type: Number, default: 0 },
       caseNumber: { type: String, default: '' },
       printDate:  { type: String, default: '' },
+      intakeType: { type: String, enum: ['', 'impression', 'scan'], default: '' },
     },
     status: {
       type: String,

@@ -11,6 +11,7 @@ export interface PrintFormDraft {
   quantity: number;
   date?: string;
   urgent?: boolean;
+  intakeType?: 'impression' | 'scan';
 }
 
 export function formatPrintDate(now = new Date()): string {
@@ -45,6 +46,9 @@ export function buildPrintData(draft: PrintFormDraft, caseNumber: string) {
     caseNumber: String(caseNumber || '').trim(),
     printDate: formatPrintDate(),
     ...(draft.urgent ? { urgent: true } : {}),
+    ...(draft.intakeType === 'scan' || draft.intakeType === 'impression'
+      ? { intakeType: draft.intakeType }
+      : {}),
   };
 }
 
@@ -69,6 +73,7 @@ export function buildCasePayloadFromPrintForm(
     quantity: draft.caseType === 'Empty' ? 0 : draft.quantity || 1,
     date: opts?.date || draft.date || new Date().toISOString().slice(0, 10),
     entrySource: opts?.entrySource,
+    intakeType: draft.intakeType,
   });
   if (opts?.priority) {
     payload['priority'] = opts.priority;

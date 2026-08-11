@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
+import { UserApiService } from '../../core/services/user-api.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import {
   buildCasePayloadFromPrintForm,
@@ -12,7 +13,7 @@ import {
   formatPrintDate,
   formatWorkTypeForPrint,
 } from '../../core/utils/print-job.util';
-import { Subscription, switchMap } from 'rxjs';
+import { Subscription, catchError, switchMap } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -54,6 +55,7 @@ export interface PrintJobCard {
     quantity: number;
     caseNumber: string;
     printDate: string;
+    intakeType?: string;
   };
   status: 'pending' | 'printing' | 'done' | 'failed';
   paperConfirmed?: 'pending' | 'yes' | 'no';
@@ -72,6 +74,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly caseApi = inject(CaseApiService);
   private readonly sharedCases = inject(SharedCasesService);
+  private readonly userApi = inject(UserApiService);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
@@ -137,29 +140,87 @@ export class EntryComponent implements OnInit, OnDestroy {
   workTypeQuantities: Record<string, number> = {};
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   workTypeError = '';
+  patientWarning = '';
+  intakeType: 'impression' | 'scan' | '' = '';
+  selectedPlyFile: File | null = null;
 
-  // Doctor autocomplete
+  // Doctor autocomplete — اقتراحات من أكونتات الدكاترة فقط (الكتابة الحرة مسموحة)
+  readonly accountDoctors = signal<string[]>([]);
   readonly showDoctorSuggestions = signal(false);
   readonly activeSuggestionIndex = signal(-1);
   private doctorSearchQuery = '';
 
   get filteredDoctors(): string[] {
-    const allCases = this.sharedCases.cases();
-    const doctors = Array.from(new Set(
-      allCases.map(c => c.doctor?.trim()).filter((n): n is string => !!n)
-    )).sort();
+    const doctors = [...this.accountDoctors()].sort((a, b) => a.localeCompare(b, 'ar'));
     const q = this.normalizeArabic(this.doctorSearchQuery);
     if (!q) return doctors.slice(0, 10);
-    return doctors.filter(d => this.normalizeArabic(d).includes(q));
+    return doctors.filter((d) => this.normalizeArabic(d).includes(q));
   }
 
   normalizeArabic(text: string): string {
     if (!text) return '';
-    return text.trim()
+    return text
+      .trim()
       .replace(/[أإآا]/g, 'ا')
       .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
       .replace(/\s+/g, ' ');
+  }
+
+  private loadAccountDoctors(): void {
+    this.userApi.getUsersByRole('doctor').subscribe({
+      next: (res) => {
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const names = rows
+          .map((u: any) => String(u?.fullName || '').trim())
+          .filter((n: string) => !!n);
+        this.accountDoctors.set(Array.from(new Set(names)));
+      },
+      error: () => this.accountDoctors.set([]),
+    });
+  }
+
+  setIntakeType(type: 'impression' | 'scan'): void {
+    if (this.intakeType === type) {
+      this.intakeType = '';
+      this.clearPlySelection();
+      return;
+    }
+    this.intakeType = type;
+    if (type === 'impression') this.clearPlySelection();
+  }
+
+  onPatientInputChange(): void {
+    const name = (this.formDraft.patient || '').trim();
+    if (!name) {
+      this.patientWarning = '';
+      return;
+    }
+    const parts = name.split(/\s+/).filter((p) => p);
+    this.patientWarning =
+      parts.length < 2 ? 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).' : '';
+  }
+
+  onPlyFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      this.selectedPlyFile = null;
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.ply')) {
+      this.flash('يُسمح فقط بملفات بصيغة .ply');
+      input.value = '';
+      this.selectedPlyFile = null;
+      return;
+    }
+    this.selectedPlyFile = file;
+  }
+
+  clearPlySelection(): void {
+    this.selectedPlyFile = null;
+    const el = document.getElementById('entryPlyInput') as HTMLInputElement | null;
+    if (el) el.value = '';
   }
 
   onDoctorInputChange(): void {
@@ -323,8 +384,9 @@ export class EntryComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const role = this.auth.getSession()?.role;
     this.showReceptionHub.set(role === 'secretary' || role === 'admin');
+    this.loadAccountDoctors();
 
-    // Load doctor suggestions
+    // Load cases (for list context / shared state)
     this.caseApi.getAllCases(1, 1500).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
@@ -419,11 +481,15 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.workTypeQuantities = {};
     this.workTypeError = '';
     this.nightGuardType = '';
+    this.patientWarning = '';
+    this.intakeType = '';
+    this.clearPlySelection();
     this.dialogOpen.set(true);
   }
 
   closeDialog(): void {
     this.dialogOpen.set(false);
+    this.clearPlySelection();
   }
 
   save(): void {
@@ -431,7 +497,17 @@ export class EntryComponent implements OnInit, OnDestroy {
 
     if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
     if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
+    const patientParts = d.patient.trim().split(/\s+/).filter((p) => p);
+    if (patientParts.length < 2) {
+      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
+      this.flash('اسم المريض يجب أن يكون ثنائيًا على الأقل');
+      return;
+    }
     if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
+    if (!this.intakeType) {
+      this.flash('اختَر امبرشن أو سكان');
+      return;
+    }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
@@ -449,7 +525,11 @@ export class EntryComponent implements OnInit, OnDestroy {
       color: (d.color || '').trim(),
       quantity: d.caseType === 'Empty' ? 0 : (d.quantity || 1),
       date: d.date,
+      intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
+        ? this.intakeType
+        : undefined) as 'impression' | 'scan' | undefined,
     };
+    const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
 
     this.closeDialog();
     this.saveInProgress.set(true);
@@ -457,17 +537,25 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.caseApi
       .createCase(buildCasePayloadFromPrintForm(draft, { entrySource: 'print' }))
       .pipe(
-        switchMap((res: { case?: { caseNumber?: string } }) => {
+        switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
-          return this.http.post(`${this.apiBase}/print/job`, {
+          const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
+          const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
+          if (ply && caseId) {
+            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+              switchMap(() => print$),
+              catchError(() => print$)
+            );
+          }
+          return print$;
         })
       )
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);
-          this.flash('✅ تم إرسال الريكويست للطباعة');
+          this.flash('✅ تم حفظ الحالة وإرسالها للطباعة');
           this.loadTodayJobs();
         },
         error: () => {
