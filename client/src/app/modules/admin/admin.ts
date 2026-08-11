@@ -1651,8 +1651,10 @@ export class Admin implements OnInit, OnDestroy {
   waToken = '';
   waDailyHour = 18;
   waLabName = 'Elegance Dental Lab';
-  waMsgCompleted = '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
-  waMsgExited = '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
+  waMsgCompleted =
+    '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
+  waMsgExited =
+    '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
   waMsgDaily = '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
   waHasToken = false;
   waLiveConfigured = false;
@@ -1673,10 +1675,10 @@ export class Admin implements OnInit, OnDestroy {
         this.waLabName = s.labName || 'Elegance Dental Lab';
         this.waMsgCompleted =
           s.msgCompleted ||
-          '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
         this.waMsgExited =
           s.msgExited ||
-          '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
         this.waMsgDaily =
           s.msgDaily || '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
         this.waHasToken = !!s.hasToken;

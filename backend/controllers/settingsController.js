@@ -29,10 +29,10 @@ exports.getWhatsAppSettings = async (req, res) => {
         labName: wa.labName || 'Elegance Dental Lab',
         msgCompleted:
           wa.msgCompleted ||
-          '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.',
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة',
         msgExited:
           wa.msgExited ||
-          '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.',
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل',
         msgDaily:
           wa.msgDaily ||
           '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',

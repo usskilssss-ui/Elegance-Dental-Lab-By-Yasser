@@ -23,11 +23,13 @@ const appSettingsSchema = new mongoose.Schema(
       // Message templates — placeholders: {lab} {caseNumber} {patient} {count} {list}
       msgCompleted: {
         type: String,
-        default: '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.',
+        default:
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة',
       },
       msgExited: {
         type: String,
-        default: '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.',
+        default:
+          '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل',
       },
       msgDaily: {
         type: String,

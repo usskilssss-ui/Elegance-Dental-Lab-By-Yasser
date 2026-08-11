@@ -6,11 +6,47 @@ const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
 
 const DEFAULT_MSG_COMPLETED =
-  '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+  '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
 const DEFAULT_MSG_EXITED =
+  '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
+const OLD_MSG_COMPLETED =
+  '{lab}\nالحالة {caseNumber} للمريض {patient} أصبحت منتهية وجاهزة.';
+const OLD_MSG_EXITED =
   '{lab}\nالحالة {caseNumber} للمريض {patient} تم تسليمها/خرجت من المعمل.';
-const DEFAULT_MSG_DAILY =
-  '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+
+function normalizeMsgTemplate(saved, oldDefault, nextDefault) {
+  const text = String(saved || '').trim();
+  if (!text || text === oldDefault) return nextDefault;
+  return text;
+}
+
+function parseNotesMeta(notes) {
+  const prefix = '__META__\n';
+  if (!notes || typeof notes !== 'string' || !notes.startsWith(prefix)) return {};
+  try {
+    return JSON.parse(notes.slice(prefix.length));
+  } catch {
+    return {};
+  }
+}
+
+function caseMessageVars(dentalCase) {
+  const meta = parseNotesMeta(dentalCase?.notes || '');
+  const workType =
+    String(meta.workType || dentalCase?.caseType || '').trim() || '—';
+  const qtyRaw = meta.quantity ?? meta.qty;
+  const quantity =
+    qtyRaw !== undefined && qtyRaw !== null && qtyRaw !== '' && !Number.isNaN(Number(qtyRaw))
+      ? String(Number(qtyRaw))
+      : '1';
+  return {
+    lab: labLabel(),
+    caseNumber: dentalCase?.caseNumber || '',
+    patient: dentalCase?.patientName || '—',
+    workType,
+    quantity,
+  };
+}
 
 /** @type {null | { enabled: boolean, provider: string, token: string, instanceId: string, phoneNumberId: string, dailyHour: number, labName: string, msgCompleted: string, msgExited: string, msgDaily: string }} */
 let cachedConfig = null;
@@ -52,8 +88,16 @@ async function reloadWhatsAppConfig() {
         phoneNumberId: String(doc.whatsapp.phoneNumberId || ''),
         dailyHour: Number(doc.whatsapp.dailyHour ?? 18),
         labName: String(doc.whatsapp.labName || 'Elegance Dental Lab'),
-        msgCompleted: String(doc.whatsapp.msgCompleted || DEFAULT_MSG_COMPLETED),
-        msgExited: String(doc.whatsapp.msgExited || DEFAULT_MSG_EXITED),
+        msgCompleted: normalizeMsgTemplate(
+          doc.whatsapp.msgCompleted,
+          OLD_MSG_COMPLETED,
+          DEFAULT_MSG_COMPLETED
+        ),
+        msgExited: normalizeMsgTemplate(
+          doc.whatsapp.msgExited,
+          OLD_MSG_EXITED,
+          DEFAULT_MSG_EXITED
+        ),
         msgDaily: String(doc.whatsapp.msgDaily || DEFAULT_MSG_DAILY),
       };
       return cachedConfig;
@@ -180,17 +224,15 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
       console.log('[whatsapp] no doctor phone for', dentalCase?.caseNumber);
       return;
     }
-    const patient = dentalCase.patientName || '—';
-    const num = dentalCase.caseNumber || '';
     const c = getConfig();
-    const vars = { lab: labLabel(), caseNumber: num, patient, count: '', list: '' };
+    const vars = { ...caseMessageVars(dentalCase), count: '', list: '' };
     let msg = '';
     if (kind === 'completed') {
       msg = applyTemplate(c.msgCompleted || DEFAULT_MSG_COMPLETED, vars);
     } else if (kind === 'exited') {
       msg = applyTemplate(c.msgExited || DEFAULT_MSG_EXITED, vars);
     } else {
-      msg = applyTemplate('{lab}\nتحديث على الحالة {caseNumber} ({patient}).', vars);
+      msg = applyTemplate('{lab}\nتحديث على الحالة ({patient}).', vars);
     }
     await sendWhatsAppText(doctor.phone, msg);
   } catch (err) {
