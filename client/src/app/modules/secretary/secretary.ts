@@ -889,8 +889,8 @@ export class Secretary implements OnInit, OnDestroy {
       return;
     }
     const name = file.name.toLowerCase();
-    if (!name.endsWith('.ply')) {
-      this.flash('يُسمح فقط بملفات بصيغة .ply');
+    if (!/\.(ply|stl|obj)$/i.test(name)) {
+      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj');
       input.value = '';
       this.selectedPlyFile = null;
       return;

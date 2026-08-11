@@ -99,7 +99,7 @@ export class CaseApiService {
     return this.http.post(`${this.apiUrl}/${id}/upload-image`, form);
   }
 
-  /** رفع مسح ثلاثي الأبعاد .ply (سكرتير / أدمن) */
+  /** رفع مسح ثلاثي الأبعاد .ply / .stl / .obj */
   uploadCasePly(id: string, file: File): Observable<any> {
     const form = new FormData();
     form.append('ply', file);

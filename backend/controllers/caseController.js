@@ -1662,15 +1662,13 @@ exports.reopenCase = async (req, res) => {
 exports.uploadCasePly = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No .ply file uploaded' });
+      return res.status(400).json({ message: 'No scan file uploaded (.ply / .stl / .obj)' });
     }
 
     const dentalCase = await DentalCase.findById(req.params.id);
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
     }
-
-
 
     const prefix = '__META__\n';
     const raw = dentalCase.notes || '';
@@ -1690,7 +1688,7 @@ exports.uploadCasePly = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'PLY file uploaded successfully',
+      message: 'Scan file uploaded successfully',
       plyUrl: meta.plyScanPath,
       plyFileName: meta.plyFileName,
     });

@@ -208,8 +208,8 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.selectedPlyFile = null;
       return;
     }
-    if (!file.name.toLowerCase().endsWith('.ply')) {
-      this.flash('يُسمح فقط بملفات بصيغة .ply');
+    if (!/\.(ply|stl|obj)$/i.test(file.name)) {
+      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj');
       input.value = '';
       this.selectedPlyFile = null;
       return;
