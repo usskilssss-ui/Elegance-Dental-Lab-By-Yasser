@@ -7,19 +7,21 @@
     <div class="doctor-access-banner doctor-access-banner--warn" role="alert">
       <div>
         <strong>تثبيت التطبيق</strong>
-        <p>اضغط الزر مرة واحدة فقط.</p>
+        <p>اضغط تثبيت.</p>
       </div>
       <div class="doctor-access-actions">
-        <button type="button" class="btn-primary" (click)="pwa.installApp()" [disabled]="pwa.installing()">
-          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
-        </button>
+        <button type="button" class="btn-primary" (click)="pwa.installApp()">تثبيت</button>
       </div>
     </div>
   } @else if (pwa.showInstallHint() && !pwa.isStandalone() && !isAdminView()) {
     <div class="doctor-access-banner" role="status">
       <div>
         <strong>تثبيت التطبيق</strong>
-        <p>اضغط تثبيت مرة واحدة وهيتحمّل على موبايلك.</p>
+        @if (pwa.isIos()) {
+          <p>اضغط تثبيت وهنوضحلك خطوتين بس.</p>
+        } @else {
+          <p>اضغط تثبيت مرة واحدة.</p>
+        }
       </div>
       <div class="doctor-access-actions">
         <button
@@ -37,6 +39,26 @@
           }
         </button>
         <button type="button" class="btn-secondary" (click)="pwa.dismissInstallHint()">إخفاء</button>
+      </div>
+    </div>
+  }
+
+  @if (pwa.showIosGuide() && !isAdminView()) {
+    <div class="ios-install-overlay" dir="rtl" role="dialog" aria-modal="true" (click)="pwa.closeIosGuide()">
+      <div class="ios-install-sheet" (click)="$event.stopPropagation()">
+        <h3>تثبيت على الآيفون</h3>
+        <p class="ios-install-note">آبل مش بتسمح بالتحميل التلقائي — خطوتين من سفاري:</p>
+        <ol class="ios-install-steps">
+          <li>
+            <span class="ios-step-num">1</span>
+            <span>من شريط سفاري تحت، اضغط زر <strong>المشاركة</strong></span>
+          </li>
+          <li>
+            <span class="ios-step-num">2</span>
+            <span>اختَر <strong>إضافة إلى الشاشة الرئيسية</strong> ثم <strong>إضافة</strong></span>
+          </li>
+        </ol>
+        <button type="button" class="btn-primary" style="width:100%" (click)="pwa.closeIosGuide()">تم</button>
       </div>
     </div>
   }

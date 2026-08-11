@@ -17,8 +17,9 @@ export class PwaInstallService {
   readonly showInstallHint = signal(false);
   readonly copied = signal(false);
   readonly installing = signal(false);
-  /** True while waiting for Chrome to offer the native install event */
   readonly preparingInstall = signal(false);
+  /** iOS cannot install via JS — show the Safari guide modal instead */
+  readonly showIosGuide = signal(false);
 
   private deferredPrompt: BeforeInstallPromptEvent | null = null;
 
@@ -32,11 +33,11 @@ export class PwaInstallService {
     const wantHint = !this.isStandalone() && !dismissed && this.isMobile();
     this.showInstallHint.set(wantHint);
 
-    // Coming from WhatsApp → Chrome with ?install=1 : force show install CTA
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('install') === '1' && wantHint) {
         this.showInstallHint.set(true);
+        if (this.isIos()) this.showIosGuide.set(true);
       }
     } catch {
       /* ignore */
@@ -59,6 +60,7 @@ export class PwaInstallService {
       this.canInstall.set(false);
       this.preparingInstall.set(false);
       this.showInstallHint.set(false);
+      this.showIosGuide.set(false);
       this.isStandalone.set(true);
       this.installing.set(false);
       this.clearInstallQuery();
@@ -67,7 +69,6 @@ export class PwaInstallService {
     if ('serviceWorker' in navigator) {
       void navigator.serviceWorker.ready
         .then(() => {
-          // Give Chrome a moment to fire beforeinstallprompt after SW is ready
           window.setTimeout(() => {
             if (!this.deferredPrompt) this.preparingInstall.set(false);
           }, 12000);
@@ -100,6 +101,11 @@ export class PwaInstallService {
       /* ignore */
     }
     this.showInstallHint.set(false);
+    this.showIosGuide.set(false);
+  }
+
+  closeIosGuide(): void {
+    this.showIosGuide.set(false);
   }
 
   isIos(): boolean {
@@ -124,7 +130,6 @@ export class PwaInstallService {
     return typeof location !== 'undefined' ? `${location.origin}/login` : '';
   }
 
-  /** Chrome URL that auto-opens the install banner flow */
   installDeepLink(): string {
     const url = new URL(this.appUrl());
     url.searchParams.set('install', '1');
@@ -150,28 +155,41 @@ export class PwaInstallService {
         `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(target)};end`;
       return;
     }
-    window.open(target, '_blank', 'noopener,noreferrer');
+    // iOS in-app: open Safari if possible
+    window.location.href = target;
   }
 
   /**
-   * One doctor tap → native Android install sheet (must stay in user gesture).
+   * Android: native install sheet (one tap + system confirm).
+   * iOS: Apple blocks auto-install — open the Safari guide (never use navigator.share;
+   * that sheet does NOT include Add to Home Screen).
    */
   async installApp(): Promise<boolean> {
+    this.installing.set(false);
+
     if (this.isStandalone()) {
       this.showInstallHint.set(false);
       return true;
     }
 
-    // Inside WhatsApp: jump to Chrome with ?install=1 (one tap from doctor)
     if (this.isInAppBrowser()) {
+      if (this.isIos()) {
+        this.showIosGuide.set(true);
+        return false;
+      }
       this.openInSystemBrowser();
+      return false;
+    }
+
+    // iPhone / iPad — no JS install API exists
+    if (this.isIos()) {
+      this.showIosGuide.set(true);
       return false;
     }
 
     const promptEvent = this.deferredPrompt;
     if (promptEvent) {
       this.installing.set(true);
-      // Keep event until prompt succeeds; clear after calling prompt()
       this.deferredPrompt = null;
       this.canInstall.set(false);
       try {
@@ -183,7 +201,6 @@ export class PwaInstallService {
           this.clearInstallQuery();
           return true;
         }
-        // If dismissed, Chrome won't re-fire event — hide noisy spinner
         return false;
       } catch {
         this.installing.set(false);
@@ -191,34 +208,15 @@ export class PwaInstallService {
       }
     }
 
-    // Not ready yet on Android Chrome — open same page fresh (helps SW/prompt)
     if (this.isAndroid()) {
       this.preparingInstall.set(true);
       window.location.href = this.installDeepLink();
       return false;
     }
 
-    // iOS: share sheet (system UI includes Add to Home Screen)
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      this.installing.set(true);
-      try {
-        await navigator.share({
-          title: 'Elegance Dental Lab',
-          url: this.appUrl(),
-        });
-        this.installing.set(false);
-        return true;
-      } catch {
-        this.installing.set(false);
-        return false;
-      }
-    }
-
-    this.installing.set(false);
     return false;
   }
 
-  /** @deprecated use installApp */
   async promptInstall(): Promise<boolean> {
     return this.installApp();
   }

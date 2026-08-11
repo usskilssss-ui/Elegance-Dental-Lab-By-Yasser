@@ -20,11 +20,11 @@
     <div class="access-banner access-banner--warn" dir="rtl" role="alert">
       <div class="access-banner-text">
         <strong>تثبيت التطبيق</strong>
-        <span>اضغط الزر مرة واحدة فقط.</span>
+        <span>اضغط تثبيت.</span>
       </div>
       <div class="access-banner-actions">
-        <button type="button" class="access-btn access-btn--primary access-btn--install" (click)="installApp()" [disabled]="pwa.installing()">
-          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
+        <button type="button" class="access-btn access-btn--primary access-btn--install" (click)="installApp()">
+          تثبيت
         </button>
       </div>
     </div>
@@ -32,7 +32,11 @@
     <div class="access-banner access-banner--install" dir="rtl" role="status">
       <div class="access-banner-text">
         <strong>تثبيت التطبيق</strong>
-        <span>اضغط تثبيت مرة واحدة وهيتحمّل على موبايلك.</span>
+        @if (pwa.isIos()) {
+          <span>اضغط تثبيت وهنوضحلك خطوتين بس.</span>
+        } @else {
+          <span>اضغط تثبيت مرة واحدة.</span>
+        }
       </div>
       <div class="access-banner-actions">
         <button
@@ -50,6 +54,32 @@
           }
         </button>
         <button type="button" class="access-btn" (click)="pwa.dismissInstallHint()">إخفاء</button>
+      </div>
+    </div>
+  }
+
+  @if (pwa.showIosGuide()) {
+    <div class="ios-install-overlay" dir="rtl" role="dialog" aria-modal="true" (click)="pwa.closeIosGuide()">
+      <div class="ios-install-sheet" (click)="$event.stopPropagation()">
+        <h3>تثبيت على الآيفون</h3>
+        <p class="ios-install-note">آبل مش بتسمح بالتحميل التلقائي — خطوتين من سفاري:</p>
+        <ol class="ios-install-steps">
+          <li>
+            <span class="ios-step-num">1</span>
+            <span>من شريط سفاري تحت، اضغط زر <strong>المشاركة</strong>
+              <svg class="ios-share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 3v12"></path>
+                <path d="M8 7l4-4 4 4"></path>
+                <path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"></path>
+              </svg>
+            </span>
+          </li>
+          <li>
+            <span class="ios-step-num">2</span>
+            <span>اختَر <strong>إضافة إلى الشاشة الرئيسية</strong> ثم <strong>إضافة</strong></span>
+          </li>
+        </ol>
+        <button type="button" class="access-btn access-btn--primary access-btn--install" (click)="pwa.closeIosGuide()">تم</button>
       </div>
     </div>
   }
