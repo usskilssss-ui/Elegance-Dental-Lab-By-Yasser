@@ -901,10 +901,6 @@ export class Secretary implements OnInit, OnDestroy {
       this.flash('اختَر امبرشن أو سكان');
       return;
     }
-    if (this.intakeType === 'scan' && !this.selectedPlyFile && !this.existingPlyFileName) {
-      this.flash('ارفع ملف السكان (.ply) لأن النوع سكان');
-      return;
-    }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
