@@ -6,27 +6,25 @@
   @if (pwa.isInAppBrowser()) {
     <div class="doctor-access-banner doctor-access-banner--warn" role="alert">
       <div>
-        <strong>افتح من المتصفح مش واتساب</strong>
-        <p>عشان الحساب يفضل محفوظ، انسخ اللينك وافتحه من Chrome/Safari وثبّت التطبيق على الشاشة الرئيسية.</p>
+        <strong>ثبّت التطبيق</strong>
+        <p>اضغط تثبيت عشان يتحمّل على موبايلك.</p>
       </div>
       <div class="doctor-access-actions">
-        <button type="button" class="btn-secondary" (click)="pwa.copyAppLink()">{{ pwa.copied() ? 'تم النسخ' : 'نسخ اللينك' }}</button>
+        <button type="button" class="btn-primary" (click)="pwa.installApp()" [disabled]="pwa.installing()">
+          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
+        </button>
       </div>
     </div>
   } @else if (pwa.showInstallHint() && !pwa.isStandalone() && !isAdminView()) {
     <div class="doctor-access-banner" role="status">
       <div>
-        <strong>ثبّت التطبيق مرة واحدة</strong>
-        <p>بعدها تفتح من أيقونة الشاشة الرئيسية مباشرة — من غير واتساب.</p>
-        <p>{{ pwa.installManualHint() }}</p>
+        <strong>ثبّت التطبيق</strong>
+        <p>اضغط تثبيت وهيتحمّل على الشاشة الرئيسية.</p>
       </div>
       <div class="doctor-access-actions">
-        @if (pwa.canInstall()) {
-          <button type="button" class="btn-primary" (click)="pwa.promptInstall()">تثبيت</button>
-        } @else {
-          <button type="button" class="btn-primary" (click)="showInstallHelp()">طريقة التثبيت</button>
-        }
-        <button type="button" class="btn-secondary" (click)="pwa.copyAppLink()">{{ pwa.copied() ? 'تم النسخ' : 'نسخ اللينك' }}</button>
+        <button type="button" class="btn-primary" (click)="pwa.installApp()" [disabled]="pwa.installing()">
+          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
+        </button>
         <button type="button" class="btn-secondary" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>
     </div>

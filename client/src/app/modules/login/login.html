@@ -19,31 +19,24 @@
   @if (pwa.isInAppBrowser()) {
     <div class="access-banner access-banner--warn" dir="rtl" role="alert">
       <div class="access-banner-text">
-        <strong>افتح من المتصفح، مش من واتساب</strong>
-        <span>فتح اللينك من واتساب بيخلي الحساب يتشال. انسخ اللينك وافتحه من Chrome أو Safari مرة واحدة، وثبّت التطبيق على الشاشة الرئيسية.</span>
+        <strong>ثبّت التطبيق</strong>
+        <span>اضغط تثبيت عشان يفتح في المتصفح ويتحمّل على موبايلك.</span>
       </div>
       <div class="access-banner-actions">
-        <button type="button" class="access-btn" (click)="pwa.copyAppLink()">
-          {{ pwa.copied() ? 'تم النسخ ✓' : 'نسخ اللينك' }}
+        <button type="button" class="access-btn access-btn--primary" (click)="installApp()" [disabled]="pwa.installing()">
+          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
         </button>
-        <button type="button" class="access-btn access-btn--primary" (click)="pwa.openInSystemBrowser()">فتح في المتصفح</button>
       </div>
     </div>
   } @else if (pwa.showInstallHint() && !pwa.isStandalone()) {
     <div class="access-banner" dir="rtl" role="status">
       <div class="access-banner-text">
         <strong>ثبّت التطبيق على الموبايل</strong>
-        <span>ثبّته على الشاشة الرئيسية وافتحه من الأيقونة — من غير واتساب كل مرة.</span>
-        <span class="access-ios-hint">{{ pwa.installManualHint() }}</span>
+        <span>اضغط تثبيت وهيتحمّل على الشاشة الرئيسية.</span>
       </div>
       <div class="access-banner-actions">
-        @if (pwa.canInstall()) {
-          <button type="button" class="access-btn access-btn--primary" (click)="installApp()">تثبيت الآن</button>
-        } @else {
-          <button type="button" class="access-btn access-btn--primary" (click)="showInstallHelp()">طريقة التثبيت</button>
-        }
-        <button type="button" class="access-btn" (click)="pwa.copyAppLink()">
-          {{ pwa.copied() ? 'تم النسخ ✓' : 'نسخ اللينك' }}
+        <button type="button" class="access-btn access-btn--primary" (click)="installApp()" [disabled]="pwa.installing()">
+          {{ pwa.installing() ? 'جاري التثبيت…' : 'تثبيت' }}
         </button>
         <button type="button" class="access-btn" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>

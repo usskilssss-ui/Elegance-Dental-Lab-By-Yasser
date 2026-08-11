@@ -16,8 +16,10 @@ export class PwaInstallService {
   readonly isInAppBrowser = signal(false);
   readonly showInstallHint = signal(false);
   readonly copied = signal(false);
+  readonly installing = signal(false);
 
   private deferredPrompt: BeforeInstallPromptEvent | null = null;
+  private promptWaiters: Array<(ok: boolean) => void> = [];
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -26,13 +28,15 @@ export class PwaInstallService {
     this.isInAppBrowser.set(this.detectInAppBrowser());
 
     const dismissed = localStorage.getItem(INSTALL_HINT_DISMISSED_KEY) === '1';
-    this.showInstallHint.set(!this.isStandalone() && !dismissed);
+    this.showInstallHint.set(!this.isStandalone() && !dismissed && this.isMobile());
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.deferredPrompt = e as BeforeInstallPromptEvent;
       this.canInstall.set(true);
       if (!dismissed) this.showInstallHint.set(true);
+      const waiters = this.promptWaiters.splice(0);
+      waiters.forEach((w) => w(true));
     });
 
     window.addEventListener('appinstalled', () => {
@@ -40,6 +44,7 @@ export class PwaInstallService {
       this.canInstall.set(false);
       this.showInstallHint.set(false);
       this.isStandalone.set(true);
+      this.installing.set(false);
     });
   }
 
@@ -69,20 +74,6 @@ export class PwaInstallService {
     this.showInstallHint.set(false);
   }
 
-  async promptInstall(): Promise<boolean> {
-    if (!this.deferredPrompt) return false;
-    const promptEvent = this.deferredPrompt;
-    this.deferredPrompt = null;
-    this.canInstall.set(false);
-    await promptEvent.prompt();
-    const choice = await promptEvent.userChoice;
-    if (choice.outcome === 'accepted') {
-      this.showInstallHint.set(false);
-      return true;
-    }
-    return false;
-  }
-
   isIos(): boolean {
     if (typeof navigator === 'undefined') return false;
     return /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -96,17 +87,6 @@ export class PwaInstallService {
   isMobile(): boolean {
     if (typeof navigator === 'undefined') return false;
     return this.isIos() || this.isAndroid() || /Mobile|webOS/i.test(navigator.userAgent);
-  }
-
-  /** Manual install steps when beforeinstallprompt is unavailable (iOS / some Android). */
-  installManualHint(): string {
-    if (this.isIos()) {
-      return 'آيفون/آيباد: اضغط زر المشاركة (□↑) أسفل أو أعلى الشاشة ← Add to Home Screen / إضافة إلى الشاشة الرئيسية';
-    }
-    if (this.isAndroid()) {
-      return 'أندرويد (Chrome): اضغط ⋮ أعلى اليمين ← تثبيت التطبيق أو إضافة إلى الشاشة الرئيسية';
-    }
-    return 'من المتصفح: افتح القائمة ← تثبيت التطبيق / إضافة إلى الشاشة الرئيسية';
   }
 
   appUrl(): string {
@@ -126,7 +106,73 @@ export class PwaInstallService {
 
   openInSystemBrowser(): void {
     const url = this.appUrl();
+    if (this.isAndroid()) {
+      // Open in Chrome so native PWA install works
+      const hostPath = url.replace(/^https?:\/\//, '');
+      window.location.href =
+        `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      return;
+    }
     window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  /**
+   * One-tap install: opens native browser install sheet when available.
+   * On Android in-app browsers (WhatsApp), opens Chrome first so install can run.
+   */
+  async installApp(): Promise<boolean> {
+    if (this.isStandalone()) return true;
+
+    // WhatsApp / Instagram webview cannot install PWAs — jump to Chrome
+    if (this.isInAppBrowser() && this.isAndroid()) {
+      this.openInSystemBrowser();
+      return false;
+    }
+
+    this.installing.set(true);
+    try {
+      if (!this.deferredPrompt) {
+        await this.waitForInstallPrompt(8000);
+      }
+      if (!this.deferredPrompt) {
+        this.installing.set(false);
+        return false;
+      }
+      const promptEvent = this.deferredPrompt;
+      this.deferredPrompt = null;
+      this.canInstall.set(false);
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      this.installing.set(false);
+      if (choice.outcome === 'accepted') {
+        this.showInstallHint.set(false);
+        return true;
+      }
+      return false;
+    } catch {
+      this.installing.set(false);
+      return false;
+    }
+  }
+
+  /** @deprecated use installApp */
+  async promptInstall(): Promise<boolean> {
+    return this.installApp();
+  }
+
+  private waitForInstallPrompt(timeoutMs: number): Promise<boolean> {
+    if (this.deferredPrompt) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(() => {
+        this.promptWaiters = this.promptWaiters.filter((w) => w !== onReady);
+        resolve(false);
+      }, timeoutMs);
+      const onReady = (ok: boolean) => {
+        window.clearTimeout(timer);
+        resolve(ok);
+      };
+      this.promptWaiters.push(onReady);
+    });
   }
 
   private detectStandalone(): boolean {
