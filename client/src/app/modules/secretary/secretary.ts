@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { catchError, of, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
@@ -12,6 +13,8 @@ import {
   mapApiCaseToDentalCase,
   toStoredCaseImagePath,
 } from '../../core/mappers/dental-case-api.mapper';
+import { buildPrintData } from '../../core/utils/print-job.util';
+import { environment } from '../../../environments/environment';
 
 import { Subscription } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
@@ -101,9 +104,11 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly caseApi = inject(CaseApiService);
   private readonly userApi = inject(UserApiService);
+  private readonly http = inject(HttpClient);
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
+  private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
   readonly activeFilter = signal<
     'all' | 'urgent' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
