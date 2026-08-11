@@ -228,6 +228,27 @@ export class Admin implements OnInit, OnDestroy {
   patients: AdminPatient[] = [];
   adminCases: AdminCaseRow[] = [];
   reportCases: AdminCaseRow[] = [];
+  /** Live DB stats for dashboard counters (all exited cases) */
+  materialStats: Record<string, number> = {
+    emax: 0,
+    regularZircon: 0,
+    germanZircon: 0,
+    titanium: 0,
+    peek: 0,
+    pmma: 0,
+    nightGuard: 0,
+    mokup: 0,
+    tryIn: 0,
+    wax: 0,
+    ring: 0,
+    zircon: 0,
+    jundiEmax: 0,
+    jundiRegularZircon: 0,
+    jundiGermanZircon: 0,
+    jundiTitanium: 0,
+    jundiPeek: 0,
+    jundiZircon: 0,
+  };
   doctorPayments: any[] = [];
   newPaymentAmount: number | null = null;
   newPaymentNotes = '';
@@ -285,6 +306,23 @@ export class Admin implements OnInit, OnDestroy {
 
   private connectCaseRealtime(): void {
     this.socketService.connect();
+
+    // Delete: drop case locally + recompute counters immediately (don't wait for debounce)
+    this.socketService
+      .onCaseDeleted()
+      .pipe(takeUntil(this.destroy$), filter((evt) => !!evt))
+      .subscribe((evt: { caseId?: string }) => {
+        const id = String(evt?.caseId || '');
+        if (id) {
+          this.adminCases = this.adminCases.filter((c) => c.id !== id);
+          this.patients = this.buildPatientsFromCases(this.adminCases);
+        }
+        this.refreshMaterialStatsFromLocalCases();
+        this.loadMaterialStats();
+        this.loadCasesFromApi();
+        this.loadFinancialReportFromApi();
+      });
+
     merge(
       this.socketService.onCaseCreated(),
       this.socketService.onCaseAssigned(),
@@ -292,8 +330,7 @@ export class Admin implements OnInit, OnDestroy {
       this.socketService.onCaseMovedStage(),
       this.socketService.onCaseCompleted(),
       this.socketService.onCaseReleased(),
-      this.socketService.onCaseUpdated(),
-      this.socketService.onCaseDeleted()
+      this.socketService.onCaseUpdated()
     )
       .pipe(
         takeUntil(this.destroy$),
@@ -1103,57 +1140,35 @@ export class Admin implements OnInit, OnDestroy {
 
   /** عدد وحدات الزيركونيا الإجمالي الخارجة غير الإعادة */
   get zirconCount(): number {
-    return this.regularZirconCount + this.germanZirconCount + this.titaniumCount + this.peekCount;
+    return this.materialStats['zircon'] || 0;
   }
 
   get regularZirconCount(): number {
-    return this.countUnitsByKeywords(['zircon'], ['german']);
+    return this.materialStats['regularZircon'] || 0;
   }
 
   get germanZirconCount(): number {
-    return this.countUnitsByKeywords(['german zircon', 'german']);
+    return this.materialStats['germanZircon'] || 0;
   }
 
   get titaniumCount(): number {
-    return this.countUnitsByKeywords(['titanium']);
+    return this.materialStats['titanium'] || 0;
   }
 
   get peekCount(): number {
-    return this.countUnitsByKeywords(['peek']);
+    return this.materialStats['peek'] || 0;
   }
 
-  /** عدادات الماتريال الخارجة — بدون زيركون/إيماكس، وبدون تعديل/إعادة/غير معروف */
+  /** عدادات الماتريال الخارجة — بدون زيركون/إيماكس/تيتانيوم/بيك (متكررة تحت) */
   get exitedMaterialCounters(): { label: string; qty: number; color: string }[] {
-    const cases = this.exitedMaterialEligibleCases;
     return [
-      { label: 'Pmma Cad', qty: this.countUnitsByKeywordsFromCases(cases, ['pmma cad', 'pmma'], []), color: '#14b8a6' },
-      { label: 'Peek', qty: this.countUnitsByKeywordsFromCases(cases, ['peek'], []), color: '#10b981' },
-      { label: 'Titanium', qty: this.countUnitsByKeywordsFromCases(cases, ['titanium'], []), color: '#64748b' },
-      { label: 'Try in', qty: this.countUnitsByKeywordsFromCases(cases, ['try in', 'tryin'], []), color: '#f59e0b' },
-      { label: 'Mokup', qty: this.countUnitsByKeywordsFromCases(cases, ['mokup', 'mockup', 'mock up', 'موكب'], []), color: '#ec4899' },
-      { label: 'Night Guard', qty: this.countUnitsByKeywordsFromCases(cases, ['night guard', 'nightguard', 'guard'], []), color: '#8b5cf6' },
-      { label: 'Wax', qty: this.countUnitsByKeywordsFromCases(cases, ['wax'], []), color: '#a16207' },
-      { label: 'Ring', qty: this.countUnitsByKeywordsFromCases(cases, ['ring'], []), color: '#ef4444' },
+      { label: 'Pmma Cad', qty: this.materialStats['pmma'] || 0, color: '#14b8a6' },
+      { label: 'Try in', qty: this.materialStats['tryIn'] || 0, color: '#f59e0b' },
+      { label: 'Mokup', qty: this.materialStats['mokup'] || 0, color: '#ec4899' },
+      { label: 'Night Guard', qty: this.materialStats['nightGuard'] || 0, color: '#8b5cf6' },
+      { label: 'Wax', qty: this.materialStats['wax'] || 0, color: '#a16207' },
+      { label: 'Ring', qty: this.materialStats['ring'] || 0, color: '#ef4444' },
     ];
-  }
-
-  /** حالات خارجة تُحسب في عدادات الماتريال (بدون تعديل/إعادة/غير معروف) */
-  get exitedMaterialEligibleCases(): AdminCaseRow[] {
-    return this.adminCases.filter(c => {
-      if (String(c.currentStage) !== 'exited') return false;
-      const ct = (c.caseType || '').toLowerCase();
-      const isExcluded =
-        ct.includes('redo') ||
-        ct.includes('remake') ||
-        ct.includes('modification') ||
-        ct.includes('تعديل') ||
-        ct.includes('اعاده') ||
-        ct.includes('إعادة') ||
-        ct.includes('empty') ||
-        ct.includes('غير معروف') ||
-        ct.includes('unknown');
-      return !isExcluded;
-    });
   }
 
   get financialCostEligibleCases(): AdminCaseRow[] {
@@ -1347,25 +1362,7 @@ export class Admin implements OnInit, OnDestroy {
 
   /** عدد وحدات الإيماكس الخارجة غير الإعادة */
   get emaxCount(): number {
-    let total = 0;
-    for (const c of this.exitedNonRedoCases) {
-      const ct = c.caseType || '';
-      const parts = ct.split('+').map(p => p.trim());
-      const meta = this.parseNotesMeta(c.rawNotes || '');
-      const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
-
-      for (const part of parts) {
-        if (part.toLowerCase().includes('emax')) {
-          const match = part.match(/\((\d+)\)/);
-          if (match) {
-            total += parseInt(match[1], 10);
-          } else {
-            total += caseOverallQuantity;
-          }
-        }
-      }
-    }
-    return total;
+    return this.materialStats['emax'] || 0;
   }
 
   /** الحالات الخارجة للدكتور الجندي فقط (بدون إعادة أو تعديل) */
@@ -1378,32 +1375,28 @@ export class Admin implements OnInit, OnDestroy {
 
   /** عداد زيركون الجندي */
   get jundiZirconCount(): number {
-    return this.jundiRegularZirconCount + this.jundiGermanZirconCount + this.jundiTitaniumCount + this.jundiPeekCount;
+    return this.materialStats['jundiZircon'] || 0;
   }
 
   get jundiRegularZirconCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['zircon'], ['german']);
+    return this.materialStats['jundiRegularZircon'] || 0;
   }
 
   get jundiGermanZirconCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['german zircon', 'german'], []);
+    return this.materialStats['jundiGermanZircon'] || 0;
   }
 
   get jundiTitaniumCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['titanium'], []);
+    return this.materialStats['jundiTitanium'] || 0;
   }
 
   get jundiPeekCount(): number {
-    return this.countUnitsByKeywordsFromCases(this.jundiExitedNonRedoCases, ['peek'], []);
+    return this.materialStats['jundiPeek'] || 0;
   }
 
   /** عداد إيماكس الجندي */
   get jundiEmaxCount(): number {
-    return this.countUnitsByKeywordsFromCases(
-      this.jundiExitedNonRedoCases,
-      ['emax'],
-      []
-    );
+    return this.materialStats['jundiEmax'] || 0;
   }
 
   private countUnitsByKeywordsFromCases(cases: AdminCaseRow[], includeKeywords: string[], excludeKeywords: string[]): number {
@@ -1434,11 +1427,66 @@ export class Admin implements OnInit, OnDestroy {
         this.adminCases = Array.isArray(rows) ? rows.map((row) => this.mapApiCaseToAdminCase(row)) : [];
         this.patients = this.buildPatientsFromCases(this.adminCases);
         this.currentPage = 1;
+        this.refreshMaterialStatsFromLocalCases();
+        this.loadMaterialStats();
       },
       error: (err) => {
         console.error(err);
         this.adminCases = [];
         this.patients = [];
+        this.refreshMaterialStatsFromLocalCases();
+      },
+    });
+  }
+
+  /** Instant counters from loaded cases (updates right after delete / list refresh). */
+  private refreshMaterialStatsFromLocalCases(): void {
+    const all = this.exitedNonRedoCases;
+    const jundi = this.jundiExitedNonRedoCases;
+    const regularZircon = this.countUnitsByKeywordsFromCases(all, ['zircon'], ['german']);
+    const germanZircon = this.countUnitsByKeywordsFromCases(all, ['german zircon', 'german'], []);
+    const titanium = this.countUnitsByKeywordsFromCases(all, ['titanium'], []);
+    const peek = this.countUnitsByKeywordsFromCases(all, ['peek'], []);
+    const jundiRegularZircon = this.countUnitsByKeywordsFromCases(jundi, ['zircon'], ['german']);
+    const jundiGermanZircon = this.countUnitsByKeywordsFromCases(jundi, ['german zircon', 'german'], []);
+    const jundiTitanium = this.countUnitsByKeywordsFromCases(jundi, ['titanium'], []);
+    const jundiPeek = this.countUnitsByKeywordsFromCases(jundi, ['peek'], []);
+
+    this.materialStats = {
+      emax: this.countUnitsByKeywordsFromCases(all, ['emax'], []),
+      regularZircon,
+      germanZircon,
+      titanium,
+      peek,
+      pmma: this.countUnitsByKeywordsFromCases(all, ['pmma cad', 'pmma'], []),
+      nightGuard: this.countUnitsByKeywordsFromCases(all, ['night guard', 'nightguard', 'guard'], []),
+      mokup: this.countUnitsByKeywordsFromCases(all, ['mokup', 'mockup', 'mock up', 'موكب'], []),
+      tryIn: this.countUnitsByKeywordsFromCases(all, ['try in', 'tryin'], []),
+      wax: this.countUnitsByKeywordsFromCases(all, ['wax'], []),
+      ring: this.countUnitsByKeywordsFromCases(all, ['ring'], []),
+      zircon: regularZircon + germanZircon + titanium + peek,
+      jundiEmax: this.countUnitsByKeywordsFromCases(jundi, ['emax'], []),
+      jundiRegularZircon,
+      jundiGermanZircon,
+      jundiTitanium,
+      jundiPeek,
+      jundiZircon: jundiRegularZircon + jundiGermanZircon + jundiTitanium + jundiPeek,
+    };
+  }
+
+  private loadMaterialStats(): void {
+    this.caseApi.getExitedMaterialStats().subscribe({
+      next: (res) => {
+        const data = (res?.data ?? {}) as Record<string, number>;
+        if (!data || typeof data !== 'object') return;
+        this.materialStats = {
+          ...this.materialStats,
+          ...data,
+        };
+      },
+      error: (err) => {
+        // Keep local recomputed stats if API not deployed yet / offline
+        console.error('material-stats', err);
       },
     });
   }

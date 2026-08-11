@@ -328,6 +328,130 @@ exports.getAllCases = async (req, res) => {
   }
 };
 
+function isExcludedWorkCaseType(caseType) {
+  const ct = String(caseType || '').toLowerCase();
+  return (
+    ct.includes('redo') ||
+    ct.includes('remake') ||
+    ct.includes('modification') ||
+    ct.includes('تعديل') ||
+    ct.includes('اعاده') ||
+    ct.includes('إعادة') ||
+    ct.includes('empty') ||
+    ct.includes('غير معروف') ||
+    ct.includes('unknown')
+  );
+}
+
+function isJundiDoctorName(name) {
+  const doctor = String(name || '').toLowerCase();
+  return doctor.includes('الجندي') || doctor.includes('jundi') || doctor.includes('gundi');
+}
+
+function addMaterialUnits(stats, caseType, quantity, targets) {
+  const parts = String(caseType || '')
+    .split('+')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const overallQty = Number(quantity) > 0 ? Number(quantity) : 1;
+  const jundiMap = {
+    emax: 'jundiEmax',
+    regularZircon: 'jundiRegularZircon',
+    germanZircon: 'jundiGermanZircon',
+    titanium: 'jundiTitanium',
+    peek: 'jundiPeek',
+  };
+
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    const match = part.match(/\((\d+)\)/);
+    const qty = match ? parseInt(match[1], 10) : overallQty;
+
+    let key = '';
+    if (lower.includes('emax')) key = 'emax';
+    else if (lower.includes('german zircon') || lower.includes('german')) key = 'germanZircon';
+    else if (lower.includes('zircon')) key = 'regularZircon';
+    else if (lower.includes('titanium')) key = 'titanium';
+    else if (lower.includes('peek')) key = 'peek';
+    else if (lower.includes('pmma cad') || lower.includes('pmma')) key = 'pmma';
+    else if (lower.includes('night guard') || lower.includes('nightguard')) key = 'nightGuard';
+    else if (lower.includes('mokup') || lower.includes('mockup') || lower.includes('mock up') || lower.includes('موكب'))
+      key = 'mokup';
+    else if (lower.includes('try in') || lower.includes('tryin')) key = 'tryIn';
+    else if (lower.includes('wax')) key = 'wax';
+    else if (lower.includes('ring')) key = 'ring';
+    else continue;
+
+    if (targets.global) {
+      stats[key] = (stats[key] || 0) + qty;
+    }
+    if (targets.jundi && jundiMap[key]) {
+      const jk = jundiMap[key];
+      stats[jk] = (stats[jk] || 0) + qty;
+    }
+  }
+}
+
+/** Live material counters for admin dashboard — always from DB exited cases */
+exports.getExitedMaterialStats = async (req, res) => {
+  try {
+    const cases = await DentalCase.find({ currentStage: 'exited' })
+      .select('caseType notes referringDoctor')
+      .lean();
+
+    const stats = {
+      emax: 0,
+      regularZircon: 0,
+      germanZircon: 0,
+      titanium: 0,
+      peek: 0,
+      pmma: 0,
+      nightGuard: 0,
+      mokup: 0,
+      tryIn: 0,
+      wax: 0,
+      ring: 0,
+      jundiEmax: 0,
+      jundiRegularZircon: 0,
+      jundiGermanZircon: 0,
+      jundiTitanium: 0,
+      jundiPeek: 0,
+    };
+
+    for (const doc of cases) {
+      const meta = parseNotesMeta(doc.notes || '');
+      if (meta.isRedoCase || meta.isModificationCase) continue;
+      if (isExcludedWorkCaseType(doc.caseType)) continue;
+
+      const quantity = Number(meta.quantity ?? 1) || 1;
+      const doctorName = String(meta.doctor || meta.doctorName || doc.referringDoctor || '').trim();
+      const jundi = isJundiDoctorName(doctorName);
+
+      addMaterialUnits(stats, doc.caseType, quantity, { global: true, jundi });
+    }
+
+    const zircon = stats.regularZircon + stats.germanZircon + stats.titanium + stats.peek;
+    const jundiZircon =
+      stats.jundiRegularZircon + stats.jundiGermanZircon + stats.jundiTitanium + stats.jundiPeek;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...stats,
+        zircon,
+        jundiZircon,
+        totalExitedCases: cases.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to compute material stats',
+      error: error.message,
+    });
+  }
+};
+
 // Financial report rows + summary (admin only)
 exports.getFinancialReport = async (req, res) => {
   try {

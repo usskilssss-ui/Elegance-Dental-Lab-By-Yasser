@@ -37,6 +37,11 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/financial-report${query}`);
   }
 
+  /** Admin dashboard material counters (all exited cases in DB) */
+  getExitedMaterialStats(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/material-stats`);
+  }
+
   // Get case by ID
   getCaseById(id: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/${id}`);
