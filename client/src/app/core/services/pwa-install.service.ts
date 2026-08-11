@@ -19,7 +19,6 @@ export class PwaInstallService {
   readonly installing = signal(false);
 
   private deferredPrompt: BeforeInstallPromptEvent | null = null;
-  private promptWaiters: Array<(ok: boolean) => void> = [];
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -30,13 +29,12 @@ export class PwaInstallService {
     const dismissed = localStorage.getItem(INSTALL_HINT_DISMISSED_KEY) === '1';
     this.showInstallHint.set(!this.isStandalone() && !dismissed && this.isMobile());
 
+    // Capture install event as soon as Chrome offers it
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.deferredPrompt = e as BeforeInstallPromptEvent;
       this.canInstall.set(true);
       if (!dismissed) this.showInstallHint.set(true);
-      const waiters = this.promptWaiters.splice(0);
-      waiters.forEach((w) => w(true));
     });
 
     window.addEventListener('appinstalled', () => {
@@ -46,6 +44,11 @@ export class PwaInstallService {
       this.isStandalone.set(true);
       this.installing.set(false);
     });
+
+    // Ensure SW is ready ASAP (needed for beforeinstallprompt on Android)
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.ready.catch(() => undefined);
+    }
   }
 
   getRememberedEmail(): string {
@@ -76,7 +79,8 @@ export class PwaInstallService {
 
   isIos(): boolean {
     if (typeof navigator === 'undefined') return false;
-    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
   isAndroid(): boolean {
@@ -107,7 +111,6 @@ export class PwaInstallService {
   openInSystemBrowser(): void {
     const url = this.appUrl();
     if (this.isAndroid()) {
-      // Open in Chrome so native PWA install works
       const hostPath = url.replace(/^https?:\/\//, '');
       window.location.href =
         `intent://${hostPath}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
@@ -117,62 +120,73 @@ export class PwaInstallService {
   }
 
   /**
-   * One-tap install: opens native browser install sheet when available.
-   * On Android in-app browsers (WhatsApp), opens Chrome first so install can run.
+   * Install must stay in the same user-gesture turn as the click.
+   * Never await long work before deferredPrompt.prompt().
    */
   async installApp(): Promise<boolean> {
-    if (this.isStandalone()) return true;
+    if (this.isStandalone()) {
+      this.showInstallHint.set(false);
+      return true;
+    }
 
-    // WhatsApp / Instagram webview cannot install PWAs — jump to Chrome
-    if (this.isInAppBrowser() && this.isAndroid()) {
+    // WhatsApp/Facebook webview cannot install — jump to Chrome first
+    if (this.isInAppBrowser()) {
       this.openInSystemBrowser();
       return false;
     }
 
-    this.installing.set(true);
-    try {
-      if (!this.deferredPrompt) {
-        await this.waitForInstallPrompt(8000);
-      }
-      if (!this.deferredPrompt) {
+    const promptEvent = this.deferredPrompt;
+    if (promptEvent) {
+      this.installing.set(true);
+      this.deferredPrompt = null;
+      this.canInstall.set(false);
+      try {
+        // Must call promptly after click (user gesture)
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        this.installing.set(false);
+        if (choice.outcome === 'accepted') {
+          this.showInstallHint.set(false);
+          return true;
+        }
+        return false;
+      } catch {
         this.installing.set(false);
         return false;
       }
-      const promptEvent = this.deferredPrompt;
-      this.deferredPrompt = null;
-      this.canInstall.set(false);
-      await promptEvent.prompt();
-      const choice = await promptEvent.userChoice;
-      this.installing.set(false);
-      if (choice.outcome === 'accepted') {
-        this.showInstallHint.set(false);
+    }
+
+    // iOS / Safari: open share sheet (includes Add to Home Screen)
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      this.installing.set(true);
+      try {
+        await navigator.share({
+          title: 'Elegance Dental Lab',
+          text: 'Elegance Dental Lab',
+          url: this.appUrl(),
+        });
+        this.installing.set(false);
         return true;
+      } catch {
+        this.installing.set(false);
+        // user cancelled share
+        return false;
       }
-      return false;
-    } catch {
-      this.installing.set(false);
+    }
+
+    // Android Chrome without prompt yet: open clean Chrome tab of the app
+    if (this.isAndroid()) {
+      this.openInSystemBrowser();
       return false;
     }
+
+    this.installing.set(false);
+    return false;
   }
 
   /** @deprecated use installApp */
   async promptInstall(): Promise<boolean> {
     return this.installApp();
-  }
-
-  private waitForInstallPrompt(timeoutMs: number): Promise<boolean> {
-    if (this.deferredPrompt) return Promise.resolve(true);
-    return new Promise((resolve) => {
-      const timer = window.setTimeout(() => {
-        this.promptWaiters = this.promptWaiters.filter((w) => w !== onReady);
-        resolve(false);
-      }, timeoutMs);
-      const onReady = (ok: boolean) => {
-        window.clearTimeout(timer);
-        resolve(ok);
-      };
-      this.promptWaiters.push(onReady);
-    });
   }
 
   private detectStandalone(): boolean {

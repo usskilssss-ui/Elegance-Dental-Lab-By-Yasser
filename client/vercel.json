@@ -1,7 +1,32 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist/client/browser",
+  "headers": [
+    {
+      "source": "/ngsw-worker.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/ngsw.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/((?!ngsw\\.json|ngsw-worker\\.js|manifest\\.webmanifest|icons/|assets/|favicon\\.png|favicon\\.ico).*)",
+      "destination": "/index.html"
+    }
   ]
 }
