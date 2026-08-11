@@ -813,6 +813,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const casePayload = buildCasePayloadFromPrintForm(draft, {
       requesterType: 'doctor',
       priority: d.urgent ? 'urgent' : isEdit ? 'normal' : undefined,
+      entrySource: 'doctor',
     });
 
     if (isEdit && editId) {

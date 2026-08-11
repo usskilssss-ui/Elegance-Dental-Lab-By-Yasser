@@ -346,7 +346,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
 
     const token = this.auth.getToken();
     const createThenPrint = token
-      ? this.caseApi.createCase(buildCasePayloadFromPrintForm(draft)).pipe(
+      ? this.caseApi.createCase(buildCasePayloadFromPrintForm(draft, { entrySource: 'print' })).pipe(
           switchMap((res: { case?: { caseNumber?: string } }) => {
             const caseNumber = String(res?.case?.caseNumber ?? '');
             return this.http.post(`${this.apiBase}/print/job`, {

@@ -310,6 +310,32 @@ export class Secretary implements OnInit, OnDestroy {
     }
   }
 
+  intakeLabel(c: { intakeType?: string; plyScanUrl?: string }): string {
+    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
+    if (c.intakeType === 'impression') return 'امبرشن';
+    return 'غير محدد';
+  }
+
+  intakeBadgeClass(c: { intakeType?: string; plyScanUrl?: string }): string {
+    if (c.intakeType === 'scan' || c.plyScanUrl) return 'meta-pill--scan';
+    if (c.intakeType === 'impression') return 'meta-pill--impression';
+    return 'meta-pill--unknown';
+  }
+
+  entrySourceLabel(c: { entrySource?: string }): string {
+    if (c.entrySource === 'secretary') return 'سكرتارية';
+    if (c.entrySource === 'print') return 'طباعة';
+    if (c.entrySource === 'doctor') return 'من الدكتور';
+    return 'مصدر غير معروف';
+  }
+
+  entrySourceBadgeClass(c: { entrySource?: string }): string {
+    if (c.entrySource === 'secretary') return 'meta-pill--secretary';
+    if (c.entrySource === 'print') return 'meta-pill--print';
+    if (c.entrySource === 'doctor') return 'meta-pill--doctor-entry';
+    return 'meta-pill--unknown';
+  }
+
   readonly filteredDoctors = computed(() => {
     const input = this.doctorSearchQuery();
     const unique = this.uniqueDoctors();
@@ -948,6 +974,7 @@ export class Secretary implements OnInit, OnDestroy {
       deliveryTime: d.deliveryTime || '',
       exitedAt: d.exitedAt || undefined,
       intakeType: this.intakeType === 'scan' || this.intakeType === 'impression' ? this.intakeType : undefined,
+      entrySource: 'secretary' as const,
     };
 
     const plyPreserveMeta =

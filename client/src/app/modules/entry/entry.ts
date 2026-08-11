@@ -455,7 +455,7 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.saveInProgress.set(true);
 
     this.caseApi
-      .createCase(buildCasePayloadFromPrintForm(draft))
+      .createCase(buildCasePayloadFromPrintForm(draft, { entrySource: 'print' }))
       .pipe(
         switchMap((res: { case?: { caseNumber?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');

@@ -50,7 +50,12 @@ export function buildPrintData(draft: PrintFormDraft, caseNumber: string) {
 
 export function buildCasePayloadFromPrintForm(
   draft: PrintFormDraft,
-  opts?: { requesterType?: 'doctor' | 'student'; priority?: string; date?: string }
+  opts?: {
+    requesterType?: 'doctor' | 'student';
+    priority?: string;
+    date?: string;
+    entrySource?: 'secretary' | 'print' | 'doctor';
+  }
 ) {
   const payload = buildCreateCasePayload({
     requesterType: opts?.requesterType === 'student' ? 'student' : 'doctor',
@@ -63,6 +68,7 @@ export function buildCasePayloadFromPrintForm(
     branch: (draft.branch || '').trim(),
     quantity: draft.caseType === 'Empty' ? 0 : draft.quantity || 1,
     date: opts?.date || draft.date || new Date().toISOString().slice(0, 10),
+    entrySource: opts?.entrySource,
   });
   if (opts?.priority) {
     payload['priority'] = opts.priority;

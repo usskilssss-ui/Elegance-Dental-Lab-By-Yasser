@@ -45,6 +45,8 @@ export interface DentalCase {
   plyFileName?: string;
   /** امبرشن أو سكان */
   intakeType?: 'impression' | 'scan';
+  /** من سجّل الحالة: سكرتارية / طباعة / دكتور */
+  entrySource?: 'secretary' | 'print' | 'doctor';
   exitedAt?: string;
   exitedAtRaw?: string;
   /** القيمة الخام لتاريخ الاستلام من قاعدة البيانات (لضمان عدم تغييره عند التعديل) */

@@ -170,7 +170,7 @@ exports.createCase = async (req, res) => {
       }
     }
     if (lastSaveError) throw lastSaveError;
-    await newCase.populate('createdBy', 'fullName email');
+    await newCase.populate('createdBy', 'fullName email role');
 
     // Create audit log (avoid storing full Mongoose doc in Mixed — circular refs / size)
     await AuditLog.create({
@@ -298,7 +298,7 @@ exports.getAllCases = async (req, res) => {
     const [cases, total] = await Promise.all([
       DentalCase.find(filter)
         .populate('assignedTo', 'fullName email role')
-        .populate('createdBy', 'fullName email')
+        .populate('createdBy', 'fullName email role')
         .select(
           'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
         )
@@ -340,7 +340,7 @@ exports.getFinancialReport = async (req, res) => {
 
     const cases = await DentalCase.find(filter)
       .populate('assignedTo', 'fullName')
-      .populate('createdBy', 'fullName')
+      .populate('createdBy', 'fullName role')
       .sort({ createdAt: -1 });
 
     const rows = cases
@@ -417,7 +417,7 @@ exports.getCaseById = async (req, res) => {
   try {
     const dentalCase = await DentalCase.findById(req.params.id)
       .populate('assignedTo', 'fullName email role phone')
-      .populate('createdBy', 'fullName email');
+      .populate('createdBy', 'fullName email role');
 
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
@@ -1364,7 +1364,7 @@ exports.updateCase = async (req, res) => {
     }
 
     await dentalCase.save();
-    await dentalCase.populate('createdBy', 'fullName email');
+    await dentalCase.populate('createdBy', 'fullName email role');
 
     emitCaseUpdated(dentalCase, req.user);
 

@@ -64,6 +64,8 @@ export type CaseMeta = {
   plyFileName?: string;
   /** طريقة استلام الشغل من العيادة */
   intakeType?: 'impression' | 'scan';
+  /** مصدر تسجيل الحالة */
+  entrySource?: 'secretary' | 'print' | 'doctor';
 };
 
 export type SecretaryCaseFormPayload = {
@@ -84,6 +86,7 @@ export type SecretaryCaseFormPayload = {
   branch?: string;
   exitedAt?: string;
   intakeType?: 'impression' | 'scan';
+  entrySource?: 'secretary' | 'print' | 'doctor';
 };
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
@@ -120,6 +123,9 @@ export function buildSecretaryNotes(
   };
   if (form.intakeType === 'impression' || form.intakeType === 'scan') {
     meta.intakeType = form.intakeType;
+  }
+  if (form.entrySource === 'secretary' || form.entrySource === 'print' || form.entrySource === 'doctor') {
+    meta.entrySource = form.entrySource;
   }
   const path = plyPreserve?.plyScanPath?.trim();
   if (path) {
@@ -226,6 +232,8 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     createdBy && typeof createdBy['fullName'] === 'string'
       ? String(createdBy['fullName'])
       : 'السكرتارية';
+  const createdByRole =
+    createdBy && typeof createdBy['role'] === 'string' ? String(createdBy['role']) : '';
 
   const instructionsLines = [
     doctor && `الطبيب: ${doctor}`,
@@ -253,6 +261,16 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const intakeRaw = String(meta['intakeType'] ?? '').toLowerCase();
   const intakeType: 'impression' | 'scan' | undefined =
     intakeRaw === 'scan' ? 'scan' : intakeRaw === 'impression' ? 'impression' : undefined;
+  const entryRaw = String(meta['entrySource'] ?? '').toLowerCase();
+  let entrySource: 'secretary' | 'print' | 'doctor' | undefined =
+    entryRaw === 'secretary' || entryRaw === 'print' || entryRaw === 'doctor'
+      ? (entryRaw as 'secretary' | 'print' | 'doctor')
+      : undefined;
+  if (!entrySource) {
+    if (createdByRole === 'doctor') entrySource = 'doctor';
+    else if (createdByRole === 'secretary') entrySource = 'secretary';
+    else if (createdByRole === 'requester') entrySource = 'print';
+  }
   const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
   const requesterType: 'doctor' | 'student' =
     requesterTypeRaw === 'student' ? 'student' : 'doctor';
@@ -308,6 +326,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     plyScanUrl: plyScanUrl || undefined,
     plyFileName: plyFileName || undefined,
     intakeType,
+    entrySource,
     exitedAt: exitedDisplay || undefined,
     exitedAtRaw: exitedAtRaw ? String(exitedAtRaw) : undefined,
   };
