@@ -88,6 +88,27 @@ export class PwaInstallService {
     return /iphone|ipad|ipod/i.test(navigator.userAgent);
   }
 
+  isAndroid(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /android/i.test(navigator.userAgent);
+  }
+
+  isMobile(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return this.isIos() || this.isAndroid() || /Mobile|webOS/i.test(navigator.userAgent);
+  }
+
+  /** Manual install steps when beforeinstallprompt is unavailable (iOS / some Android). */
+  installManualHint(): string {
+    if (this.isIos()) {
+      return 'آيفون/آيباد: اضغط زر المشاركة (□↑) أسفل أو أعلى الشاشة ← Add to Home Screen / إضافة إلى الشاشة الرئيسية';
+    }
+    if (this.isAndroid()) {
+      return 'أندرويد (Chrome): اضغط ⋮ أعلى اليمين ← تثبيت التطبيق أو إضافة إلى الشاشة الرئيسية';
+    }
+    return 'من المتصفح: افتح القائمة ← تثبيت التطبيق / إضافة إلى الشاشة الرئيسية';
+  }
+
   appUrl(): string {
     return typeof location !== 'undefined' ? `${location.origin}/login` : '';
   }
@@ -105,7 +126,6 @@ export class PwaInstallService {
 
   openInSystemBrowser(): void {
     const url = this.appUrl();
-    // Best-effort: open outside in-app browser
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 

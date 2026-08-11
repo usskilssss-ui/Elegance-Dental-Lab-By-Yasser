@@ -18,14 +18,15 @@
       <div>
         <strong>ثبّت التطبيق مرة واحدة</strong>
         <p>بعدها تفتح من أيقونة الشاشة الرئيسية مباشرة — من غير واتساب.</p>
-        @if (pwa.isIos()) {
-          <p>آيفون: شارك ← Add to Home Screen</p>
-        }
+        <p>{{ pwa.installManualHint() }}</p>
       </div>
       <div class="doctor-access-actions">
         @if (pwa.canInstall()) {
           <button type="button" class="btn-primary" (click)="pwa.promptInstall()">تثبيت</button>
+        } @else {
+          <button type="button" class="btn-primary" (click)="showInstallHelp()">طريقة التثبيت</button>
         }
+        <button type="button" class="btn-secondary" (click)="pwa.copyAppLink()">{{ pwa.copied() ? 'تم النسخ' : 'نسخ اللينك' }}</button>
         <button type="button" class="btn-secondary" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>
     </div>

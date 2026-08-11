@@ -134,7 +134,12 @@ export class Login implements OnInit {
   }
 
   async installApp(): Promise<void> {
-    await this.pwa.promptInstall();
+    const ok = await this.pwa.promptInstall();
+    if (!ok) this.showInstallHelp();
+  }
+
+  showInstallHelp(): void {
+    window.alert(this.pwa.installManualHint());
   }
 
   private formatLoginError(err: unknown): string {

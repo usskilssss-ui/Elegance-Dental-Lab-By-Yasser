@@ -914,6 +914,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
       });
   }
 
+  showInstallHelp(): void {
+    window.alert(this.pwa.installManualHint());
+  }
+
   logout(): void {
     if (this.isAdminView()) {
       this.backToAdminDoctors();

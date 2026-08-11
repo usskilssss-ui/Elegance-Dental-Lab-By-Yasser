@@ -33,15 +33,18 @@
     <div class="access-banner" dir="rtl" role="status">
       <div class="access-banner-text">
         <strong>ثبّت التطبيق على الموبايل</strong>
-        <span>بعد تسجيل الدخول مرة واحدة، ثبّته على الشاشة الرئيسية وافتحه من الأيقونة — من غير واتساب كل مرة.</span>
-        @if (pwa.isIos()) {
-          <span class="access-ios-hint">آيفون: شارك ← Add to Home Screen</span>
-        }
+        <span>ثبّته على الشاشة الرئيسية وافتحه من الأيقونة — من غير واتساب كل مرة.</span>
+        <span class="access-ios-hint">{{ pwa.installManualHint() }}</span>
       </div>
       <div class="access-banner-actions">
         @if (pwa.canInstall()) {
           <button type="button" class="access-btn access-btn--primary" (click)="installApp()">تثبيت الآن</button>
+        } @else {
+          <button type="button" class="access-btn access-btn--primary" (click)="showInstallHelp()">طريقة التثبيت</button>
         }
+        <button type="button" class="access-btn" (click)="pwa.copyAppLink()">
+          {{ pwa.copied() ? 'تم النسخ ✓' : 'نسخ اللينك' }}
+        </button>
         <button type="button" class="access-btn" (click)="pwa.dismissInstallHint()">إخفاء</button>
       </div>
     </div>
