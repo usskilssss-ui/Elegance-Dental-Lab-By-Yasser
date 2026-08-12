@@ -300,6 +300,7 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopWaWebPoll();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1731,7 +1732,7 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   waEnabled = false;
-  waProvider: 'ultramsg' | 'meta' = 'ultramsg';
+  waProvider: 'ultramsg' | 'meta' | 'waweb' = 'waweb';
   waInstanceId = '';
   waPhoneNumberId = '';
   waToken = '';
@@ -1747,6 +1748,67 @@ export class Admin implements OnInit, OnDestroy {
   waTestPhone = '';
   waMsg = '';
   waSaving = false;
+  waWebStatus = 'disconnected';
+  waWebQr = '';
+  waWebError = '';
+  waWebBusy = false;
+  private waWebPollTimer: ReturnType<typeof setInterval> | null = null;
+
+  get waWebConnected(): boolean {
+    return this.waWebStatus === 'open';
+  }
+
+  get waWebStatusLabel(): string {
+    switch (this.waWebStatus) {
+      case 'open':
+        return 'متصل';
+      case 'qr':
+        return 'امسح QR';
+      case 'connecting':
+        return 'جاري الاتصال…';
+      default:
+        return 'غير متصل';
+    }
+  }
+
+  private applyWaWebStatus(web?: {
+    status?: string;
+    connected?: boolean;
+    qr?: string;
+    error?: string;
+  }): void {
+    if (!web) return;
+    this.waWebStatus = String(web.status || (web.connected ? 'open' : 'disconnected'));
+    this.waWebQr = web.qr || '';
+    this.waWebError = web.error || '';
+    if (this.waWebStatus === 'open') {
+      this.waLiveConfigured = true;
+      this.stopWaWebPoll();
+    } else if (this.waWebStatus === 'qr' || this.waWebStatus === 'connecting') {
+      this.startWaWebPoll();
+    }
+  }
+
+  private startWaWebPoll(): void {
+    if (this.waWebPollTimer) return;
+    this.waWebPollTimer = setInterval(() => this.refreshWhatsAppWebStatus(), 2500);
+  }
+
+  private stopWaWebPoll(): void {
+    if (this.waWebPollTimer) {
+      clearInterval(this.waWebPollTimer);
+      this.waWebPollTimer = null;
+    }
+  }
+
+  onWaProviderChange(): void {
+    if (this.waProvider !== 'waweb') {
+      this.stopWaWebPoll();
+      this.waWebQr = '';
+    } else {
+      this.refreshWhatsAppWebStatus();
+    }
+  }
 
   loadWhatsAppSettings(): void {
     this.waMsg = '';
@@ -1754,7 +1816,8 @@ export class Admin implements OnInit, OnDestroy {
       next: (res) => {
         const s = res?.settings || {};
         this.waEnabled = !!s.enabled;
-        this.waProvider = s.provider === 'meta' ? 'meta' : 'ultramsg';
+        const p = String(s.provider || 'waweb');
+        this.waProvider = p === 'meta' || p === 'ultramsg' || p === 'waweb' ? p : 'waweb';
         this.waInstanceId = s.instanceId || '';
         this.waPhoneNumberId = s.phoneNumberId || '';
         this.waDailyHour = s.dailyHour ?? 18;
@@ -1770,6 +1833,12 @@ export class Admin implements OnInit, OnDestroy {
         this.waHasToken = !!s.hasToken;
         this.waLiveConfigured = !!s.liveConfigured;
         this.waToken = '';
+        if (this.waProvider === 'waweb') {
+          this.applyWaWebStatus(s.web);
+          this.refreshWhatsAppWebStatus();
+        } else {
+          this.stopWaWebPoll();
+        }
       },
       error: (err: any) => {
         const status = err?.status;
@@ -1782,6 +1851,69 @@ export class Admin implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  refreshWhatsAppWebStatus(): void {
+    this.http
+      .get<{ success?: boolean; status?: string; connected?: boolean; qr?: string; error?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/web/status`
+      )
+      .subscribe({
+        next: (res) => this.applyWaWebStatus(res),
+        error: () => {
+          /* ignore poll errors */
+        },
+      });
+  }
+
+  startWhatsAppWeb(): void {
+    this.waWebBusy = true;
+    this.waMsg = '';
+    this.http
+      .post<{ success?: boolean; status?: string; connected?: boolean; qr?: string; error?: string; message?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/web/start`,
+        {}
+      )
+      .subscribe({
+        next: (res) => {
+          this.waWebBusy = false;
+          this.applyWaWebStatus(res);
+          this.waMsg = res.connected
+            ? 'واتساب Web متصل'
+            : res.qr
+              ? 'امسح رمز QR من واتساب المعمل'
+              : 'جاري تجهيز الاتصال…';
+          this.startWaWebPoll();
+        },
+        error: (err) => {
+          this.waWebBusy = false;
+          this.waMsg = err?.error?.message || 'فشل بدء واتساب Web';
+        },
+      });
+  }
+
+  logoutWhatsAppWeb(): void {
+    this.waWebBusy = true;
+    this.http
+      .post<{ success?: boolean; status?: string; message?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/web/logout`,
+        {}
+      )
+      .subscribe({
+        next: (res) => {
+          this.waWebBusy = false;
+          this.stopWaWebPoll();
+          this.waWebStatus = 'disconnected';
+          this.waWebQr = '';
+          this.waWebError = '';
+          this.waLiveConfigured = false;
+          this.waMsg = res.message || 'تم فصل الجلسة';
+        },
+        error: (err) => {
+          this.waWebBusy = false;
+          this.waMsg = err?.error?.message || 'فشل الفصل';
+        },
+      });
   }
 
   saveWhatsAppSettings(): void {
@@ -1798,8 +1930,8 @@ export class Admin implements OnInit, OnDestroy {
       msgExited: this.waMsgExited,
       msgDaily: this.waMsgDaily,
     };
-    if (this.waToken.trim()) body['token'] = this.waToken.trim();
-    this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean }>(
+    if (this.waProvider !== 'waweb' && this.waToken.trim()) body['token'] = this.waToken.trim();
+    this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean; web?: any }>(
       `${environment.apiUrl}/settings/whatsapp`,
       body
     ).subscribe({
@@ -1808,7 +1940,11 @@ export class Admin implements OnInit, OnDestroy {
         this.waLiveConfigured = !!res.liveConfigured;
         this.waMsg = res.message || 'تم الحفظ';
         this.waToken = '';
+        this.applyWaWebStatus(res.web);
         this.loadWhatsAppSettings();
+        if (this.waProvider === 'waweb' && this.waEnabled) {
+          this.startWhatsAppWeb();
+        }
       },
       error: (err) => {
         this.waSaving = false;

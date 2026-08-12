@@ -264,6 +264,7 @@
                   </svg>
                 </button>
                 <span class="case-id">{{ c.caseNumber }}</span>
+                <app-case-barcode [value]="c.caseNumber"></app-case-barcode>
                 @if (c.priority === 'emergency') {
                   <span class="urgent-pill">مستعجل</span>
                 }

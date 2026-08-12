@@ -106,6 +106,7 @@
             <!-- Doctor / Patient -->
             <div class="case-head">
               <span class="case-id">{{ c.caseNumber }}</span>
+              <app-case-barcode [value]="c.caseNumber"></app-case-barcode>
               <div class="doctor">{{ c.doctor }}</div>
               @if (c.requesterType === 'student') {
                 <span class="requester-badge requester-badge--student">طالب</span>

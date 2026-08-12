@@ -1,0 +1,51 @@
+@if (ready) {
+  <button
+    type="button"
+    class="case-qr-trigger"
+    title="عرض باركود الحالة للسكان"
+    aria-label="عرض باركود الحالة"
+    (click)="openBarcode($event)"
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <path d="M14 14h3v3"/>
+      <path d="M20 14v3h-3"/>
+      <path d="M14 20h.01"/>
+      <path d="M17 17h.01"/>
+      <path d="M20 20h.01"/>
+    </svg>
+  </button>
+
+  @if (open) {
+    <div class="case-barcode-overlay" role="presentation" (click)="close($event)">
+      <div
+        class="case-barcode-panel"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="'باركود ' + label"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="case-barcode-panel-head">
+          <span>باركود الحالة</span>
+          <button type="button" class="case-barcode-close" (click)="close($event)" aria-label="إغلاق">×</button>
+        </div>
+        <div class="case-barcode-canvas">
+          <svg
+            class="case-barcode-svg"
+            [attr.viewBox]="'0 0 ' + width + ' ' + height"
+            [attr.width]="width"
+            [attr.height]="height"
+            role="img"
+            [attr.aria-label]="'باركود ' + label"
+          >
+            <path [attr.d]="path" fill="#0f172a"></path>
+          </svg>
+          <div class="case-barcode-label">{{ label }}</div>
+        </div>
+        <p class="case-barcode-hint">اعمل سكان من هنا لو الورق اتقطع</p>
+      </div>
+    </div>
+  }
+}

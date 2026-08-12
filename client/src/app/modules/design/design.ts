@@ -15,6 +15,7 @@ import {
 } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 export type CasePriority = 'emergency' | 'normal' | 'low';
 export type CaseStatus =
@@ -35,7 +36,7 @@ export interface WorkStage {
 @Component({
   selector: 'app-case-details',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
   templateUrl: './design.html',
   styleUrls: ['./design.css']
 })
