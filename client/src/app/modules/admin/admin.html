@@ -1190,13 +1190,19 @@
             </div>
             <p *ngIf="waWebError" style="margin:0 0 10px;color:#f87171;font-size:13px;">{{ waWebError }}</p>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <button type="button" class="export-btn" (click)="startWhatsAppWeb()" [disabled]="waWebBusy">
+              <button type="button" class="export-btn" (click)="startWhatsAppWeb(false)" [disabled]="waWebBusy">
                 {{ waWebBusy ? 'جاري الربط…' : (waWebConnected ? 'تحديث الحالة' : 'ربط واتساب / إظهار QR') }}
+              </button>
+              <button type="button" class="finish-btn" (click)="startWhatsAppWeb(true)" [disabled]="waWebBusy" *ngIf="!waWebConnected">
+                QR جديد
               </button>
               <button type="button" class="finish-btn" (click)="logoutWhatsAppWeb()" [disabled]="waWebBusy" *ngIf="waWebConnected || waWebStatus === 'qr'">
                 فصل الجلسة
               </button>
             </div>
+            <p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;">
+              امسح بسرعة بعد ما يظهر QR. لو الموبايل قال «تعذر ربط الجهاز» اضغط «QR جديد» وجرّب تاني (يفضّل واتساب عادي مش Business لو بيرفض).
+            </p>
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider === 'ultramsg'">

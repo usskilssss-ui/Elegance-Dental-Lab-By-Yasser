@@ -1866,13 +1866,13 @@ export class Admin implements OnInit, OnDestroy {
       });
   }
 
-  startWhatsAppWeb(): void {
+  startWhatsAppWeb(force = false): void {
     this.waWebBusy = true;
     this.waMsg = '';
     this.http
       .post<{ success?: boolean; status?: string; connected?: boolean; qr?: string; error?: string; message?: string }>(
         `${environment.apiUrl}/settings/whatsapp/web/start`,
-        {}
+        { force: !!force }
       )
       .subscribe({
         next: (res) => {

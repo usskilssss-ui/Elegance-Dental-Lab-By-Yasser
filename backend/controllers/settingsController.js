@@ -170,9 +170,10 @@ exports.getWhatsAppWebStatus = async (_req, res) => {
   }
 };
 
-exports.startWhatsAppWeb = async (_req, res) => {
+exports.startWhatsAppWeb = async (req, res) => {
   try {
-    const status = await startWhatsAppWeb();
+    const force = req.body?.force === true;
+    const status = await startWhatsAppWeb({ force });
     return res.json({ success: true, ...status });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
