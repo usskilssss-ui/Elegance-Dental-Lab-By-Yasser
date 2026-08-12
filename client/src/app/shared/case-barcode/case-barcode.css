@@ -1,16 +1,75 @@
-.case-barcode {
+.case-qr-trigger {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: rgba(212, 175, 55, 0.12);
+  color: #d4af37;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.case-qr-trigger:hover {
+  background: rgba(212, 175, 55, 0.22);
+  border-color: rgba(212, 175, 55, 0.7);
+  transform: translateY(-1px);
+}
+
+.case-barcode-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.case-barcode-panel {
+  width: min(420px, 100%);
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.case-barcode-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.case-barcode-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.case-barcode-canvas {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 8px 4px;
-  margin-top: 8px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 22px 16px 12px;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  color: #0f172a;
-  max-width: 100%;
-  user-select: none;
 }
 
 .case-barcode-svg {
@@ -20,20 +79,17 @@
 }
 
 .case-barcode-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   letter-spacing: 0.04em;
-  color: #334155;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  line-height: 1.2;
+  color: #0f172a;
 }
 
-.case-barcode--compact {
-  padding: 4px 6px 3px;
-  margin-top: 6px;
-  border-radius: 8px;
-}
-
-.case-barcode--compact .case-barcode-label {
-  font-size: 9px;
+.case-barcode-hint {
+  margin: 0;
+  padding: 0 16px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
 }
