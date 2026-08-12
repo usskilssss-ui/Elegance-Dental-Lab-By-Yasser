@@ -1,5 +1,5 @@
 /**
- * WhatsApp notifications via UltraMsg or Meta Cloud API.
+ * WhatsApp notifications via UltraMsg, Meta Cloud API, or WhatsApp Web (Baileys).
  * Config from: Admin UI (Mongo AppSettings) OR env vars.
  */
 const User = require('../models/User');
@@ -81,7 +81,12 @@ async function reloadWhatsAppConfig() {
   try {
     const AppSettings = require('../models/AppSettings');
     const doc = await AppSettings.findOne({ key: 'app' }).lean();
-    if (doc?.whatsapp && (doc.whatsapp.enabled || doc.whatsapp.token)) {
+    if (
+      doc?.whatsapp &&
+      (doc.whatsapp.enabled ||
+        doc.whatsapp.token ||
+        String(doc.whatsapp.provider || '').toLowerCase() === 'waweb')
+    ) {
       cachedConfig = {
         enabled: !!doc.whatsapp.enabled,
         provider: String(doc.whatsapp.provider || 'ultramsg').toLowerCase(),
@@ -127,6 +132,15 @@ function normalizePhone(raw) {
 
 function providerConfigured() {
   const c = getConfig();
+  if (c.provider === 'waweb') {
+    if (!c.enabled) return false;
+    try {
+      const { isWhatsAppWebConnected } = require('./waWebService');
+      return isWhatsAppWebConnected();
+    } catch {
+      return false;
+    }
+  }
   // Env-only configs may have enabled inferred from provider string
   const on = c.enabled || !!(c.token && (c.instanceId || c.phoneNumberId));
   if (!on) return false;
@@ -148,6 +162,11 @@ async function sendWhatsAppText(phone, body) {
   const text = String(body);
 
   try {
+    if (c.provider === 'waweb') {
+      const { sendWhatsAppWebText } = require('./waWebService');
+      return sendWhatsAppWebText(phone, text);
+    }
+
     if (c.provider === 'meta') {
       const res = await fetch(`https://graph.facebook.com/v19.0/${c.phoneNumberId}/messages`, {
         method: 'POST',
@@ -221,12 +240,17 @@ function labLabel() {
 async function notifyDoctorCaseStatus(dentalCase, kind) {
   try {
     if (!cachedConfig) await reloadWhatsAppConfig();
+    const c = getConfig();
+    // WhatsApp Web: only notify when case is completed (lower ban risk)
+    if (c.provider === 'waweb' && kind !== 'completed') {
+      console.log('[whatsapp] waweb skip non-completed:', kind, dentalCase?.caseNumber);
+      return;
+    }
     const doctor = await findDoctorUserByCase(dentalCase);
     if (!doctor?.phone) {
       console.log('[whatsapp] no doctor phone for', dentalCase?.caseNumber);
       return;
     }
-    const c = getConfig();
     const vars = { ...caseMessageVars(dentalCase), count: '', list: '' };
     let msg = '';
     if (kind === 'completed') {
@@ -244,6 +268,10 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
 
 async function sendDailyReadySummaries() {
   if (!cachedConfig) await reloadWhatsAppConfig();
+  if (getConfig().provider === 'waweb') {
+    console.log('[whatsapp] daily summary skipped for waweb (completed-only mode)');
+    return;
+  }
   if (!providerConfigured()) {
     console.log('[whatsapp] daily summary skipped (not configured)');
     return;

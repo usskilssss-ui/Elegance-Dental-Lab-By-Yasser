@@ -180,8 +180,17 @@ const startServer = async () => {
 ╚════════════════════════════════════════╝
       `);
       try {
-        const { scheduleDailyWhatsAppSummary } = require('./services/whatsappService');
+        const { scheduleDailyWhatsAppSummary, reloadWhatsAppConfig } = require('./services/whatsappService');
         scheduleDailyWhatsAppSummary();
+        reloadWhatsAppConfig()
+          .then((cfg) => {
+            if (cfg?.enabled && cfg.provider === 'waweb') {
+              const { startWhatsAppWeb } = require('./services/waWebService');
+              return startWhatsAppWeb();
+            }
+            return null;
+          })
+          .catch((e) => console.warn('[wa-web] boot start skipped:', e.message));
       } catch (e) {
         console.warn('WhatsApp scheduler not started:', e.message);
       }
