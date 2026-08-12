@@ -222,7 +222,12 @@ function normalizeDoctorKey(name) {
   return String(name || '')
     .trim()
     .replace(/\s+/g, ' ')
-    .toLowerCase();
+    .toLowerCase()
+    // strip common titles so "د. أحمد" matches "أحمد"
+    .replace(/^(د\.|د|dr\.|dr|doctor|أ\.|ا\.)\s*/i, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function findDoctorUserByCase(dentalCase) {
@@ -230,7 +235,17 @@ async function findDoctorUserByCase(dentalCase) {
   if (!doctorName) return null;
   const users = await User.find({ role: 'doctor', isActive: true }).select('fullName phone email');
   const key = normalizeDoctorKey(doctorName);
-  return users.find((u) => normalizeDoctorKey(u.fullName) === key) || null;
+  if (!key) return null;
+
+  const exact = users.find((u) => normalizeDoctorKey(u.fullName) === key);
+  if (exact) return exact;
+
+  // Partial match when names differ slightly (clinic nickname vs account name)
+  const partial = users.find((u) => {
+    const uk = normalizeDoctorKey(u.fullName);
+    return uk && (uk.includes(key) || key.includes(uk));
+  });
+  return partial || null;
 }
 
 function labLabel() {
@@ -239,8 +254,13 @@ function labLabel() {
 
 async function notifyDoctorCaseStatus(dentalCase, kind) {
   try {
-    if (!cachedConfig) await reloadWhatsAppConfig();
+    // Always reload — admin may have just enabled / switched provider
+    await reloadWhatsAppConfig();
     const c = getConfig();
+    if (!c.enabled) {
+      console.log('[whatsapp] skip (disabled):', dentalCase?.caseNumber, kind);
+      return;
+    }
     // WhatsApp Web: only notify when case is completed (lower ban risk)
     if (c.provider === 'waweb' && kind !== 'completed') {
       console.log('[whatsapp] waweb skip non-completed:', kind, dentalCase?.caseNumber);
@@ -248,7 +268,12 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
     }
     const doctor = await findDoctorUserByCase(dentalCase);
     if (!doctor?.phone) {
-      console.log('[whatsapp] no doctor phone for', dentalCase?.caseNumber);
+      console.log(
+        '[whatsapp] no doctor phone match for',
+        dentalCase?.caseNumber,
+        'referringDoctor=',
+        dentalCase?.referringDoctor || ''
+      );
       return;
     }
     const vars = { ...caseMessageVars(dentalCase), count: '', list: '' };
@@ -260,7 +285,15 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
     } else {
       msg = applyTemplate('{lab}\nتحديث على الحالة ({patient}).', vars);
     }
-    await sendWhatsAppText(doctor.phone, msg);
+    const result = await sendWhatsAppText(doctor.phone, msg);
+    console.log(
+      '[whatsapp] notify',
+      dentalCase?.caseNumber,
+      kind,
+      'to',
+      doctor.fullName,
+      result?.ok ? 'OK' : result?.error || result?.skipped || 'failed'
+    );
   } catch (err) {
     console.warn('[whatsapp] notifyDoctorCaseStatus:', err.message);
   }
