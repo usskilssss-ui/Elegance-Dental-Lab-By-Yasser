@@ -32,15 +32,15 @@ const printJobSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/** Auto-delete jobs older than 7 days (Mongo TTL). Keep in sync with listTodayJobs. */
-const PRINT_JOB_TTL_SECONDS = 7 * 24 * 60 * 60; // 604800
+/** Auto-delete jobs older than 1 day (Mongo TTL). Keep in sync with listTodayJobs. */
+const PRINT_JOB_TTL_SECONDS = 24 * 60 * 60; // 86400
 printJobSchema.index({ createdAt: 1 }, { expireAfterSeconds: PRINT_JOB_TTL_SECONDS });
 
 const PrintJob = mongoose.model('PrintJob', printJobSchema);
 
 /**
  * MongoDB does not update expireAfterSeconds when the schema changes.
- * Drop/recreate the TTL index if an old 24h (or other) value is still active.
+ * Drop/recreate the TTL index if an old 7d (or other) value is still active.
  */
 PrintJob.ensurePrintJobTtlIndex = async function ensurePrintJobTtlIndex() {
   const wanted = PRINT_JOB_TTL_SECONDS;
@@ -52,10 +52,10 @@ PrintJob.ensurePrintJobTtlIndex = async function ensurePrintJobTtlIndex() {
     if (ttl && ttl.expireAfterSeconds !== wanted) {
       await PrintJob.collection.dropIndex(ttl.name);
       await PrintJob.collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: wanted });
-      console.log(`PrintJob TTL index updated: ${ttl.expireAfterSeconds}s → ${wanted}s (7 days)`);
+      console.log(`PrintJob TTL index updated: ${ttl.expireAfterSeconds}s → ${wanted}s (1 day)`);
     } else if (!ttl) {
       await PrintJob.collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: wanted });
-      console.log(`PrintJob TTL index created: ${wanted}s (7 days)`);
+      console.log(`PrintJob TTL index created: ${wanted}s (1 day)`);
     }
   } catch (err) {
     console.warn('PrintJob TTL index sync skipped:', err.message);

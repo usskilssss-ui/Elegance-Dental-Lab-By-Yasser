@@ -277,13 +277,21 @@ exports.listPendingJobs = async (req, res) => {
   }
 };
 
-const PRINT_JOB_RETENTION_DAYS = 7;
-const PRINT_JOB_RETENTION_MS = PRINT_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+/** Start of calendar day in Africa/Cairo (entry screen "today"). */
+function startOfTodayCairo() {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  return new Date(`${ymd}T00:00:00+03:00`);
+}
 
-// GET /api/print/jobs/today — entry screen: jobs from the last 7 days (then TTL deletes)
+// GET /api/print/jobs/today — entry screen: jobs from today only (TTL deletes after 24h)
 exports.listTodayJobs = async (req, res) => {
   try {
-    const since = new Date(Date.now() - PRINT_JOB_RETENTION_MS);
+    const since = startOfTodayCairo();
 
     const jobs = await PrintJob.find({
       createdAt: { $gte: since },
