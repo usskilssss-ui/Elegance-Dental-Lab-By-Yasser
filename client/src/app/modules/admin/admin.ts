@@ -404,6 +404,11 @@ export class Admin implements OnInit, OnDestroy {
     );
   }
 
+  /** إجمالي أكونتات الدكاترة المسجّلة */
+  get doctorAccountsCount(): number {
+    return this.doctorMembers.length;
+  }
+
   get filteredCases(): AdminCaseRow[] {
     const sortedCases = [...this.adminCases].sort(
       (a, b) => this.getCaseTimestamp(b) - this.getCaseTimestamp(a)
