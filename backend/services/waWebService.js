@@ -11,6 +11,7 @@ let lastQrDataUrl = '';
 let connectionStatus = 'disconnected'; // disconnected | qr | connecting | open
 let lastError = '';
 let saveCreds = null;
+let reconnectTimer = null;
 
 const WaAuthSchema = new mongoose.Schema(
   {
@@ -90,20 +91,65 @@ function getPublicStatus() {
   };
 }
 
-async function startWhatsAppWeb() {
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect(delayMs = 1500) {
+  clearReconnectTimer();
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startWhatsAppWeb().catch((e) => {
+      lastError = e.message || String(e);
+    });
+  }, delayMs);
+}
+
+async function startWhatsAppWeb(options = {}) {
+  const force = !!options.force;
+  if (force) {
+    clearReconnectTimer();
+    try {
+      if (sock) {
+        try {
+          sock.end(undefined);
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      sock = null;
+      connectionStatus = 'disconnected';
+      lastQrDataUrl = '';
+    }
+    try {
+      await WaAuth().deleteMany({});
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Keep an in-progress QR/session alive — killing it mid-scan causes "تعذر ربط الجهاز"
   if (starting) return getPublicStatus();
-  if (sock && connectionStatus === 'open') return getPublicStatus();
+  if (sock && (connectionStatus === 'open' || connectionStatus === 'qr' || connectionStatus === 'connecting')) {
+    return getPublicStatus();
+  }
 
   starting = true;
   lastError = '';
   connectionStatus = 'connecting';
   lastQrDataUrl = '';
+  clearReconnectTimer();
 
   try {
     const {
       default: makeWASocket,
       DisconnectReason,
       fetchLatestBaileysVersion,
+      Browsers,
     } = require('@whiskeysockets/baileys');
     const { Boom } = require('@hapi/boom');
     const pino = require('pino');
@@ -126,9 +172,14 @@ async function startWhatsAppWeb() {
       auth: auth.state,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
-      browser: ['Elegance Dental Lab', 'Chrome', '120.0.0'],
+      // WhatsApp now expects macOS desktop fingerprint for new pairings
+      browser: Browsers.macOS('Chrome'),
       syncFullHistory: false,
       markOnlineOnConnect: false,
+      connectTimeoutMs: 60_000,
+      defaultQueryTimeoutMs: 60_000,
+      keepAliveIntervalMs: 20_000,
+      getMessage: async () => undefined,
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -141,9 +192,10 @@ async function startWhatsAppWeb() {
           lastQrDataUrl = await QRCode.toDataURL(qr, {
             errorCorrectionLevel: 'M',
             margin: 2,
-            width: 280,
+            width: 320,
           });
           connectionStatus = 'qr';
+          lastError = '';
         } catch (err) {
           lastError = err.message || 'QR encode failed';
           connectionStatus = 'disconnected';
@@ -163,20 +215,31 @@ async function startWhatsAppWeb() {
             ? lastDisconnect.error.output?.statusCode
             : lastDisconnect?.error?.output?.statusCode;
         const loggedOut = statusCode === DisconnectReason.loggedOut;
+        const restartRequired = statusCode === DisconnectReason.restartRequired;
         connectionStatus = 'disconnected';
         lastQrDataUrl = '';
         sock = null;
-        console.warn('[wa-web] closed', statusCode, loggedOut ? '(logged out)' : '');
-        if (!loggedOut) {
-          // Auto-reconnect after brief delay
-          setTimeout(() => {
-            startWhatsAppWeb().catch((e) => {
-              lastError = e.message || String(e);
-            });
-          }, 2500);
-        } else {
-          lastError = 'تم تسجيل الخروج — امسح QR من جديد';
+        console.warn('[wa-web] closed', statusCode, loggedOut ? '(logged out)' : restartRequired ? '(restart required)' : '');
+
+        if (loggedOut) {
+          lastError = 'تم تسجيل الخروج — اضغط ربط واتساب وامسح QR من جديد';
+          try {
+            await WaAuth().deleteMany({});
+          } catch {
+            /* ignore */
+          }
+          return;
         }
+
+        // 515 after successful scan is expected — reconnect with saved creds
+        if (restartRequired) {
+          lastError = 'جاري إكمال الربط…';
+          scheduleReconnect(800);
+          return;
+        }
+
+        lastError = `انقطع الاتصال (${statusCode || 'unknown'}) — جاري إعادة المحاولة`;
+        scheduleReconnect(2500);
       }
     });
   } catch (err) {
@@ -191,6 +254,7 @@ async function startWhatsAppWeb() {
 }
 
 async function stopWhatsAppWeb(logout = false) {
+  clearReconnectTimer();
   try {
     if (logout && sock) {
       try {
