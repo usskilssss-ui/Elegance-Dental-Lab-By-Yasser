@@ -10,5 +10,8 @@ router.get('/whatsapp', settingsController.getWhatsAppSettings);
 router.put('/whatsapp', settingsController.updateWhatsAppSettings);
 router.post('/whatsapp/test', settingsController.testWhatsApp);
 router.post('/whatsapp/daily-summary', settingsController.runDailySummaryNow);
+router.get('/whatsapp/web/status', settingsController.getWhatsAppWebStatus);
+router.post('/whatsapp/web/start', settingsController.startWhatsAppWeb);
+router.post('/whatsapp/web/logout', settingsController.logoutWhatsAppWeb);
 
 module.exports = router;

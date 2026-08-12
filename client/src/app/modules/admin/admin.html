@@ -1112,11 +1112,11 @@
 
         <div class="report-table-card" style="padding:20px;max-width:720px;">
           <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;line-height:1.6;">
-            1) اعمل حساب على
-            <a href="https://ultramsg.com" target="_blank" rel="noopener" style="color:#38bdf8;">ultramsg.com</a>
-            وافتح Instance وامسح QR من واتساب المعمل.<br>
-            2) انسخ Instance ID والـ Token هنا وفعّل الإرسال.<br>
-            3) تأكد إن رقم الموبايل مكتوب في حساب كل دكتور.
+            <strong style="color:#e2e8f0;">WhatsApp Web (مجاني):</strong>
+            اختَر المزود → فعّل → احفظ → اضغط «ربط واتساب» وامسح QR من واتساب المعمل
+            (الأجهزة المرتبطة). يرسل فقط عند انتهاء الحالة.<br>
+            <strong style="color:#e2e8f0;">Meta / UltraMsg:</strong>
+            مدفوعين/رسميين — يحتاجون Token. تأكد إن رقم الموبايل مكتوب في حساب كل دكتور.
           </p>
 
           <label class="remember-row" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;color:#e2e8f0;">
@@ -1127,12 +1127,13 @@
           <div class="financial-controls" style="margin-bottom:12px;">
             <div class="control-card" style="flex:1;">
               <label>المزوّد</label>
-              <select [(ngModel)]="waProvider">
-                <option value="ultramsg">UltraMsg (الأسهل)</option>
+              <select [(ngModel)]="waProvider" (ngModelChange)="onWaProviderChange()">
+                <option value="waweb">WhatsApp Web (مجاني)</option>
+                <option value="ultramsg">UltraMsg</option>
                 <option value="meta">Meta Cloud API</option>
               </select>
             </div>
-            <div class="control-card" style="flex:1;">
+            <div class="control-card" style="flex:1;" *ngIf="waProvider !== 'waweb'">
               <label>ساعة الملخص اليومي (0–23)</label>
               <input type="number" min="0" max="23" [(ngModel)]="waDailyHour" />
             </div>
@@ -1156,28 +1157,46 @@
             </small>
           </div>
 
-          <div class="control-card" style="margin-bottom:12px;">
+          <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
             <label>رسالة خروج الحالة</label>
             <textarea rows="3" [(ngModel)]="waMsgExited" style="width:100%;resize:vertical;"></textarea>
-            <small style="color:#94a3b8;">
-              المتغيرات:
-              {{ '{' }}lab{{ '}' }}
-              {{ '{' }}patient{{ '}' }}
-              {{ '{' }}workType{{ '}' }}
-              {{ '{' }}quantity{{ '}' }}
-              {{ '{' }}caseNumber{{ '}' }}
-            </small>
           </div>
 
-          <div class="control-card" style="margin-bottom:12px;">
+          <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
             <label>رسالة الملخص اليومي</label>
             <textarea rows="4" [(ngModel)]="waMsgDaily" style="width:100%;resize:vertical;"></textarea>
-            <small style="color:#94a3b8;">
-              المتغيرات:
-              {{ '{' }}lab{{ '}' }}
-              {{ '{' }}count{{ '}' }}
-              {{ '{' }}list{{ '}' }}
-            </small>
+          </div>
+
+          <div
+            class="control-card"
+            style="margin-bottom:16px;padding:16px;border:1px solid #334155;border-radius:12px;"
+            *ngIf="waProvider === 'waweb'"
+          >
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              <strong style="color:#e2e8f0;">ربط واتساب Web</strong>
+              <span
+                class="staff-status-badge"
+                [class]="waWebConnected ? 'active' : 'inactive'"
+              >
+                {{ waWebStatusLabel }}
+              </span>
+            </div>
+            <p style="margin:0 0 12px;color:#94a3b8;font-size:13px;line-height:1.5;">
+              افتح واتساب على موبايل المعمل → الأجهزة المرتبطة → ربط جهاز → امسح الكود.
+              الجلسة تتخزن على السيرفر؛ بعد إعادة تشغيل Railway غالباً تفضل متصلة.
+            </p>
+            <div *ngIf="waWebQr" style="text-align:center;margin:12px 0;">
+              <img [src]="waWebQr" alt="WhatsApp QR" width="280" height="280" style="background:#fff;border-radius:8px;" />
+            </div>
+            <p *ngIf="waWebError" style="margin:0 0 10px;color:#f87171;font-size:13px;">{{ waWebError }}</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="export-btn" (click)="startWhatsAppWeb()" [disabled]="waWebBusy">
+                {{ waWebBusy ? 'جاري الربط…' : (waWebConnected ? 'تحديث الحالة' : 'ربط واتساب / إظهار QR') }}
+              </button>
+              <button type="button" class="finish-btn" (click)="logoutWhatsAppWeb()" [disabled]="waWebBusy" *ngIf="waWebConnected || waWebStatus === 'qr'">
+                فصل الجلسة
+              </button>
+            </div>
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider === 'ultramsg'">
@@ -1190,7 +1209,7 @@
             <input type="text" [(ngModel)]="waPhoneNumberId" autocomplete="off" />
           </div>
 
-          <div class="control-card" style="margin-bottom:12px;">
+          <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
             <label>Token {{ waHasToken ? '(محفوظ — اكتب جديد فقط لو هتغيره)' : '' }}</label>
             <input type="password" [(ngModel)]="waToken" placeholder="الصق التوكن هنا" autocomplete="off" />
           </div>
@@ -1199,7 +1218,14 @@
             <button type="button" class="export-btn" (click)="saveWhatsAppSettings()" [disabled]="waSaving">
               {{ waSaving ? 'جاري الحفظ…' : 'حفظ الإعدادات' }}
             </button>
-            <button type="button" class="finish-btn" (click)="runWhatsAppDailyNow()">إرسال الملخص اليومي الآن</button>
+            <button
+              type="button"
+              class="finish-btn"
+              (click)="runWhatsAppDailyNow()"
+              *ngIf="waProvider !== 'waweb'"
+            >
+              إرسال الملخص اليومي الآن
+            </button>
           </div>
 
           <div class="financial-controls">

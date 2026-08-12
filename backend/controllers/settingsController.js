@@ -5,6 +5,11 @@ const {
   reloadWhatsAppConfig,
   providerConfigured,
 } = require('../services/whatsappService');
+const {
+  startWhatsAppWeb,
+  stopWhatsAppWeb,
+  getPublicStatus,
+} = require('../services/waWebService');
 
 async function getOrCreateSettings() {
   let doc = await AppSettings.findOne({ key: 'app' });
@@ -18,11 +23,19 @@ exports.getWhatsAppSettings = async (req, res) => {
   try {
     const doc = await getOrCreateSettings();
     const wa = doc.whatsapp || {};
+    const provider = wa.provider || 'ultramsg';
+    let liveConfigured = false;
+    try {
+      await reloadWhatsAppConfig();
+      liveConfigured = providerConfigured();
+    } catch {
+      liveConfigured = false;
+    }
     return res.json({
       success: true,
       settings: {
         enabled: !!wa.enabled,
-        provider: wa.provider || 'ultramsg',
+        provider,
         instanceId: wa.instanceId || '',
         phoneNumberId: wa.phoneNumberId || '',
         dailyHour: wa.dailyHour ?? 18,
@@ -36,9 +49,9 @@ exports.getWhatsAppSettings = async (req, res) => {
         msgDaily:
           wa.msgDaily ||
           '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
-        // never send full token — only whether set
         hasToken: !!(wa.token && String(wa.token).trim()),
-        liveConfigured: providerConfigured(),
+        liveConfigured,
+        web: provider === 'waweb' ? getPublicStatus() : undefined,
       },
     });
   } catch (error) {
@@ -70,7 +83,6 @@ exports.updateWhatsAppSettings = async (req, res) => {
     if (body.msgDaily !== undefined) {
       wa.msgDaily = String(body.msgDaily || '').trim() || wa.msgDaily;
     }
-    // Only update token if non-empty string sent (keep existing otherwise)
     if (typeof body.token === 'string' && body.token.trim()) {
       wa.token = body.token.trim();
     }
@@ -82,10 +94,15 @@ exports.updateWhatsAppSettings = async (req, res) => {
     await doc.save();
     await reloadWhatsAppConfig();
 
+    if (wa.provider === 'waweb' && wa.enabled) {
+      startWhatsAppWeb().catch((e) => console.warn('[wa-web] autostart:', e.message));
+    }
+
     return res.json({
       success: true,
       message: 'تم حفظ إعدادات واتساب',
       liveConfigured: providerConfigured(),
+      web: wa.provider === 'waweb' ? getPublicStatus() : undefined,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -98,7 +115,8 @@ exports.testWhatsApp = async (req, res) => {
     if (!providerConfigured()) {
       return res.status(400).json({
         success: false,
-        message: 'واتساب مش مضبوط — عبّي Instance + Token وفعّل الإرسال',
+        message:
+          'واتساب مش جاهز — لو WhatsApp Web امسح QR واتأكد إنه متصل، أو عبّي إعدادات UltraMsg/Meta',
       });
     }
     const phone = String(req.body?.phone || req.user?.phone || '').trim();
@@ -127,11 +145,44 @@ exports.testWhatsApp = async (req, res) => {
 exports.runDailySummaryNow = async (req, res) => {
   try {
     await reloadWhatsAppConfig();
+    const doc = await AppSettings.findOne({ key: 'app' }).lean();
+    if (String(doc?.whatsapp?.provider || '') === 'waweb') {
+      return res.status(400).json({
+        success: false,
+        message: 'وضع WhatsApp Web يرسل فقط عند انتهاء الحالة — الملخص اليومي متوقف لتقليل خطر الحظر',
+      });
+    }
     if (!providerConfigured()) {
       return res.status(400).json({ success: false, message: 'واتساب مش مضبوط' });
     }
     await sendDailyReadySummaries();
     return res.json({ success: true, message: 'تم إرسال الملخص اليومي للدكاترة اللي عندهم حالات جاهزة' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getWhatsAppWebStatus = async (_req, res) => {
+  try {
+    return res.json({ success: true, ...getPublicStatus() });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.startWhatsAppWeb = async (_req, res) => {
+  try {
+    const status = await startWhatsAppWeb();
+    return res.json({ success: true, ...status });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.logoutWhatsAppWeb = async (_req, res) => {
+  try {
+    const status = await stopWhatsAppWeb(true);
+    return res.json({ success: true, message: 'تم فصل واتساب Web', ...status });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

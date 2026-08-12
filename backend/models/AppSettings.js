@@ -12,7 +12,7 @@ const appSettingsSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: false },
       provider: {
         type: String,
-        enum: ['', 'ultramsg', 'meta'],
+        enum: ['', 'ultramsg', 'meta', 'waweb'],
         default: 'ultramsg',
       },
       token: { type: String, default: '' },

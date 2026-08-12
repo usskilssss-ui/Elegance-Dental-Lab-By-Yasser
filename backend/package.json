@@ -17,6 +17,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.18",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -29,6 +31,8 @@
     "mongoose": "^7.5.0",
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",
     "uuid": "^9.0.1"
