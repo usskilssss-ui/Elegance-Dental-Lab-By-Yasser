@@ -387,6 +387,16 @@
         </button>
       </div>
 
+      <div class="stats-grid" style="margin-bottom:20px;grid-template-columns:repeat(auto-fit,minmax(180px,240px));">
+        <div class="stat-card" style="border-top:4px solid #0f766e;">
+          <div class="stat-top">
+            <span class="stat-label" style="font-size:13px;font-weight:600;color:#0f766e;">عدد حسابات الدكاترة</span>
+          </div>
+          <div class="stat-val" style="font-size:2.5rem;font-weight:800;color:#0f766e;">{{ doctorAccountsCount }}</div>
+          <div class="stat-sub">إجمالي الأكونتات المسجّلة</div>
+        </div>
+      </div>
+
       <p *ngIf="doctorLoadError" style="margin:0 0 12px;color:#dc2626;font-size:14px;">{{ doctorLoadError }}</p>
 
       <div class="staff-search">
