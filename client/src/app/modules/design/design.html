@@ -133,6 +133,7 @@
           <span class="case-phase-badge" [ngClass]="c.status">
             {{ statusLabel(c.status) }}
           </span>
+          <app-case-barcode [value]="c.caseNumber" [compact]="true"></app-case-barcode>
         </div>
 
         <!-- Col 2: People -->

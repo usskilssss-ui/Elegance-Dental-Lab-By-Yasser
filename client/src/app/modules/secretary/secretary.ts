@@ -20,6 +20,7 @@ import { SocketService } from '../../core/services/socket.service';
 import { CaseDraft, SecretaryService } from './secretary.service';
 import { PatientLabelPipe } from './patient-label.pipe';
 import { ThemeService } from '../../core/services/theme.service';
+import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 function emptyDraft(): CaseDraft {
   const today = new Date();
@@ -48,7 +49,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })

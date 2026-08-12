@@ -9,11 +9,12 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 @Component({
   selector: 'app-finishing',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
   templateUrl: './finishing.html',
   styleUrl: './finishing.css',
 })

@@ -1,0 +1,20 @@
+@if (ready) {
+  <div
+    class="case-barcode"
+    [class.case-barcode--compact]="compact"
+    title="باركود الحالة — اعمل سكان لو الورق اتقطع"
+    (click)="$event.stopPropagation()"
+  >
+    <svg
+      class="case-barcode-svg"
+      [attr.viewBox]="'0 0 ' + width + ' ' + height"
+      [attr.width]="width"
+      [attr.height]="height"
+      role="img"
+      [attr.aria-label]="'باركود ' + label"
+    >
+      <path [attr.d]="path" fill="currentColor"></path>
+    </svg>
+    <div class="case-barcode-label">{{ label }}</div>
+  </div>
+}

@@ -1,0 +1,39 @@
+.case-barcode {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px 4px;
+  margin-top: 8px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  max-width: 100%;
+  user-select: none;
+}
+
+.case-barcode-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.case-barcode-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.2;
+}
+
+.case-barcode--compact {
+  padding: 4px 6px 3px;
+  margin-top: 6px;
+  border-radius: 8px;
+}
+
+.case-barcode--compact .case-barcode-label {
+  font-size: 9px;
+}

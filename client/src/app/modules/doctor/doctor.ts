@@ -18,6 +18,7 @@ import { ThemeService } from '../../core/services/theme.service';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
+import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 function todayYmd(): string {
   const d = new Date();
@@ -60,7 +61,7 @@ export type DoctorNotif = {
 @Component({
   selector: 'app-doctor',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabelPipe],
+  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent],
   templateUrl: './doctor.html',
   styleUrls: ['../secretary/secretary.css', './doctor.css'],
 })

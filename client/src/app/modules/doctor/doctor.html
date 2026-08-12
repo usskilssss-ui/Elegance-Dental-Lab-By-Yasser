@@ -291,6 +291,7 @@
                 {{ getCasePhase(c).label }}
               </span>
             </div>
+            <app-case-barcode [value]="c.caseNumber"></app-case-barcode>
             <div class="case-people">
               <div class="patient">{{ c.patient | patientLabel }}</div>
             </div>
