@@ -1,16 +1,11 @@
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-
-const uploadRoot = path.join(__dirname, '..', 'uploads', 'cases');
-if (!fs.existsSync(uploadRoot)) {
-  fs.mkdirSync(uploadRoot, { recursive: true });
-}
+const { getCasesUploadDir } = require('../config/uploadPaths');
 
 const SCAN_EXTS = ['.ply', '.stl', '.obj'];
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadRoot),
+  destination: (_req, _file, cb) => cb(null, getCasesUploadDir()),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
     const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
@@ -33,7 +28,7 @@ const uploadCaseImage = multer({
 });
 
 const plyStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadRoot),
+  destination: (_req, _file, cb) => cb(null, getCasesUploadDir()),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
     const safeExt = SCAN_EXTS.includes(ext) ? ext : '.ply';

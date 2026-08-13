@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const http = require('http');
 const path = require('path');
+const { getUploadRoot } = require('./config/uploadPaths');
 
 // Import database connection
 const connectDB = require('./config/database');
@@ -129,6 +130,9 @@ app.use('/api/month-archive', monthArchiveRoutes);
 app.use('/api/settings', settingsRoutes);
 
 // Static files with proper CORS headers
+// Prefer UPLOAD_DIR (Railway Volume). Default local ./uploads is wiped on redeploy.
+const uploadRoot = getUploadRoot();
+console.log('[uploads] serving from', uploadRoot);
 app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || 'http://localhost:4200');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -136,8 +140,19 @@ app.use('/uploads', (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   // Uploaded files use unique names, so long immutable cache is safe and faster.
   res.header('Cache-Control', 'public, max-age=31536000, immutable');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
   next();
-}, express.static(path.join(__dirname, 'uploads')));
+}, express.static(uploadRoot, { fallthrough: true }));
+
+// Clearer 404 for missing uploaded files (usually wiped after redeploy without a Volume)
+app.use('/uploads', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'ملف الرفع غير موجود على السيرفر — ارفع السكان من جديد (بعد إضافة Volume على Railway الملفات هتفضل)',
+  });
+});
 
 // 404 handler
 app.use((req, res) => {
