@@ -5,7 +5,6 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const http = require('http');
-const path = require('path');
 const { getUploadRoot } = require('./config/uploadPaths');
 
 // Import database connection
