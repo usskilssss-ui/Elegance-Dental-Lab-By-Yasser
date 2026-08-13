@@ -1,0 +1,76 @@
+<div class="doctors-page">
+  <button
+    type="button"
+    class="icon-btn"
+    aria-label="تبديل المظهر"
+    (click)="themeService.toggleTheme()"
+    title="تبديل المظهر"
+  >
+    <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </svg>
+    <svg *ngIf="themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </button>
+
+  <div class="doctors-shell" dir="rtl">
+    <header class="doctors-header">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">
+            <path d="M 32,25 C 20,25 15,45 25,68 C 32,82 46,85 48,72 C 44,64 36,48 40,36 C 44,24 52,28 58,26" stroke="url(#doctors-logo-grad)" stroke-width="5.5" stroke-linecap="round" />
+            <path d="M 68,25 C 80,25 85,45 75,68 C 68,82 54,85 52,72 C 56,64 64,48 60,36 C 56,24 48,28 42,26" stroke="url(#doctors-logo-grad)" stroke-width="5.5" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="doctors-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#2563eb" />
+                <stop offset="100%" stop-color="#0d9488" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span class="brand-name">Elegance Dental Lab</span>
+      </div>
+      <p class="kicker">للدكاترة</p>
+      <h1 class="title">منصتكم لمتابعة الحالات بكل وضوح</h1>
+      <p class="subtitle">
+        تابعوا حالاتكم لحظة بلحظة، ارفعوا الإسكانات، واستلموا إشعار واتساب عند الاكتمال —
+        أقل مكالمات «فين حالتي؟» وأكثر راحة للعيادة والمعمل.
+      </p>
+      <div class="cta-row">
+        <a routerLink="/login" class="btn-primary">تسجيل الدخول</a>
+        <a
+          href="https://wa.me/201033937424"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn-secondary"
+        >تواصل مع المعمل لفتح حساب</a>
+      </div>
+    </header>
+
+    <section class="features" aria-label="مميزات المنصة للدكاترة">
+      <article class="feature" *ngFor="let f of features">
+        <div class="feature-accent" aria-hidden="true"></div>
+        <h2 class="feature-title">{{ f.title }}</h2>
+        <p class="feature-desc">{{ f.desc }}</p>
+      </article>
+    </section>
+
+    <footer class="doctors-footer">
+      <p class="footer-lead">جاهزون للبدء؟</p>
+      <div class="cta-row">
+        <a routerLink="/login" class="btn-primary">الدخول للمنصة</a>
+        <a routerLink="/login" class="link-back">العودة لصفحة الدخول</a>
+      </div>
+      <p class="footer-note">V2.4.0 CLINICAL EDITION · Elegance Dental Lab</p>
+    </footer>
+  </div>
+</div>

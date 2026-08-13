@@ -12,12 +12,15 @@ import { RequesterComponent } from './modules/requester/requester';
 import { EntryComponent } from './modules/entry/entry';
 import { DoctorComponent } from './modules/doctor/doctor';
 import { StationScanComponent } from './modules/station-scan/station-scan';
+import { ForDoctorsComponent } from './modules/for-doctors/for-doctors';
 
 /** Admin may open designer / secretary / finisher workspaces from the admin UI. */
 const WITH_ADMIN: (r: AppRole) => AppRole[] = r => [r, 'admin'];
 
 export const routes: Routes = [
   { path: 'login', component: Login, canActivate: [guestGuard] },
+  { path: 'for-doctors', component: ForDoctorsComponent },
+  { path: 'doctors', pathMatch: 'full', redirectTo: 'for-doctors' },
 
   {
     path: 'scan',
