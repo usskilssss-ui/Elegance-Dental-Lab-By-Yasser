@@ -19,7 +19,7 @@
   </button>
 
   @if (open) {
-    <div class="case-barcode-overlay" role="presentation" (click)="close($event)">
+    <div #overlay class="case-barcode-overlay" role="presentation" (click)="close($event)">
       <div
         class="case-barcode-panel"
         role="dialog"
