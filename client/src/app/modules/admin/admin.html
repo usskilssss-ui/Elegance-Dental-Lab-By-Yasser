@@ -1234,12 +1234,21 @@
             </button>
           </div>
 
-          <div class="financial-controls">
-            <div class="control-card" style="flex:1;">
+          <div class="financial-controls" style="flex-direction:column;align-items:stretch;gap:12px;">
+            <div class="control-card">
               <label>رقم اختبار (مثال: 010xxxxxxxx)</label>
               <input type="text" [(ngModel)]="waTestPhone" placeholder="رقم موبايلك" />
             </div>
-            <button type="button" class="export-btn" style="align-self:flex-end;" (click)="testWhatsApp()">إرسال رسالة تجربة</button>
+            <div class="control-card">
+              <label>نص الرسالة التجريبية</label>
+              <textarea
+                rows="4"
+                [(ngModel)]="waTestMessage"
+                placeholder="اكتب الرسالة اللي هتتبعت في التجربة"
+                style="width:100%;resize:vertical;min-height:88px;"
+              ></textarea>
+            </div>
+            <button type="button" class="export-btn" style="align-self:flex-start;" (click)="testWhatsApp()">إرسال رسالة تجربة</button>
           </div>
 
           <p *ngIf="waMsg" style="margin-top:14px;color:#38bdf8;font-size:14px;">{{ waMsg }}</p>

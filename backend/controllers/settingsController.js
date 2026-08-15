@@ -126,10 +126,11 @@ exports.testWhatsApp = async (req, res) => {
         message: 'اكتب رقم موبايل للاختبار (مثال: 01xxxxxxxxx)',
       });
     }
-    const result = await sendWhatsAppText(
-      phone,
-      'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.'
-    );
+    const custom = String(req.body?.message || '').trim();
+    const text =
+      custom ||
+      'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
+    const result = await sendWhatsAppText(phone, text);
     if (!result.ok) {
       return res.status(400).json({
         success: false,
