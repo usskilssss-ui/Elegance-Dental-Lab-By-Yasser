@@ -1239,6 +1239,14 @@
               <label>رقم اختبار (مثال: 010xxxxxxxx)</label>
               <input type="text" [(ngModel)]="waTestPhone" placeholder="رقم موبايلك" />
             </div>
+            <div class="control-card" style="flex:2;">
+              <label>نص رسالة الاختبار (اختياري)</label>
+              <textarea
+                [(ngModel)]="waTestMessage"
+                rows="3"
+                placeholder="اكتب أي رسالة تريد إرسالها للاختبار… (لو فاضي هتتبعت الرسالة الافتراضية)"
+              ></textarea>
+            </div>
             <button type="button" class="export-btn" style="align-self:flex-end;" (click)="testWhatsApp()">إرسال رسالة تجربة</button>
           </div>
 

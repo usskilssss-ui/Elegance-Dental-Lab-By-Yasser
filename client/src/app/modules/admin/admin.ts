@@ -1746,6 +1746,7 @@ export class Admin implements OnInit, OnDestroy {
   waHasToken = false;
   waLiveConfigured = false;
   waTestPhone = '';
+  waTestMessage = '';
   waMsg = '';
   waSaving = false;
   waWebStatus = 'disconnected';
@@ -1958,6 +1959,7 @@ export class Admin implements OnInit, OnDestroy {
     this.http
       .post<{ success?: boolean; message?: string }>(`${environment.apiUrl}/settings/whatsapp/test`, {
         phone: this.waTestPhone,
+        message: this.waTestMessage,
       })
       .subscribe({
         next: (res) => {
