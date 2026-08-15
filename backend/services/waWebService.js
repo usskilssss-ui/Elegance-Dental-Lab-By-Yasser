@@ -83,11 +83,13 @@ async function useMongoAuthState() {
 }
 
 function getPublicStatus() {
+  const linked = linkedAccountDigits();
   return {
     status: connectionStatus,
     connected: connectionStatus === 'open',
     qr: connectionStatus === 'qr' ? lastQrDataUrl : '',
     error: lastError || '',
+    linkedPhone: linked || '',
   };
 }
 
@@ -106,6 +108,143 @@ function scheduleReconnect(delayMs = 1500) {
       lastError = e.message || String(e);
     });
   }, delayMs);
+}
+
+/**
+ * Normalize to E.164 digits without +.
+ * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
+ */
+function normalizeWaWebPhone(raw) {
+  let p = String(raw || '').replace(/\D/g, '');
+  if (!p) return '';
+  if (p.startsWith('00')) p = p.slice(2);
+  // Local EG: 01xxxxxxxxx (11 digits)
+  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
+  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
+  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
+  // Already has country code but was typed as 0201... (13 digits)
+  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
+  return p;
+}
+
+function linkedAccountDigits() {
+  const candidates = [
+    sock?.user?.id,
+    sock?.authState?.creds?.me?.id,
+    sock?.user?.jid,
+  ];
+  for (const id of candidates) {
+    const raw = String(id || '').split(':')[0].split('@')[0].replace(/\D/g, '');
+    // Real phone JIDs are typically 10–15 digits; LIDs are often much longer
+    if (raw && raw.length >= 10 && raw.length <= 15) return raw;
+  }
+  return '';
+}
+
+function isSelfTarget(digits, jid) {
+  const selfDigits = linkedAccountDigits();
+  if (selfDigits && selfDigits === digits) return true;
+  const selfId = String(sock?.user?.id || sock?.authState?.creds?.me?.id || '');
+  if (!selfId || !jid) return false;
+  const selfBare = selfId.split(':')[0];
+  const jidBare = String(jid).split(':')[0];
+  return !!selfBare && selfBare === jidBare;
+}
+
+async function resolveWhatsAppJid(digits) {
+  const fallback = `${digits}@s.whatsapp.net`;
+  if (typeof sock.onWhatsApp !== 'function') {
+    return { jid: fallback, exists: null, via: 'fallback' };
+  }
+  try {
+    // Prefer bare digits — Baileys resolves PN → current jid (incl. LID migration)
+    let results = await sock.onWhatsApp(digits);
+    if (!Array.isArray(results) || !results.length) {
+      results = await sock.onWhatsApp(fallback);
+    }
+    const hit = Array.isArray(results) ? results.find((r) => r != null) : null;
+    if (hit && hit.exists === false) {
+      return { jid: null, exists: false, via: 'onWhatsApp' };
+    }
+    if (hit?.jid) {
+      return { jid: hit.jid, exists: true, via: 'onWhatsApp' };
+    }
+  } catch (err) {
+    console.warn('[wa-web] onWhatsApp failed, using fallback jid:', err.message);
+  }
+  return { jid: fallback, exists: null, via: 'fallback' };
+}
+
+async function sendWhatsAppWebText(phone, body) {
+  if (!sock || connectionStatus !== 'open') {
+    return { ok: false, error: 'واتساب Web مش متصل — امسح QR من الأدمن' };
+  }
+  const to = normalizeWaWebPhone(phone);
+  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
+  if (to.length < 10 || to.length > 15) {
+    return {
+      ok: false,
+      error: `رقم غير مكتمل بعد التطبيع (${to}) — استخدم 01xxxxxxxxx أو 201xxxxxxxxx`,
+    };
+  }
+
+  try {
+    const resolved = await resolveWhatsAppJid(to);
+    if (resolved.exists === false || !resolved.jid) {
+      console.warn('[wa-web] number not on WhatsApp:', to);
+      return {
+        ok: false,
+        error: `الرقم ${to} مش مسجّل على واتساب (بعد التطبيع من ${String(phone)})`,
+        to,
+      };
+    }
+
+    const jid = resolved.jid;
+    if (isSelfTarget(to, jid)) {
+      console.warn('[wa-web] send target is the linked account itself:', to, jid);
+      return {
+        ok: false,
+        error:
+          'ده رقم واتساب المعمل المربوط نفسه — الرسالة مش هتوصلك كإشعار. جرّب رقم موبايل تاني عليه واتساب',
+        to,
+        jid,
+        self: true,
+      };
+    }
+
+    const text = String(body || '');
+    console.log('[wa-web] sending to', jid, `(from ${String(phone)} → ${to}, via ${resolved.via})`);
+
+    let sent;
+    try {
+      sent = await sock.sendMessage(jid, { text });
+    } catch (primaryErr) {
+      console.warn('[wa-web] sendMessage failed, retry once:', primaryErr.message);
+      await new Promise((r) => setTimeout(r, 600));
+      sent = await sock.sendMessage(jid, { text });
+    }
+
+    if (!sent?.key?.id) {
+      console.warn('[wa-web] sendMessage returned empty/unconfirmed result for', jid, sent);
+      return {
+        ok: false,
+        error: 'واتساب قبل الطلب لكن مفيش تأكيد إرسال — حاول تاني أو أعد الربط',
+        to,
+        jid,
+      };
+    }
+
+    console.log('[wa-web] send OK', {
+      to,
+      jid,
+      messageId: sent.key.id,
+      remoteJid: sent.key.remoteJid || jid,
+    });
+    return { ok: true, to, jid, messageId: sent.key.id };
+  } catch (err) {
+    console.warn('[wa-web] send failed:', to, err.message);
+    return { ok: false, error: err.message || 'send failed', to };
+  }
 }
 
 async function startWhatsAppWeb(options = {}) {
@@ -277,125 +416,6 @@ async function stopWhatsAppWeb(logout = false) {
     lastQrDataUrl = '';
   }
   return getPublicStatus();
-}
-
-/**
- * Normalize to E.164 digits without +.
- * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
- */
-function normalizeWaWebPhone(raw) {
-  let p = String(raw || '').replace(/\D/g, '');
-  if (!p) return '';
-  if (p.startsWith('00')) p = p.slice(2);
-  // Local EG: 01xxxxxxxxx (11 digits)
-  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
-  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
-  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
-  // Already has country code but was typed as 0201... (13 digits)
-  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
-  return p;
-}
-
-function linkedAccountDigits() {
-  const id = sock?.user?.id || '';
-  // e.g. "201033937424:12@s.whatsapp.net" or "201033937424@s.whatsapp.net"
-  return String(id).split(':')[0].split('@')[0].replace(/\D/g, '');
-}
-
-async function resolveWhatsAppJid(digits) {
-  const fallback = `${digits}@s.whatsapp.net`;
-  if (typeof sock.onWhatsApp !== 'function') {
-    return { jid: fallback, exists: null, via: 'fallback' };
-  }
-  try {
-    // Prefer bare digits — Baileys resolves PN → current jid (incl. LID migration)
-    let results = await sock.onWhatsApp(digits);
-    if (!Array.isArray(results) || !results.length) {
-      results = await sock.onWhatsApp(fallback);
-    }
-    const hit = Array.isArray(results) ? results.find((r) => r != null) : null;
-    if (hit && hit.exists === false) {
-      return { jid: null, exists: false, via: 'onWhatsApp' };
-    }
-    if (hit?.jid) {
-      return { jid: hit.jid, exists: true, via: 'onWhatsApp' };
-    }
-  } catch (err) {
-    console.warn('[wa-web] onWhatsApp failed, using fallback jid:', err.message);
-  }
-  return { jid: fallback, exists: null, via: 'fallback' };
-}
-
-async function sendWhatsAppWebText(phone, body) {
-  if (!sock || connectionStatus !== 'open') {
-    return { ok: false, error: 'واتساب Web مش متصل — امسح QR من الأدمن' };
-  }
-  const to = normalizeWaWebPhone(phone);
-  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
-  if (to.length < 10 || to.length > 15) {
-    return {
-      ok: false,
-      error: `رقم غير مكتمل بعد التطبيع (${to}) — استخدم 01xxxxxxxxx أو 201xxxxxxxxx`,
-    };
-  }
-
-  const selfDigits = linkedAccountDigits();
-  if (selfDigits && selfDigits === to) {
-    console.warn('[wa-web] send target is the linked account itself:', to);
-    return {
-      ok: false,
-      error:
-        'لا يمكن الاعتماد على إرسال لنفس رقم الجهاز المربوط — جرّب رقم واتساب آخر للاختبار',
-      to,
-      self: true,
-    };
-  }
-
-  try {
-    const resolved = await resolveWhatsAppJid(to);
-    if (resolved.exists === false || !resolved.jid) {
-      console.warn('[wa-web] number not on WhatsApp:', to);
-      return {
-        ok: false,
-        error: `الرقم ${to} مش مسجّل على واتساب (بعد التطبيع من ${String(phone)})`,
-        to,
-      };
-    }
-
-    const jid = resolved.jid;
-    const text = String(body || '');
-    console.log('[wa-web] sending to', jid, `(from ${String(phone)} → ${to}, via ${resolved.via})`);
-
-    // Explicit options help some Baileys builds avoid silent drops after LID migration
-    let sent;
-    try {
-      sent = await sock.sendMessage(jid, { text }, { messageId: undefined });
-    } catch (primaryErr) {
-      console.warn('[wa-web] sendMessage primary failed, retrying bare:', primaryErr.message);
-      sent = await sock.sendMessage(jid, { text });
-    }
-
-    if (!sent?.key?.id) {
-      console.warn('[wa-web] sendMessage returned empty/unconfirmed result for', jid, sent);
-      return {
-        ok: false,
-        error: 'واتساب قبل الطلب لكن مفيش تأكيد إرسال — حاول تاني أو أعد الربط',
-        to,
-        jid,
-      };
-    }
-
-    console.log('[wa-web] send OK', {
-      to,
-      jid,
-      messageId: sent.key.id,
-      remoteJid: sent.key.remoteJid || jid,
-    });
-    return { ok: true, to, jid, messageId: sent.key.id };
-  } catch (err) {
-    console.warn('[wa-web] send failed:', to, err.message);
-    return { ok: false, error: err.message || 'send failed', to };
-  }
 }
 
 function isWhatsAppWebConnected() {
