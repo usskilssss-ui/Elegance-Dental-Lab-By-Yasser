@@ -1,0 +1,18 @@
+---
+description: Auto commit and push after Elegance coding changes
+alwaysApply: true
+---
+
+# Auto commit + push (Elegance)
+
+When Maro requests any code change for the Elegance Dental Lab project, after finishing the work:
+
+1. Stage only the files related to that change.
+2. Create a concise commit (follow repo commit style; do not ask first).
+3. Push to `fork` immediately (`git push -u fork HEAD` or current tracking remote that works).
+4. If `origin` push fails (403), note that a PR/merge to `ussskils22-prog/main` is still needed — do not block on origin.
+5. Never force-push; never amend unless the existing amend rules are fully met.
+6. Do not commit secrets (`.env`, tokens).
+7. Briefly tell Maro the commit hash and push result when done.
+
+This overrides the default "only commit when asked" preference for this project only when a coding change was actually made.
