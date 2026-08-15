@@ -363,10 +363,20 @@ async function sendWhatsAppWebText(phone, body) {
     }
 
     const jid = resolved.jid;
+    const text = String(body || '');
     console.log('[wa-web] sending to', jid, `(from ${String(phone)} → ${to}, via ${resolved.via})`);
-    const sent = await sock.sendMessage(jid, { text: String(body || '') });
-    if (!sent?.key) {
-      console.warn('[wa-web] sendMessage returned empty result for', jid);
+
+    // Explicit options help some Baileys builds avoid silent drops after LID migration
+    let sent;
+    try {
+      sent = await sock.sendMessage(jid, { text }, { messageId: undefined });
+    } catch (primaryErr) {
+      console.warn('[wa-web] sendMessage primary failed, retrying bare:', primaryErr.message);
+      sent = await sock.sendMessage(jid, { text });
+    }
+
+    if (!sent?.key?.id) {
+      console.warn('[wa-web] sendMessage returned empty/unconfirmed result for', jid, sent);
       return {
         ok: false,
         error: 'واتساب قبل الطلب لكن مفيش تأكيد إرسال — حاول تاني أو أعد الربط',
@@ -374,7 +384,14 @@ async function sendWhatsAppWebText(phone, body) {
         jid,
       };
     }
-    return { ok: true, to, jid, messageId: sent.key.id || '' };
+
+    console.log('[wa-web] send OK', {
+      to,
+      jid,
+      messageId: sent.key.id,
+      remoteJid: sent.key.remoteJid || jid,
+    });
+    return { ok: true, to, jid, messageId: sent.key.id };
   } catch (err) {
     console.warn('[wa-web] send failed:', to, err.message);
     return { ok: false, error: err.message || 'send failed', to };

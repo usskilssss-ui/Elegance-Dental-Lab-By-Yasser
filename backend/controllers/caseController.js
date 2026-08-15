@@ -1048,11 +1048,22 @@ exports.scanAtStation = async (req, res) => {
     if (targetStage === 'completed' || targetStage === 'exited') {
       try {
         const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-        notifyDoctorCaseStatus(
-          dentalCase,
-          targetStage === 'exited' ? 'exited' : 'completed'
-        ).catch(() => {});
-      } catch (_) {}
+        const kind = targetStage === 'exited' ? 'exited' : 'completed';
+        notifyDoctorCaseStatus(dentalCase, kind).catch((err) =>
+          console.warn(
+            '[whatsapp] scanAtStation notify failed:',
+            dentalCase?.caseNumber,
+            kind,
+            err?.message || err
+          )
+        );
+      } catch (err) {
+        console.warn(
+          '[whatsapp] scanAtStation notify setup failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        );
+      }
     }
 
     return res.status(200).json({
@@ -1120,8 +1131,20 @@ exports.completeCase = async (req, res) => {
 
     try {
       const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-      notifyDoctorCaseStatus(dentalCase, 'completed').catch(() => {});
-    } catch (_) {}
+      notifyDoctorCaseStatus(dentalCase, 'completed').catch((err) =>
+        console.warn(
+          '[whatsapp] completeCase notify failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        )
+      );
+    } catch (err) {
+      console.warn(
+        '[whatsapp] completeCase notify setup failed:',
+        dentalCase?.caseNumber,
+        err?.message || err
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -1271,8 +1294,20 @@ exports.exitCase = async (req, res) => {
 
     try {
       const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-      notifyDoctorCaseStatus(dentalCase, 'exited').catch(() => {});
-    } catch (_) {}
+      notifyDoctorCaseStatus(dentalCase, 'exited').catch((err) =>
+        console.warn(
+          '[whatsapp] exitCase notify failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        )
+      );
+    } catch (err) {
+      console.warn(
+        '[whatsapp] exitCase notify setup failed:',
+        dentalCase?.caseNumber,
+        err?.message || err
+      );
+    }
 
     return res.status(200).json({
       success: true,

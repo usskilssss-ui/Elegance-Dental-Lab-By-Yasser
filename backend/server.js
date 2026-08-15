@@ -199,9 +199,14 @@ const startServer = async () => {
         reloadWhatsAppConfig()
           .then((cfg) => {
             if (cfg?.enabled && cfg.provider === 'waweb') {
+              console.log('[wa-web] boot: starting WhatsApp Web session…');
               const { startWhatsAppWeb } = require('./services/waWebService');
-              return startWhatsAppWeb();
+              return startWhatsAppWeb().then((st) => {
+                console.log('[wa-web] boot status:', st?.status, st?.connected ? 'connected' : '');
+                return st;
+              });
             }
+            console.log('[wa-web] boot: skipped (enabled=', !!cfg?.enabled, 'provider=', cfg?.provider || 'none', ')');
             return null;
           })
           .catch((e) => console.warn('[wa-web] boot start skipped:', e.message));
