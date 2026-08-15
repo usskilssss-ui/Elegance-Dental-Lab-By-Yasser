@@ -300,8 +300,6 @@ async function stopWhatsAppWeb(logout = false) {
       } catch {
         /* ignore */
       }
-      const Model = WaAuth();
-      await Model.deleteMany({});
     } else if (sock) {
       try {
         sock.end(undefined);
@@ -313,6 +311,15 @@ async function stopWhatsAppWeb(logout = false) {
     sock = null;
     connectionStatus = 'disconnected';
     lastQrDataUrl = '';
+    // Always wipe Mongo session on logout — stale lab creds can show "connected" but not deliver
+    if (logout) {
+      try {
+        await WaAuth().deleteMany({});
+        console.log('[wa-web] auth session cleared from Mongo');
+      } catch (err) {
+        console.warn('[wa-web] failed clearing auth:', err.message);
+      }
+    }
   }
   return getPublicStatus();
 }
