@@ -279,12 +279,51 @@ async function stopWhatsAppWeb(logout = false) {
   return getPublicStatus();
 }
 
+/**
+ * Normalize to E.164 digits without +.
+ * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
+ */
 function normalizeWaWebPhone(raw) {
   let p = String(raw || '').replace(/\D/g, '');
   if (!p) return '';
   if (p.startsWith('00')) p = p.slice(2);
+  // Local EG: 01xxxxxxxxx (11 digits)
   if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
+  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
+  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
+  // Already has country code but was typed as 0201... (13 digits)
+  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
   return p;
+}
+
+function linkedAccountDigits() {
+  const id = sock?.user?.id || '';
+  // e.g. "201033937424:12@s.whatsapp.net" or "201033937424@s.whatsapp.net"
+  return String(id).split(':')[0].split('@')[0].replace(/\D/g, '');
+}
+
+async function resolveWhatsAppJid(digits) {
+  const fallback = `${digits}@s.whatsapp.net`;
+  if (typeof sock.onWhatsApp !== 'function') {
+    return { jid: fallback, exists: null, via: 'fallback' };
+  }
+  try {
+    // Prefer bare digits — Baileys resolves PN → current jid (incl. LID migration)
+    let results = await sock.onWhatsApp(digits);
+    if (!Array.isArray(results) || !results.length) {
+      results = await sock.onWhatsApp(fallback);
+    }
+    const hit = Array.isArray(results) ? results.find((r) => r != null) : null;
+    if (hit && hit.exists === false) {
+      return { jid: null, exists: false, via: 'onWhatsApp' };
+    }
+    if (hit?.jid) {
+      return { jid: hit.jid, exists: true, via: 'onWhatsApp' };
+    }
+  } catch (err) {
+    console.warn('[wa-web] onWhatsApp failed, using fallback jid:', err.message);
+  }
+  return { jid: fallback, exists: null, via: 'fallback' };
 }
 
 async function sendWhatsAppWebText(phone, body) {
@@ -292,14 +331,53 @@ async function sendWhatsAppWebText(phone, body) {
     return { ok: false, error: 'واتساب Web مش متصل — امسح QR من الأدمن' };
   }
   const to = normalizeWaWebPhone(phone);
-  if (!to) return { ok: false, error: 'no-phone' };
+  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
+  if (to.length < 10 || to.length > 15) {
+    return {
+      ok: false,
+      error: `رقم غير مكتمل بعد التطبيع (${to}) — استخدم 01xxxxxxxxx أو 201xxxxxxxxx`,
+    };
+  }
+
+  const selfDigits = linkedAccountDigits();
+  if (selfDigits && selfDigits === to) {
+    console.warn('[wa-web] send target is the linked account itself:', to);
+    return {
+      ok: false,
+      error:
+        'لا يمكن الاعتماد على إرسال لنفس رقم الجهاز المربوط — جرّب رقم واتساب آخر للاختبار',
+      to,
+      self: true,
+    };
+  }
+
   try {
-    const jid = `${to}@s.whatsapp.net`;
-    await sock.sendMessage(jid, { text: String(body || '') });
-    return { ok: true };
+    const resolved = await resolveWhatsAppJid(to);
+    if (resolved.exists === false || !resolved.jid) {
+      console.warn('[wa-web] number not on WhatsApp:', to);
+      return {
+        ok: false,
+        error: `الرقم ${to} مش مسجّل على واتساب (بعد التطبيع من ${String(phone)})`,
+        to,
+      };
+    }
+
+    const jid = resolved.jid;
+    console.log('[wa-web] sending to', jid, `(from ${String(phone)} → ${to}, via ${resolved.via})`);
+    const sent = await sock.sendMessage(jid, { text: String(body || '') });
+    if (!sent?.key) {
+      console.warn('[wa-web] sendMessage returned empty result for', jid);
+      return {
+        ok: false,
+        error: 'واتساب قبل الطلب لكن مفيش تأكيد إرسال — حاول تاني أو أعد الربط',
+        to,
+        jid,
+      };
+    }
+    return { ok: true, to, jid, messageId: sent.key.id || '' };
   } catch (err) {
-    console.warn('[wa-web] send failed:', err.message);
-    return { ok: false, error: err.message || 'send failed' };
+    console.warn('[wa-web] send failed:', to, err.message);
+    return { ok: false, error: err.message || 'send failed', to };
   }
 }
 
@@ -313,4 +391,5 @@ module.exports = {
   getPublicStatus,
   sendWhatsAppWebText,
   isWhatsAppWebConnected,
+  normalizeWaWebPhone,
 };

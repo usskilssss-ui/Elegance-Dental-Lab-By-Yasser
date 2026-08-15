@@ -133,13 +133,28 @@ exports.testWhatsApp = async (req, res) => {
       customMessage ||
       'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
     const result = await sendWhatsAppText(phone, testMessage);
-    if (!result.ok) {
+    if (!result || result.skipped || !result.ok) {
       return res.status(400).json({
         success: false,
-        message: result.error || 'فشل إرسال رسالة الاختبار',
+        message:
+          result?.error ||
+          (result?.skipped
+            ? 'تم تخطي الإرسال — واتساب مش جاهز/متصل'
+            : 'فشل إرسال رسالة الاختبار'),
+        detail: {
+          to: result?.to || undefined,
+          jid: result?.jid || undefined,
+          skipped: !!result?.skipped,
+          self: !!result?.self,
+        },
       });
     }
-    return res.json({ success: true, message: 'تم إرسال رسالة الاختبار' });
+    return res.json({
+      success: true,
+      message: 'تم إرسال رسالة الاختبار',
+      to: result.to || undefined,
+      jid: result.jid || undefined,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

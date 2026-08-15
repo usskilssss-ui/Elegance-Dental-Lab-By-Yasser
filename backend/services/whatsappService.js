@@ -122,11 +122,20 @@ function getConfig() {
   return cachedConfig;
 }
 
+/**
+ * Normalize to E.164 digits without +.
+ * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
+ */
 function normalizePhone(raw) {
   let p = String(raw || '').replace(/\D/g, '');
   if (!p) return '';
   if (p.startsWith('00')) p = p.slice(2);
+  // Local EG: 01xxxxxxxxx (11 digits)
   if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
+  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
+  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
+  // Typed as 0201... (13 digits)
+  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
   return p;
 }
 
@@ -153,10 +162,14 @@ async function sendWhatsAppText(phone, body) {
   if (!cachedConfig) await reloadWhatsAppConfig();
   if (!providerConfigured()) {
     console.log('[whatsapp] skipped (not configured):', String(body).slice(0, 80));
-    return { ok: false, skipped: true };
+    return {
+      ok: false,
+      skipped: true,
+      error: 'واتساب مش مضبوط أو مش متصل حالياً',
+    };
   }
   const to = normalizePhone(phone);
-  if (!to) return { ok: false, error: 'no-phone' };
+  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
 
   const c = getConfig();
   const text = String(body);
@@ -164,7 +177,19 @@ async function sendWhatsAppText(phone, body) {
   try {
     if (c.provider === 'waweb') {
       const { sendWhatsAppWebText } = require('./waWebService');
-      return sendWhatsAppWebText(phone, text);
+      // Always await — surface skipped/errors; pass raw phone (waWeb normalizes too)
+      const result = await sendWhatsAppWebText(phone, text);
+      if (!result?.ok) {
+        console.warn(
+          '[whatsapp] waweb send not ok:',
+          result?.error || result?.skipped || 'failed',
+          'phone=',
+          phone,
+          'normalized=',
+          to
+        );
+      }
+      return result;
     }
 
     if (c.provider === 'meta') {
@@ -186,7 +211,7 @@ async function sendWhatsAppText(phone, body) {
         console.warn('[whatsapp] meta error:', res.status, errText);
         return { ok: false, error: errText };
       }
-      return { ok: true };
+      return { ok: true, to };
     }
 
     if (c.provider === 'ultramsg') {
@@ -209,13 +234,17 @@ async function sendWhatsAppText(phone, body) {
         console.warn('[whatsapp] ultramsg error:', res.status, errText);
         return { ok: false, error: errText };
       }
-      return { ok: true };
+      return { ok: true, to };
     }
   } catch (err) {
     console.warn('[whatsapp] send failed:', err.message);
     return { ok: false, error: err.message };
   }
-  return { ok: false, skipped: true };
+  return {
+    ok: false,
+    skipped: true,
+    error: `مزود واتساب غير معروف (${c.provider || 'none'})`,
+  };
 }
 
 function normalizeDoctorKey(name) {
@@ -381,4 +410,5 @@ module.exports = {
   scheduleDailyWhatsAppSummary,
   providerConfigured,
   reloadWhatsAppConfig,
+  normalizePhone,
 };
