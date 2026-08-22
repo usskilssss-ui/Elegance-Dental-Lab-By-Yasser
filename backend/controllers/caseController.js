@@ -2,8 +2,18 @@ const DentalCase = require('../models/DentalCase');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const DoctorPricing = require('../models/DoctorPricing');
+const DoctorPayment = require('../models/DoctorPayment');
 const { validationResult } = require('express-validator');
 const { emitToAll } = require('../services/socketService');
+const {
+  normalizeDoctorKey: normalizeDoctorKeyStrict,
+  doctorKeysMatch,
+  isExcludedWorkCaseType: isExcludedWorkCaseTypeShared,
+  parseNotesMeta: parseNotesMetaShared,
+  calculateCaseCost,
+  findPricingForDoctor,
+} = require('../services/casePricingService');
 
 function normalizeDocId(ref) {
   if (ref === undefined || ref === null) return '';
@@ -531,6 +541,124 @@ exports.getFinancialReport = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch financial report',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Read-only account summary for a doctor portal (exited billable cases + pricing).
+ * Doctor: always self (req.user.fullName). Admin: ?doctor= (same name as ?as=).
+ * Optional ?year=&month= filter by case createdAt.
+ */
+exports.getDoctorAccountSummary = async (req, res) => {
+  try {
+    const role = req.user?.role;
+    let doctorName = '';
+
+    if (role === 'doctor') {
+      doctorName = String(req.user.fullName || '').trim();
+    } else if (role === 'admin') {
+      doctorName = String(req.query.doctor || '').trim();
+      if (!doctorName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Query parameter doctor is required for admin',
+        });
+      }
+    } else {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    if (!doctorName) {
+      return res.status(400).json({ success: false, message: 'Doctor name is required' });
+    }
+
+    const year = req.query.year ? Number(req.query.year) : null;
+    const month = req.query.month ? Number(req.query.month) : null;
+
+    const [cases, pricings, payments] = await Promise.all([
+      DentalCase.find({ currentStage: 'exited' })
+        .select(
+          'caseNumber patientName caseType notes referringDoctor salaryAmount paymentStatus paidAt createdAt updatedAt stageTimestamps'
+        )
+        .sort({ createdAt: -1 })
+        .lean(),
+      DoctorPricing.find().lean(),
+      DoctorPayment.find().lean(),
+    ]);
+
+    const pricingDoc = findPricingForDoctor(pricings, doctorName);
+    const prices = pricingDoc?.prices || null;
+
+    const billableCases = [];
+    let totalDue = 0;
+    let paidFromCases = 0;
+
+    for (const doc of cases) {
+      const meta = parseNotesMetaShared(doc.notes || '');
+      const caseDoctor = String(
+        doc.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
+
+      if (meta.isRedoCase || meta.isModificationCase) continue;
+      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+
+      const receivedAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
+      if (year && Number.isFinite(year) && receivedAt.getFullYear() !== year) continue;
+      if (month && Number.isFinite(month) && receivedAt.getMonth() + 1 !== month) continue;
+
+      const amount = calculateCaseCost(doc.caseType, meta, prices);
+      const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
+      const salaryAmount = Number(doc.salaryAmount || 0);
+      if (paymentStatus === 'paid' && Number.isFinite(salaryAmount)) {
+        paidFromCases += salaryAmount;
+      }
+
+      totalDue += amount;
+      billableCases.push({
+        id: String(doc._id),
+        caseNumber: String(doc.caseNumber || ''),
+        patientName: String(doc.patientName || ''),
+        caseType: String(doc.caseType || ''),
+        amount,
+        paymentStatus,
+        salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
+        receivedAt: receivedAt.toISOString(),
+        exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+      });
+    }
+
+    const paidFromPayments = payments
+      .filter((p) => doctorKeysMatch(p.doctorName, doctorName))
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const totalPaid = paidFromCases + paidFromPayments;
+    const remaining = totalDue - totalPaid;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        doctorName,
+        doctorKey: normalizeDoctorKeyStrict(doctorName),
+        totalDue,
+        totalPaid,
+        remaining,
+        paidFromCases,
+        paidFromPayments,
+        caseCount: billableCases.length,
+        cases: billableCases,
+        filters: {
+          year: year && Number.isFinite(year) ? year : null,
+          month: month && Number.isFinite(month) ? month : null,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch doctor account summary',
       error: error.message,
     });
   }
