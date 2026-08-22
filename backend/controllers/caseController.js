@@ -12,6 +12,7 @@ const {
   isExcludedWorkCaseType: isExcludedWorkCaseTypeShared,
   parseNotesMeta: parseNotesMetaShared,
   calculateCaseCost,
+  calculateCaseCostBreakdown,
   findPricingForDoctor,
 } = require('../services/casePricingService');
 
@@ -609,7 +610,8 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (year && Number.isFinite(year) && receivedAt.getFullYear() !== year) continue;
       if (month && Number.isFinite(month) && receivedAt.getMonth() + 1 !== month) continue;
 
-      const amount = calculateCaseCost(doc.caseType, meta, prices);
+      const breakdown = calculateCaseCostBreakdown(doc.caseType, meta, prices);
+      const amount = breakdown.total;
       const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
       const salaryAmount = Number(doc.salaryAmount || 0);
       if (paymentStatus === 'paid' && Number.isFinite(salaryAmount)) {
@@ -623,6 +625,9 @@ exports.getDoctorAccountSummary = async (req, res) => {
         patientName: String(doc.patientName || ''),
         caseType: String(doc.caseType || ''),
         amount,
+        quantity: breakdown.quantity,
+        unitPrice: breakdown.unitPrice,
+        lines: breakdown.lines,
         paymentStatus,
         salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
         receivedAt: receivedAt.toISOString(),
