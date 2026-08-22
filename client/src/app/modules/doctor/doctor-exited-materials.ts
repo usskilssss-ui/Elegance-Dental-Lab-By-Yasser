@@ -18,6 +18,8 @@ export type DoctorExitedMaterialsSummary = {
   materials: DoctorExitedMaterialRow[];
 };
 
+const ARABIC_LOAD_ERROR = 'تعذر تحميل عدد الماتريال الخارجة. حاول مرة أخرى.';
+
 @Component({
   selector: 'app-doctor-exited-materials',
   standalone: true,
@@ -38,6 +40,8 @@ export class DoctorExitedMaterialsComponent implements OnInit {
     return role === 'admin' && !!this.viewingAsDoctor();
   });
   readonly doctorName = computed(() => {
+    const fromApi = this.summary()?.doctorName?.trim();
+    if (fromApi) return fromApi;
     const as = this.viewingAsDoctor()?.trim();
     if (as && this.auth.getSession()?.role === 'admin') return as;
     return this.auth.getSession()?.name?.trim() || '—';
@@ -50,7 +54,18 @@ export class DoctorExitedMaterialsComponent implements OnInit {
   ngOnInit(): void {
     const as = (this.route.snapshot.queryParamMap.get('as') || '').trim();
     const role = this.auth.getSession()?.role;
-    this.viewingAsDoctor.set(role === 'admin' && as ? as : null);
+    const adminAs = role === 'admin' && as ? as : null;
+    this.viewingAsDoctor.set(adminAs);
+
+    // Doctors must not keep a stale/garbled ?as= in the URL (admin-only portal param).
+    if (role !== 'admin' && as) {
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: {},
+        replaceUrl: true,
+      });
+    }
+
     this.loadSummary();
   }
 
@@ -61,10 +76,41 @@ export class DoctorExitedMaterialsComponent implements OnInit {
     });
   }
 
+  retry(): void {
+    this.loadSummary();
+  }
+
   formatCount(value: number | null | undefined): string {
     const n = Number(value);
     const safe = Number.isFinite(n) ? n : 0;
     return safe.toLocaleString('en-EG');
+  }
+
+  private friendlyError(err: any): string {
+    const status = Number(err?.status);
+    const raw = String(err?.error?.message || err?.message || '').trim();
+    // Missing backend route hits GET /:id → CastError → "Failed to fetch case"
+    if (
+      !raw ||
+      /failed to fetch case/i.test(raw) ||
+      /case not found/i.test(raw) ||
+      status === 404 ||
+      status === 0
+    ) {
+      return ARABIC_LOAD_ERROR;
+    }
+    if (/failed to fetch doctor exited materials/i.test(raw)) {
+      return ARABIC_LOAD_ERROR;
+    }
+    if (/query parameter doctor is required/i.test(raw) || /doctor name is required/i.test(raw)) {
+      return 'يرجى فتح صفحة الدكتور من لوحة الأدمن ثم إعادة المحاولة.';
+    }
+    if (status === 401 || status === 403 || /access denied/i.test(raw) || /not authenticated/i.test(raw)) {
+      return 'انتهت الجلسة أو لا يوجد صلاحية. سجّل الدخول مجددًا.';
+    }
+    // Prefer Arabic; avoid leaking English infra messages.
+    if (/[\u0600-\u06FF]/.test(raw)) return raw;
+    return ARABIC_LOAD_ERROR;
   }
 
   private loadSummary(): void {
@@ -83,7 +129,7 @@ export class DoctorExitedMaterialsComponent implements OnInit {
       error: (err) => {
         this.summary.set(null);
         this.loading.set(false);
-        this.error.set(err?.error?.message || 'تعذر تحميل عدد الماتريال الخارجة');
+        this.error.set(this.friendlyError(err));
       },
     });
   }
