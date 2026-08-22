@@ -91,6 +91,19 @@
     </div>
 
     <div class="topbar-right">
+      <button
+        type="button"
+        class="icon-btn accounts-menu-btn"
+        aria-label="الحسابات"
+        title="الحسابات"
+        (click)="toggleAccountsDrawer($event)"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20" aria-hidden="true">
+          <line x1="4" y1="7" x2="20" y2="7" stroke-linecap="round"></line>
+          <line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round"></line>
+          <line x1="4" y1="17" x2="20" y2="17" stroke-linecap="round"></line>
+        </svg>
+      </button>
       <button type="button" class="icon-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme()" title="تغيير المظهر">
         <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -156,6 +169,76 @@
       }
     </div>
   </header>
+
+  @if (accountsDrawerOpen()) {
+    <div class="accounts-drawer-overlay" (click)="closeAccountsDrawer()" aria-hidden="true"></div>
+    <aside
+      class="accounts-drawer"
+      dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="accounts-drawer-title"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="accounts-drawer-head">
+        <div>
+          <h2 id="accounts-drawer-title">الحسابات</h2>
+          <p class="accounts-drawer-sub">ملخص الحالات الخارجة القابلة للفوترة — {{ doctorName() }}</p>
+        </div>
+        <button type="button" class="icon-btn" aria-label="إغلاق" (click)="closeAccountsDrawer()" title="إغلاق">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      @if (accountsLoading()) {
+        <p class="accounts-drawer-status">جاري تحميل الحسابات…</p>
+      } @else if (accountsError()) {
+        <p class="accounts-drawer-status accounts-drawer-status--err">{{ accountsError() }}</p>
+      } @else if (accountSummary(); as summary) {
+        <div class="accounts-summary-grid">
+          <div class="accounts-summary-card">
+            <span class="accounts-summary-label">المطلوب</span>
+            <strong class="accounts-summary-value">{{ formatMoney(summary.totalDue) }}</strong>
+          </div>
+          <div class="accounts-summary-card">
+            <span class="accounts-summary-label">المدفوع</span>
+            <strong class="accounts-summary-value accounts-summary-value--paid">{{ formatMoney(summary.totalPaid) }}</strong>
+          </div>
+          <div class="accounts-summary-card">
+            <span class="accounts-summary-label">المتبقي</span>
+            <strong class="accounts-summary-value accounts-summary-value--remain">{{ formatMoney(summary.remaining) }}</strong>
+          </div>
+        </div>
+
+        <p class="accounts-cases-title">الحالات ({{ summary.caseCount }})</p>
+        @if (!summary.cases?.length) {
+          <p class="accounts-drawer-status">لا توجد حالات خارجة قابلة للفوترة</p>
+        } @else {
+          <ul class="accounts-cases-list">
+            @for (row of summary.cases; track row.id) {
+              <li class="accounts-case-row">
+                <div class="accounts-case-main">
+                  <span class="accounts-case-num">{{ row.caseNumber }}</span>
+                  <span class="accounts-case-patient">{{ row.patientName }}</span>
+                  <span class="accounts-case-type">{{ row.caseType }}</span>
+                </div>
+                <div class="accounts-case-side">
+                  <span class="accounts-case-amount">{{ formatMoney(row.amount) }}</span>
+                  <span
+                    class="accounts-case-pay"
+                    [class.is-paid]="row.paymentStatus === 'paid'"
+                  >{{ row.paymentStatus === 'paid' ? 'مدفوع' : 'غير مدفوع' }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+        <p class="accounts-readonly-note">عرض فقط — لا يمكن تعديل الحسابات من بوابة الدكتور</p>
+      }
+    </aside>
+  }
 
   <main class="dashboard">
     <div class="page-header">

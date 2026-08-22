@@ -1,6 +1,9 @@
 /**
  * Unofficial WhatsApp Web bridge (Baileys).
  * Session persisted in Mongo so Railway restarts keep the link when possible.
+ *
+ * Send path kept simple on purpose: `${digits}@s.whatsapp.net`.
+ * onWhatsApp/LID rewriting previously returned "ok" while phones never received messages.
  */
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
@@ -82,12 +85,20 @@ async function useMongoAuthState() {
   };
 }
 
+function linkedAccountDigits() {
+  const id = sock?.user?.id || sock?.authState?.creds?.me?.id || '';
+  const raw = String(id).split(':')[0].split('@')[0].replace(/\D/g, '');
+  if (raw && raw.length >= 10 && raw.length <= 15) return raw;
+  return '';
+}
+
 function getPublicStatus() {
   return {
     status: connectionStatus,
     connected: connectionStatus === 'open',
     qr: connectionStatus === 'qr' ? lastQrDataUrl : '',
     error: lastError || '',
+    linkedPhone: linkedAccountDigits() || '',
   };
 }
 
@@ -106,6 +117,36 @@ function scheduleReconnect(delayMs = 1500) {
       lastError = e.message || String(e);
     });
   }, delayMs);
+}
+
+/** Egyptian mobiles: 01xxxxxxxxx → 20xxxxxxxxxx */
+function normalizeWaWebPhone(raw) {
+  let p = String(raw || '').replace(/\D/g, '');
+  if (!p) return '';
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
+  return p;
+}
+
+async function sendWhatsAppWebText(phone, body) {
+  if (!sock || connectionStatus !== 'open') {
+    return { ok: false, error: 'واتساب Web مش متصل — امسح QR من الأدمن' };
+  }
+  const to = normalizeWaWebPhone(phone);
+  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
+
+  const jid = `${to}@s.whatsapp.net`;
+  const text = String(body || '');
+  console.log('[wa-web] sending to', jid, `(raw=${String(phone)})`);
+
+  try {
+    await sock.sendMessage(jid, { text });
+    console.log('[wa-web] send OK', { to, jid });
+    return { ok: true, to, jid };
+  } catch (err) {
+    console.warn('[wa-web] send failed:', to, err.message);
+    return { ok: false, error: err.message || 'send failed', to, jid };
+  }
 }
 
 async function startWhatsAppWeb(options = {}) {
@@ -132,7 +173,6 @@ async function startWhatsAppWeb(options = {}) {
     }
   }
 
-  // Keep an in-progress QR/session alive — killing it mid-scan causes "تعذر ربط الجهاز"
   if (starting) return getPublicStatus();
   if (sock && (connectionStatus === 'open' || connectionStatus === 'qr' || connectionStatus === 'connecting')) {
     return getPublicStatus();
@@ -172,7 +212,6 @@ async function startWhatsAppWeb(options = {}) {
       auth: auth.state,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
-      // WhatsApp now expects macOS desktop fingerprint for new pairings
       browser: Browsers.macOS('Chrome'),
       syncFullHistory: false,
       markOnlineOnConnect: false,
@@ -206,7 +245,7 @@ async function startWhatsAppWeb(options = {}) {
         connectionStatus = 'open';
         lastQrDataUrl = '';
         lastError = '';
-        console.log('[wa-web] connected');
+        console.log('[wa-web] connected as', linkedAccountDigits() || sock?.user?.id || '?');
       }
 
       if (connection === 'close') {
@@ -231,7 +270,6 @@ async function startWhatsAppWeb(options = {}) {
           return;
         }
 
-        // 515 after successful scan is expected — reconnect with saved creds
         if (restartRequired) {
           lastError = 'جاري إكمال الربط…';
           scheduleReconnect(800);
@@ -262,8 +300,6 @@ async function stopWhatsAppWeb(logout = false) {
       } catch {
         /* ignore */
       }
-      const Model = WaAuth();
-      await Model.deleteMany({});
     } else if (sock) {
       try {
         sock.end(undefined);
@@ -275,110 +311,17 @@ async function stopWhatsAppWeb(logout = false) {
     sock = null;
     connectionStatus = 'disconnected';
     lastQrDataUrl = '';
+    // Always wipe Mongo session on logout — stale lab creds can show "connected" but not deliver
+    if (logout) {
+      try {
+        await WaAuth().deleteMany({});
+        console.log('[wa-web] auth session cleared from Mongo');
+      } catch (err) {
+        console.warn('[wa-web] failed clearing auth:', err.message);
+      }
+    }
   }
   return getPublicStatus();
-}
-
-/**
- * Normalize to E.164 digits without +.
- * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
- */
-function normalizeWaWebPhone(raw) {
-  let p = String(raw || '').replace(/\D/g, '');
-  if (!p) return '';
-  if (p.startsWith('00')) p = p.slice(2);
-  // Local EG: 01xxxxxxxxx (11 digits)
-  if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
-  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
-  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
-  // Already has country code but was typed as 0201... (13 digits)
-  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
-  return p;
-}
-
-function linkedAccountDigits() {
-  const id = sock?.user?.id || '';
-  // e.g. "201033937424:12@s.whatsapp.net" or "201033937424@s.whatsapp.net"
-  return String(id).split(':')[0].split('@')[0].replace(/\D/g, '');
-}
-
-async function resolveWhatsAppJid(digits) {
-  const fallback = `${digits}@s.whatsapp.net`;
-  if (typeof sock.onWhatsApp !== 'function') {
-    return { jid: fallback, exists: null, via: 'fallback' };
-  }
-  try {
-    // Prefer bare digits — Baileys resolves PN → current jid (incl. LID migration)
-    let results = await sock.onWhatsApp(digits);
-    if (!Array.isArray(results) || !results.length) {
-      results = await sock.onWhatsApp(fallback);
-    }
-    const hit = Array.isArray(results) ? results.find((r) => r != null) : null;
-    if (hit && hit.exists === false) {
-      return { jid: null, exists: false, via: 'onWhatsApp' };
-    }
-    if (hit?.jid) {
-      return { jid: hit.jid, exists: true, via: 'onWhatsApp' };
-    }
-  } catch (err) {
-    console.warn('[wa-web] onWhatsApp failed, using fallback jid:', err.message);
-  }
-  return { jid: fallback, exists: null, via: 'fallback' };
-}
-
-async function sendWhatsAppWebText(phone, body) {
-  if (!sock || connectionStatus !== 'open') {
-    return { ok: false, error: 'واتساب Web مش متصل — امسح QR من الأدمن' };
-  }
-  const to = normalizeWaWebPhone(phone);
-  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
-  if (to.length < 10 || to.length > 15) {
-    return {
-      ok: false,
-      error: `رقم غير مكتمل بعد التطبيع (${to}) — استخدم 01xxxxxxxxx أو 201xxxxxxxxx`,
-    };
-  }
-
-  const selfDigits = linkedAccountDigits();
-  if (selfDigits && selfDigits === to) {
-    console.warn('[wa-web] send target is the linked account itself:', to);
-    return {
-      ok: false,
-      error:
-        'لا يمكن الاعتماد على إرسال لنفس رقم الجهاز المربوط — جرّب رقم واتساب آخر للاختبار',
-      to,
-      self: true,
-    };
-  }
-
-  try {
-    const resolved = await resolveWhatsAppJid(to);
-    if (resolved.exists === false || !resolved.jid) {
-      console.warn('[wa-web] number not on WhatsApp:', to);
-      return {
-        ok: false,
-        error: `الرقم ${to} مش مسجّل على واتساب (بعد التطبيع من ${String(phone)})`,
-        to,
-      };
-    }
-
-    const jid = resolved.jid;
-    console.log('[wa-web] sending to', jid, `(from ${String(phone)} → ${to}, via ${resolved.via})`);
-    const sent = await sock.sendMessage(jid, { text: String(body || '') });
-    if (!sent?.key) {
-      console.warn('[wa-web] sendMessage returned empty result for', jid);
-      return {
-        ok: false,
-        error: 'واتساب قبل الطلب لكن مفيش تأكيد إرسال — حاول تاني أو أعد الربط',
-        to,
-        jid,
-      };
-    }
-    return { ok: true, to, jid, messageId: sent.key.id || '' };
-  } catch (err) {
-    console.warn('[wa-web] send failed:', to, err.message);
-    return { ok: false, error: err.message || 'send failed', to };
-  }
 }
 
 function isWhatsAppWebConnected() {

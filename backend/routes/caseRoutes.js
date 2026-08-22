@@ -73,6 +73,11 @@ router.post(
 
 router.get('/financial-report', authorize('admin'), caseController.getFinancialReport);
 router.get('/material-stats', authorize('admin'), caseController.getExitedMaterialStats);
+router.get(
+  '/doctor-account-summary',
+  authorize('doctor', 'admin'),
+  caseController.getDoctorAccountSummary
+);
 
 // Station barcode/QR scan (must be before /:id)
 router.post(

@@ -1753,6 +1753,8 @@ export class Admin implements OnInit, OnDestroy {
   waWebQr = '';
   waWebError = '';
   waWebBusy = false;
+  /** Linked lab WhatsApp digits (from status / settings.web.linkedPhone). */
+  waWebLinkedPhone = '';
   private waWebPollTimer: ReturnType<typeof setInterval> | null = null;
 
   get waWebConnected(): boolean {
@@ -1777,11 +1779,15 @@ export class Admin implements OnInit, OnDestroy {
     connected?: boolean;
     qr?: string;
     error?: string;
+    linkedPhone?: string;
   }): void {
     if (!web) return;
     this.waWebStatus = String(web.status || (web.connected ? 'open' : 'disconnected'));
     this.waWebQr = web.qr || '';
     this.waWebError = web.error || '';
+    if (web.linkedPhone != null && String(web.linkedPhone).trim()) {
+      this.waWebLinkedPhone = String(web.linkedPhone).trim();
+    }
     if (this.waWebStatus === 'open') {
       this.waLiveConfigured = true;
       this.stopWaWebPoll();
@@ -1856,9 +1862,14 @@ export class Admin implements OnInit, OnDestroy {
 
   refreshWhatsAppWebStatus(): void {
     this.http
-      .get<{ success?: boolean; status?: string; connected?: boolean; qr?: string; error?: string }>(
-        `${environment.apiUrl}/settings/whatsapp/web/status`
-      )
+      .get<{
+        success?: boolean;
+        status?: string;
+        connected?: boolean;
+        qr?: string;
+        error?: string;
+        linkedPhone?: string;
+      }>(`${environment.apiUrl}/settings/whatsapp/web/status`)
       .subscribe({
         next: (res) => this.applyWaWebStatus(res),
         error: () => {
@@ -1907,6 +1918,7 @@ export class Admin implements OnInit, OnDestroy {
           this.waWebStatus = 'disconnected';
           this.waWebQr = '';
           this.waWebError = '';
+          this.waWebLinkedPhone = '';
           this.waLiveConfigured = false;
           this.waMsg = res.message || 'تم فصل الجلسة';
         },
@@ -1957,16 +1969,31 @@ export class Admin implements OnInit, OnDestroy {
   testWhatsApp(): void {
     this.waMsg = '';
     this.http
-      .post<{ success?: boolean; message?: string }>(`${environment.apiUrl}/settings/whatsapp/test`, {
-        phone: this.waTestPhone,
-        message: this.waTestMessage,
-      })
+      .post<{ success?: boolean; message?: string; to?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/test`,
+        {
+          phone: this.waTestPhone,
+          message: this.waTestMessage,
+        }
+      )
       .subscribe({
         next: (res) => {
-          this.waMsg = res.message || 'تم الإرسال';
+          let msg = res.message || 'تم الإرسال';
+          if (res.to) {
+            msg = `${msg} — تم الإرسال إلى ${res.to}`;
+          }
+          this.waMsg = msg;
         },
         error: (err) => {
-          this.waMsg = err?.error?.message || 'فشل الاختبار';
+          const body = err?.error;
+          let msg = body?.message || 'فشل الاختبار';
+          if (body?.detail?.self) {
+            msg =
+              '⛔ هذا رقم واتساب المعمل المربوط نفسه — الرسائل المرسلة لنفس الرقم مش هتظهر كإشعار على الموبايل. جرّب رقم موبايل تاني عليه واتساب للاختبار.' +
+              (this.waWebLinkedPhone ? ` (الرقم المربوط: ${this.waWebLinkedPhone})` : '') +
+              (body?.message ? `\n${body.message}` : '');
+          }
+          this.waMsg = msg;
         },
       });
   }

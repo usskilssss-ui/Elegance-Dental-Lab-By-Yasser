@@ -1250,7 +1250,17 @@
             <button type="button" class="export-btn" style="align-self:flex-end;" (click)="testWhatsApp()">إرسال رسالة تجربة</button>
           </div>
 
-          <p *ngIf="waMsg" style="margin-top:14px;color:#38bdf8;font-size:14px;">{{ waMsg }}</p>
+          <p
+            style="margin:12px 0 0;padding:12px 14px;border-radius:10px;background:#422006;border:1px solid #b45309;color:#fde68a;font-size:13px;line-height:1.65;"
+          >
+            ⚠️ لا تستخدم رقم واتساب المعمل المربوط نفسه في الاختبار — الرسالة مش هتوصلك كإشعار على نفس الجهاز.
+            <ng-container *ngIf="waWebLinkedPhone">
+              <br />
+              الرقم المربوط حالياً: <strong dir="ltr" style="color:#fff;">{{ waWebLinkedPhone }}</strong>
+            </ng-container>
+          </p>
+
+          <p *ngIf="waMsg" style="margin-top:14px;color:#38bdf8;font-size:14px;white-space:pre-line;">{{ waMsg }}</p>
         </div>
       </ng-container>
 
