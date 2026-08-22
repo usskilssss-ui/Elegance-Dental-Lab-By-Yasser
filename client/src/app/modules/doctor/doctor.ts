@@ -105,6 +105,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly searchQuery = signal('');
 
   readonly accountsDrawerOpen = signal(false);
+  readonly portalMenuOpen = signal(false);
   readonly accountsLoading = signal(false);
   readonly accountsError = signal<string | null>(null);
   readonly accountSummary = signal<{
@@ -119,6 +120,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
       patientName: string;
       caseType: string;
       amount: number;
+      quantity?: number;
+      unitPrice?: number;
+      lines?: Array<{
+        label: string;
+        quantity: number;
+        unitPrice: number;
+        lineTotal: number;
+      }>;
       paymentStatus: 'paid' | 'unpaid';
     }>;
   } | null>(null);
@@ -347,11 +356,43 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const el = ev.target as HTMLElement;
     if (el.closest('.notif-bell') || el.closest('.notifications-panel')) return;
     this.notificationsOpen.set(false);
+    if (el.closest('.doctor-menu-anchor')) return;
+    this.portalMenuOpen.set(false);
   }
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.portalMenuOpen()) {
+      this.portalMenuOpen.set(false);
+      return;
+    }
     if (this.accountsDrawerOpen()) this.closeAccountsDrawer();
+  }
+
+  togglePortalMenu(ev?: Event): void {
+    ev?.stopPropagation();
+    const opening = !this.portalMenuOpen();
+    this.notificationsOpen.set(false);
+    this.portalMenuOpen.set(opening);
+  }
+
+  openAccountsFromMenu(ev?: Event): void {
+    ev?.stopPropagation();
+    this.portalMenuOpen.set(false);
+    this.openAccountsDrawer();
+  }
+
+  requestRepFromMenu(ev?: Event): void {
+    ev?.stopPropagation();
+    this.portalMenuOpen.set(false);
+    this.flash('سوف تتاح قريبا');
+  }
+
+  openAccountsDrawer(): void {
+    this.notificationsOpen.set(false);
+    this.portalMenuOpen.set(false);
+    this.accountsDrawerOpen.set(true);
+    this.loadAccountSummary();
   }
 
   toggleAccountsDrawer(ev?: Event): void {
@@ -360,9 +401,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.closeAccountsDrawer();
       return;
     }
-    this.notificationsOpen.set(false);
-    this.accountsDrawerOpen.set(true);
-    this.loadAccountSummary();
+    this.openAccountsDrawer();
   }
 
   closeAccountsDrawer(): void {
@@ -501,6 +540,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   toggleNotifications(ev: Event): void {
     ev.stopPropagation();
     const opening = !this.notificationsOpen();
+    this.portalMenuOpen.set(false);
     this.notificationsOpen.set(opening);
     if (opening) this.markAllNotificationsRead();
   }

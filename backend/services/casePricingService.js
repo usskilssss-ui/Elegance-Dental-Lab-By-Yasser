@@ -82,64 +82,98 @@ function resolvePrices(custom) {
  * @param {object|string} metaOrNotes — notes meta object or raw notes string
  * @param {object} [customPrices] — DoctorPricing.prices
  */
-function calculateCaseCost(caseType, metaOrNotes, customPrices) {
-  if (isExcludedWorkCaseType(caseType)) return 0;
+function resolvePartUnitPrice(lowerPart, prices) {
+  if (lowerPart.includes('emax')) return { label: 'Emax', unitPrice: prices.emax };
+  if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
+    return { label: 'German Zircon', unitPrice: prices.germanZircon };
+  }
+  if (lowerPart.includes('zircon')) return { label: 'Zircon', unitPrice: prices.zircon };
+  if (lowerPart.includes('titanium')) return { label: 'Titanium', unitPrice: prices.titanium };
+  if (lowerPart.includes('peek')) return { label: 'Peek', unitPrice: prices.peek };
+  if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
+    return { label: 'Pmma Cad', unitPrice: prices.pmma };
+  }
+  if (
+    lowerPart.includes('night guard') ||
+    lowerPart.includes('nightguard') ||
+    lowerPart.includes('guard')
+  ) {
+    return { label: 'Night Guard', unitPrice: prices.nightGuard };
+  }
+  if (
+    lowerPart.includes('mokup') ||
+    lowerPart.includes('mockup') ||
+    lowerPart.includes('mock up') ||
+    lowerPart.includes('موكب')
+  ) {
+    return { label: 'Mockup', unitPrice: prices.mockup };
+  }
+  if (lowerPart.includes('wax')) return { label: 'Wax', unitPrice: prices.wax };
+  if (lowerPart.includes('ring')) return { label: 'Ring', unitPrice: prices.ring };
+  if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
+    return { label: 'Try in', unitPrice: prices.tryIn };
+  }
+  return null;
+}
+
+/**
+ * Same rules as calculateCaseCost, with per-line qty / unitPrice for UI display.
+ */
+function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
+  if (isExcludedWorkCaseType(caseType)) {
+    return { total: 0, quantity: 0, unitPrice: 0, lines: [] };
+  }
 
   const meta =
     metaOrNotes && typeof metaOrNotes === 'object' && !Array.isArray(metaOrNotes)
       ? metaOrNotes
       : parseNotesMeta(metaOrNotes || '');
 
-  if (meta.isRedoCase || meta.isModificationCase) return 0;
+  if (meta.isRedoCase || meta.isModificationCase) {
+    return { total: 0, quantity: 0, unitPrice: 0, lines: [] };
+  }
 
   const prices = resolvePrices(customPrices);
-  let total = 0;
   const parts = String(caseType || '')
     .split('+')
     .map((p) => p.trim())
     .filter(Boolean);
   const caseOverallQuantity = Number(meta.quantity ?? 1) || 1;
 
+  let total = 0;
+  let quantity = 0;
+  const lines = [];
+
   for (const part of parts) {
     const lowerPart = part.toLowerCase();
     const match = part.match(/\((\d+)\)/);
     const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
+    const resolved = resolvePartUnitPrice(lowerPart, prices);
+    if (!resolved) continue;
 
-    if (lowerPart.includes('emax')) {
-      total += qty * prices.emax;
-    } else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
-      total += qty * prices.germanZircon;
-    } else if (lowerPart.includes('zircon')) {
-      total += qty * prices.zircon;
-    } else if (lowerPart.includes('titanium')) {
-      total += qty * prices.titanium;
-    } else if (lowerPart.includes('peek')) {
-      total += qty * prices.peek;
-    } else if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
-      total += qty * prices.pmma;
-    } else if (
-      lowerPart.includes('night guard') ||
-      lowerPart.includes('nightguard') ||
-      lowerPart.includes('guard')
-    ) {
-      total += qty * prices.nightGuard;
-    } else if (
-      lowerPart.includes('mokup') ||
-      lowerPart.includes('mockup') ||
-      lowerPart.includes('mock up') ||
-      lowerPart.includes('موكب')
-    ) {
-      total += qty * prices.mockup;
-    } else if (lowerPart.includes('wax')) {
-      total += qty * prices.wax;
-    } else if (lowerPart.includes('ring')) {
-      total += qty * prices.ring;
-    } else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-      total += qty * prices.tryIn;
-    }
+    const lineTotal = qty * resolved.unitPrice;
+    total += lineTotal;
+    quantity += qty;
+    lines.push({
+      label: resolved.label,
+      quantity: qty,
+      unitPrice: resolved.unitPrice,
+      lineTotal,
+    });
   }
 
-  return total;
+  const unitPrice =
+    lines.length === 1
+      ? lines[0].unitPrice
+      : quantity > 0
+        ? Math.round((total / quantity) * 100) / 100
+        : 0;
+
+  return { total, quantity, unitPrice, lines };
+}
+
+function calculateCaseCost(caseType, metaOrNotes, customPrices) {
+  return calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices).total;
 }
 
 function findPricingForDoctor(pricings, doctorName) {
@@ -160,5 +194,6 @@ module.exports = {
   parseNotesMeta,
   resolvePrices,
   calculateCaseCost,
+  calculateCaseCostBreakdown,
   findPricingForDoctor,
 };
