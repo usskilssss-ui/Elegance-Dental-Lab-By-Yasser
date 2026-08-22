@@ -701,15 +701,15 @@ exports.getDoctorExitedMaterials = async (req, res) => {
       if (!doctorName) {
         return res.status(400).json({
           success: false,
-          message: 'Query parameter doctor is required for admin',
+          message: 'يلزم تحديد اسم الدكتور (doctor) عند العرض من الأدمن',
         });
       }
     } else {
-      return res.status(403).json({ success: false, message: 'Access denied' });
+      return res.status(403).json({ success: false, message: 'غير مصرح بالوصول' });
     }
 
     if (!doctorName) {
-      return res.status(400).json({ success: false, message: 'Doctor name is required' });
+      return res.status(400).json({ success: false, message: 'اسم الدكتور مطلوب' });
     }
 
     const cases = await DentalCase.find({ currentStage: 'exited' })
@@ -768,7 +768,7 @@ exports.getDoctorExitedMaterials = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch doctor exited materials',
+      message: 'تعذر تحميل عدد الماتريال الخارجة',
       error: error.message,
     });
   }

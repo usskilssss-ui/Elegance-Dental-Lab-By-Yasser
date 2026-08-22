@@ -52,7 +52,10 @@
     @if (loading()) {
       <p class="dem-status">جاري تحميل الماتريال…</p>
     } @else if (error()) {
-      <p class="dem-status dem-status--err">{{ error() }}</p>
+      <div class="dem-status dem-status--err" role="alert">
+        <p>{{ error() }}</p>
+        <button type="button" class="dem-retry-btn" (click)="retry()">إعادة المحاولة</button>
+      </div>
     } @else if (summary(); as s) {
       <section class="dem-summary" aria-label="ملخص الماتريال">
         <article class="dem-summary-card dem-summary-card--hero">
