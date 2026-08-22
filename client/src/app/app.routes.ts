@@ -11,6 +11,8 @@ import { Finishing } from './modules/finishing/finishing';
 import { RequesterComponent } from './modules/requester/requester';
 import { EntryComponent } from './modules/entry/entry';
 import { DoctorComponent } from './modules/doctor/doctor';
+import { DoctorAccountsComponent } from './modules/doctor/doctor-accounts';
+import { DoctorRequestRepComponent } from './modules/doctor/doctor-request-rep';
 import { StationScanComponent } from './modules/station-scan/station-scan';
 import { ForDoctorsComponent } from './modules/for-doctors/for-doctors';
 
@@ -88,6 +90,8 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', component: DoctorComponent },
+      { path: 'accounts', component: DoctorAccountsComponent },
+      { path: 'request-rep', component: DoctorRequestRepComponent },
     ],
   },
 

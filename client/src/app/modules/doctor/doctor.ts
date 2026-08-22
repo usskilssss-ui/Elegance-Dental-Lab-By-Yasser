@@ -104,33 +104,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly activeFilter = signal<DoctorFilter>('all');
   readonly searchQuery = signal('');
 
-  readonly accountsDrawerOpen = signal(false);
   readonly portalMenuOpen = signal(false);
-  readonly accountsLoading = signal(false);
-  readonly accountsError = signal<string | null>(null);
-  readonly accountSummary = signal<{
-    doctorName: string;
-    totalDue: number;
-    totalPaid: number;
-    remaining: number;
-    caseCount: number;
-    cases: Array<{
-      id: string;
-      caseNumber: string;
-      patientName: string;
-      caseType: string;
-      amount: number;
-      quantity?: number;
-      unitPrice?: number;
-      lines?: Array<{
-        label: string;
-        quantity: number;
-        unitPrice: number;
-        lineTotal: number;
-      }>;
-      paymentStatus: 'paid' | 'unpaid';
-    }>;
-  } | null>(null);
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
@@ -364,9 +338,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   onEscape(): void {
     if (this.portalMenuOpen()) {
       this.portalMenuOpen.set(false);
-      return;
     }
-    if (this.accountsDrawerOpen()) this.closeAccountsDrawer();
   }
 
   togglePortalMenu(ev?: Event): void {
@@ -376,64 +348,24 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.portalMenuOpen.set(opening);
   }
 
+  private doctorNavQueryParams(): Record<string, string> {
+    const as = this.viewingAsDoctor()?.trim();
+    if (as && this.auth.getSession()?.role === 'admin') return { as };
+    return {};
+  }
+
   openAccountsFromMenu(ev?: Event): void {
     ev?.stopPropagation();
     this.portalMenuOpen.set(false);
-    this.openAccountsDrawer();
+    this.notificationsOpen.set(false);
+    this.router.navigate(['/doctor/accounts'], { queryParams: this.doctorNavQueryParams() });
   }
 
   requestRepFromMenu(ev?: Event): void {
     ev?.stopPropagation();
     this.portalMenuOpen.set(false);
-    this.flash('سوف تتاح قريبا');
-  }
-
-  openAccountsDrawer(): void {
     this.notificationsOpen.set(false);
-    this.portalMenuOpen.set(false);
-    this.accountsDrawerOpen.set(true);
-    this.loadAccountSummary();
-  }
-
-  toggleAccountsDrawer(ev?: Event): void {
-    ev?.stopPropagation();
-    if (this.accountsDrawerOpen()) {
-      this.closeAccountsDrawer();
-      return;
-    }
-    this.openAccountsDrawer();
-  }
-
-  closeAccountsDrawer(): void {
-    this.accountsDrawerOpen.set(false);
-  }
-
-  formatMoney(value: number | null | undefined): string {
-    const n = Number(value);
-    const safe = Number.isFinite(n) ? n : 0;
-    return `${safe.toLocaleString('en-EG')} EGP`;
-  }
-
-  private loadAccountSummary(): void {
-    this.accountsLoading.set(true);
-    this.accountsError.set(null);
-    const filters: { doctor?: string } = {};
-    if (this.isAdminView()) {
-      const as = this.viewingAsDoctor()?.trim();
-      if (as) filters.doctor = as;
-    }
-    this.caseApi.getDoctorAccountSummary(filters).subscribe({
-      next: (res) => {
-        const data = res?.data ?? null;
-        this.accountSummary.set(data);
-        this.accountsLoading.set(false);
-      },
-      error: (err) => {
-        this.accountSummary.set(null);
-        this.accountsLoading.set(false);
-        this.accountsError.set(err?.error?.message || 'تعذر تحميل الحسابات');
-      },
-    });
+    this.router.navigate(['/doctor/request-rep'], { queryParams: this.doctorNavQueryParams() });
   }
 
   private scheduleBackgroundReload(): void {
