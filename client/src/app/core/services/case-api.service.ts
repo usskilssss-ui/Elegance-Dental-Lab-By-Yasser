@@ -56,6 +56,14 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/doctor-account-summary${query}`);
   }
 
+  /** Doctor portal: live material exit counts for this doctor */
+  getDoctorExitedMaterials(filters?: { doctor?: string }): Observable<any> {
+    const params: string[] = [];
+    if (filters?.doctor) params.push(`doctor=${encodeURIComponent(filters.doctor)}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    return this.http.get(`${this.apiUrl}/doctor-exited-materials${query}`);
+  }
+
   // Get case by ID
   getCaseById(id: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/${id}`);

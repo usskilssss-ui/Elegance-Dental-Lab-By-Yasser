@@ -78,6 +78,11 @@ router.get(
   authorize('doctor', 'admin'),
   caseController.getDoctorAccountSummary
 );
+router.get(
+  '/doctor-exited-materials',
+  authorize('doctor', 'admin'),
+  caseController.getDoctorExitedMaterials
+);
 
 // Station barcode/QR scan (must be before /:id)
 router.post(

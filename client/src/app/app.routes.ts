@@ -13,6 +13,7 @@ import { EntryComponent } from './modules/entry/entry';
 import { DoctorComponent } from './modules/doctor/doctor';
 import { DoctorAccountsComponent } from './modules/doctor/doctor-accounts';
 import { DoctorRequestRepComponent } from './modules/doctor/doctor-request-rep';
+import { DoctorExitedMaterialsComponent } from './modules/doctor/doctor-exited-materials';
 import { StationScanComponent } from './modules/station-scan/station-scan';
 import { ForDoctorsComponent } from './modules/for-doctors/for-doctors';
 
@@ -92,6 +93,7 @@ export const routes: Routes = [
       { path: 'dashboard', component: DoctorComponent },
       { path: 'accounts', component: DoctorAccountsComponent },
       { path: 'request-rep', component: DoctorRequestRepComponent },
+      { path: 'exited-materials', component: DoctorExitedMaterialsComponent },
     ],
   },
 

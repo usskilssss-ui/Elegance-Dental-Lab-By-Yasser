@@ -1,0 +1,84 @@
+<div class="doctor-exited-materials-page" dir="rtl">
+  <header class="dem-topbar">
+    <button type="button" class="dem-back-btn" (click)="backToDashboard()" aria-label="رجوع للوحة الحالات">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+      <span>رجوع</span>
+    </button>
+
+    <div class="dem-brand">
+      <span class="dem-brand-dot"></span>
+      <span class="dem-brand-title">Elegance</span>
+      <span class="dem-brand-dot"></span>
+    </div>
+
+    <button
+      type="button"
+      class="dem-icon-btn"
+      aria-label="تغيير المظهر"
+      title="تغيير المظهر"
+      (click)="themeService.toggleTheme()"
+    >
+      <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg *ngIf="themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </header>
+
+  <main class="dem-main">
+    <section class="dem-hero">
+      <p class="dem-eyebrow">الماتريال</p>
+      <h1>عدد الماتريال الخارجة</h1>
+      <p class="dem-lead">
+        عدّاد حي من الحالات الخارجة لدكتور {{ doctorName() }} — يُحدَّث تلقائيًا عند حذف الحالات
+        @if (isAdminView()) {
+          <span class="dem-admin-pill">عرض كأدمن</span>
+        }
+      </p>
+    </section>
+
+    @if (loading()) {
+      <p class="dem-status">جاري تحميل الماتريال…</p>
+    } @else if (error()) {
+      <p class="dem-status dem-status--err">{{ error() }}</p>
+    } @else if (summary(); as s) {
+      <section class="dem-summary" aria-label="ملخص الماتريال">
+        <article class="dem-summary-card dem-summary-card--hero">
+          <span class="dem-summary-label">إجمالي الوحدات</span>
+          <strong class="dem-summary-value">{{ formatCount(s.totalUnits) }}</strong>
+          <span class="dem-summary-meta">من {{ formatCount(s.caseCount) }} حالة خارجة</span>
+        </article>
+      </section>
+
+      <section class="dem-list-wrap" aria-label="قائمة الماتريال">
+        <div class="dem-list-head">
+          <h2>كل الماتريال</h2>
+          <p>يعرض كل أنواع الماتريال في المعمل مع العدد الخارج لهذا الدكتور</p>
+        </div>
+
+        <ul class="dem-list">
+          @for (row of s.materials; track row.key) {
+            <li class="dem-row" [class.dem-row--zero]="row.count === 0">
+              <span class="dem-row-label">{{ row.label }}</span>
+              <span class="dem-row-count">{{ formatCount(row.count) }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <p class="dem-footnote">يُحسب من الحالات الخارجة فقط — بدون إعادة / تعديل / غير معروف</p>
+    }
+  </main>
+</div>

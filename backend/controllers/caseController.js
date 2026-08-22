@@ -669,6 +669,111 @@ exports.getDoctorAccountSummary = async (req, res) => {
   }
 };
 
+const DOCTOR_MATERIAL_CATALOG = [
+  { key: 'emax', label: 'Emax' },
+  { key: 'regularZircon', label: 'Zircon' },
+  { key: 'germanZircon', label: 'German Zircon' },
+  { key: 'titanium', label: 'Titanium' },
+  { key: 'peek', label: 'Peek' },
+  { key: 'pmma', label: 'Pmma Cad' },
+  { key: 'nightGuard', label: 'Night Guard' },
+  { key: 'mokup', label: 'Mockup' },
+  { key: 'tryIn', label: 'Try in' },
+  { key: 'wax', label: 'Wax' },
+  { key: 'ring', label: 'Ring' },
+];
+
+/**
+ * Live material exit counts for a doctor (exited cases only).
+ * Doctor: always self. Admin: ?doctor= (same name as portal ?as=).
+ * Excludes redo / modification / empty via shared pricing helpers.
+ * Counts derive from live cases so deletes auto-subtract.
+ */
+exports.getDoctorExitedMaterials = async (req, res) => {
+  try {
+    const role = req.user?.role;
+    let doctorName = '';
+
+    if (role === 'doctor') {
+      doctorName = String(req.user.fullName || '').trim();
+    } else if (role === 'admin') {
+      doctorName = String(req.query.doctor || '').trim();
+      if (!doctorName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Query parameter doctor is required for admin',
+        });
+      }
+    } else {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    if (!doctorName) {
+      return res.status(400).json({ success: false, message: 'Doctor name is required' });
+    }
+
+    const cases = await DentalCase.find({ currentStage: 'exited' })
+      .select('caseType notes referringDoctor')
+      .lean();
+
+    const stats = {
+      emax: 0,
+      regularZircon: 0,
+      germanZircon: 0,
+      titanium: 0,
+      peek: 0,
+      pmma: 0,
+      nightGuard: 0,
+      mokup: 0,
+      tryIn: 0,
+      wax: 0,
+      ring: 0,
+    };
+
+    let caseCount = 0;
+
+    for (const doc of cases) {
+      const meta = parseNotesMetaShared(doc.notes || '');
+      const caseDoctor = String(
+        doc.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
+
+      if (meta.isRedoCase || meta.isModificationCase) continue;
+      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+
+      const quantity = Number(meta.quantity ?? 1) || 1;
+      addMaterialUnits(stats, doc.caseType, quantity, { global: true, jundi: false });
+      caseCount += 1;
+    }
+
+    const materials = DOCTOR_MATERIAL_CATALOG.map((item) => ({
+      key: item.key,
+      label: item.label,
+      count: Number(stats[item.key] || 0),
+    }));
+
+    const totalUnits = materials.reduce((sum, row) => sum + row.count, 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        doctorName,
+        doctorKey: normalizeDoctorKeyStrict(doctorName),
+        totalUnits,
+        caseCount,
+        materials,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch doctor exited materials',
+      error: error.message,
+    });
+  }
+};
+
 // Get case by ID
 exports.getCaseById = async (req, res) => {
   try {

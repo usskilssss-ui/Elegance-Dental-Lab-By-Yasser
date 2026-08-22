@@ -368,6 +368,13 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.router.navigate(['/doctor/request-rep'], { queryParams: this.doctorNavQueryParams() });
   }
 
+  openExitedMaterialsFromMenu(ev?: Event): void {
+    ev?.stopPropagation();
+    this.portalMenuOpen.set(false);
+    this.notificationsOpen.set(false);
+    this.router.navigate(['/doctor/exited-materials'], { queryParams: this.doctorNavQueryParams() });
+  }
+
   private scheduleBackgroundReload(): void {
     if (this.reloadDebounceTimer) clearTimeout(this.reloadDebounceTimer);
     this.reloadDebounceTimer = setTimeout(() => {
