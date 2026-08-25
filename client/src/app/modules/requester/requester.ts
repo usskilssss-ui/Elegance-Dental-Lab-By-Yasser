@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+﻿import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -463,7 +463,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
 
   <div class="footer">
     <div class="footer-brand">
-      <span class="footer-brand-name">Elegance Dental Lab</span>
+      <span class="footer-brand-name">IN CORE Dental</span>
       <span class="footer-date">تاريخ الطباعة: ${printDate}</span>
     </div>
   </div>

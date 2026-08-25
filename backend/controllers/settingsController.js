@@ -1,4 +1,4 @@
-const AppSettings = require('../models/AppSettings');
+﻿const AppSettings = require('../models/AppSettings');
 const {
   sendWhatsAppText,
   sendDailyReadySummaries,
@@ -39,7 +39,7 @@ exports.getWhatsAppSettings = async (req, res) => {
         instanceId: wa.instanceId || '',
         phoneNumberId: wa.phoneNumberId || '',
         dailyHour: wa.dailyHour ?? 18,
-        labName: wa.labName || 'Elegance Dental Lab',
+        labName: wa.labName || 'IN CORE Dental',
         msgCompleted:
           wa.msgCompleted ||
           '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة',
@@ -73,7 +73,7 @@ exports.updateWhatsAppSettings = async (req, res) => {
       const h = Number(body.dailyHour);
       wa.dailyHour = Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 18;
     }
-    if (body.labName !== undefined) wa.labName = String(body.labName || '').trim() || 'Elegance Dental Lab';
+    if (body.labName !== undefined) wa.labName = String(body.labName || '').trim() || 'IN CORE Dental';
     if (body.msgCompleted !== undefined) {
       wa.msgCompleted = String(body.msgCompleted || '').trim() || wa.msgCompleted;
     }
@@ -131,7 +131,7 @@ exports.testWhatsApp = async (req, res) => {
     ).trim();
     const testMessage =
       customMessage ||
-      'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
+      'IN CORE Dental\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
     const result = await sendWhatsAppText(phone, testMessage);
     if (!result || result.skipped || !result.ok) {
       return res.status(400).json({

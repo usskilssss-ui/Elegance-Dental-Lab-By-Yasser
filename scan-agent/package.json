@@ -1,5 +1,5 @@
-{
-  "name": "elegance-scan-agent",
+﻿{
+  "name": "in-core-scan-agent",
   "version": "1.0.1",
   "description": "Station Scan Agent — barcode wedge → move case by scanner1/2/3 account",
   "main": "agent.js",

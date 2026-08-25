@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -1737,7 +1737,7 @@ export class Admin implements OnInit, OnDestroy {
   waPhoneNumberId = '';
   waToken = '';
   waDailyHour = 18;
-  waLabName = 'Elegance Dental Lab';
+  waLabName = 'IN CORE Dental';
   waMsgCompleted =
     '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
   waMsgExited =
@@ -1828,7 +1828,7 @@ export class Admin implements OnInit, OnDestroy {
         this.waInstanceId = s.instanceId || '';
         this.waPhoneNumberId = s.phoneNumberId || '';
         this.waDailyHour = s.dailyHour ?? 18;
-        this.waLabName = s.labName || 'Elegance Dental Lab';
+        this.waLabName = s.labName || 'IN CORE Dental';
         this.waMsgCompleted =
           s.msgCompleted ||
           '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nجاهزة للاستلام تواصل مع المعمل لاستلام الحالة';
@@ -2081,7 +2081,7 @@ export class Admin implements OnInit, OnDestroy {
     this.monthArchiveApi.exportZip(year, month).subscribe({
       next: (blob) => {
         this.archiveLoading = false;
-        const filename = `Elegance-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
+        const filename = `IN-CORE-Lab-Export-${year}-${String(month).padStart(2, '0')}.zip`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -2782,7 +2782,7 @@ export class Admin implements OnInit, OnDestroy {
 </head>
 <body>
   <div style="margin-bottom:6px;">
-    <div class="center bold" style="font-size:18px;letter-spacing:1px;">Elegance Lab</div>
+    <div class="center bold" style="font-size:18px;letter-spacing:1px;">IN CORE Dental</div>
     <div class="center" style="font-size:9px;color:#333;">Precision Dental Laboratories</div>
   </div>
   <div class="solid"></div>
@@ -2821,7 +2821,7 @@ export class Admin implements OnInit, OnDestroy {
     </tbody>
   </table>
   <div class="dash"></div>
-  <div class="center" style="font-size:10px;margin-top:6px;">شكراً لتعاملكم معنا — Elegance Dental Lab</div>
+  <div class="center" style="font-size:10px;margin-top:6px;">شكراً لتعاملكم معنا — IN CORE Dental</div>
   <script>
     window.onload = function() {
       window.print();

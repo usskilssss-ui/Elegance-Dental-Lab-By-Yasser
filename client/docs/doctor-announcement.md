@@ -1,4 +1,4 @@
-# إعلان الدكاترة — Elegance Dental Lab
+﻿# إعلان الدكاترة — IN CORE Dental
 
 رابط المنصة: https://dental-system-seven.vercel.app
 
@@ -8,7 +8,7 @@
 
 ```
 دكاترتنا الكرام 👋
-منصة Elegance Dental Lab جاهزة لكم:
+منصة IN CORE Dental جاهزة لكم:
 https://dental-system-seven.vercel.app
 
 تابعوا حالة الحالة لحظة بلحظة
@@ -26,7 +26,7 @@ https://dental-system-seven.vercel.app
 ## نص أطول (منشور / صفحة)
 
 ### العنوان
-منصتكم الجديدة لمتابعة الحالات — Elegance Dental Lab
+منصتكم الجديدة لمتابعة الحالات — IN CORE Dental
 
 ### المقدمة
 دكاترتنا الكرام، أطلقنا منصة رقمية تسهّل متابعة حالاتكم مع المعمل من أي مكان — على الموبايل أو الكمبيوتر — بدون انتظار مكالمة أو سؤال متكرر.

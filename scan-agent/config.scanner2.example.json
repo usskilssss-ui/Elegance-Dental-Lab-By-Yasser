@@ -1,5 +1,5 @@
-{
-  "SERVER_URL": "https://elegance-dental-lab-by-yasser-production.up.railway.app",
+﻿{
+  "SERVER_URL": "REPLACE_WITH_IN_CORE_RAILWAY_URL",
   "EMAIL": "scanner2@example.com",
   "PASSWORD": "change-me",
   "LABEL": "سكان 2 — ديزاين",

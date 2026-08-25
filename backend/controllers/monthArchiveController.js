@@ -1,4 +1,4 @@
-// archiver v8 is ESM; CJS require returns { ZipArchive, ... } not a callable.
+﻿// archiver v8 is ESM; CJS require returns { ZipArchive, ... } not a callable.
 const { ZipArchive } = require('archiver');
 const DentalCase = require('../models/DentalCase');
 const User = require('../models/User');
@@ -501,7 +501,7 @@ exports.exportMonthData = async (req, res) => {
     const stamp = hasMonth
       ? `${year}-${String(month).padStart(2, '0')}`
       : new Date().toISOString().slice(0, 10);
-    const filename = `Elegance-Lab-Export-${stamp}.zip`;
+    const filename = `IN-CORE-Lab-Export-${stamp}.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

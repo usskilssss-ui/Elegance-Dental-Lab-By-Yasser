@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 
 const appSettingsSchema = new mongoose.Schema(
   {
@@ -19,7 +19,7 @@ const appSettingsSchema = new mongoose.Schema(
       instanceId: { type: String, default: '' }, // UltraMsg
       phoneNumberId: { type: String, default: '' }, // Meta
       dailyHour: { type: Number, default: 18 },
-      labName: { type: String, default: 'Elegance Dental Lab' },
+      labName: { type: String, default: 'IN CORE Dental' },
       // Message templates — placeholders: {lab} {caseNumber} {patient} {count} {list}
       msgCompleted: {
         type: String,

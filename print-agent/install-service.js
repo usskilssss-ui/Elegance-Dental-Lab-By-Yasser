@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Install Print Agent as a Windows Service
  * Run once as Administrator: node install-service.js
  */
@@ -6,8 +6,8 @@ const Service = require('node-windows').Service;
 const path = require('path');
 
 const svc = new Service({
-  name: 'ElegancePrintAgent',
-  description: 'Elegance Dental Lab — Remote Print Agent',
+  name: 'InCorePrintAgent',
+  description: 'IN CORE Dental — Remote Print Agent',
   script: path.join(__dirname, 'agent.js'),
   nodeOptions: [],
   // Restart automatically if crashed / process killed

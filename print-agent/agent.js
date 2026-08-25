@@ -1,5 +1,5 @@
-/**
- * Elegance Dental Lab — Print Agent
+﻿/**
+ * IN CORE Dental — Print Agent
  * Runs on the lab's Windows laptop.
  * Connects to the Railway server via Socket.IO,
  * receives print jobs, renders HTML → PDF → prints silently.
@@ -34,7 +34,7 @@ const POLL_INTERVAL_MS = Number(config.POLL_INTERVAL_MS) || 20000;
 const PRINT_CONFIRM_TIMEOUT_MS = Number(config.PRINT_CONFIRM_TIMEOUT_MS) || 90000;
 const PRINTER_CHECK_MS = Number(config.PRINTER_CHECK_MS) || 10000;
 
-console.log('🖨️  Elegance Print Agent starting...');
+console.log('🖨️  IN CORE Print Agent starting...');
 console.log(`   Server  : ${SERVER_URL}`);
 console.log(`   Printer : ${PRINTER_NAME}`);
 console.log(`   Poll    : every ${POLL_INTERVAL_MS / 1000}s`);
@@ -807,7 +807,7 @@ async function buildPrintHtml(c) {
     </div>
   </div>
   <div class="footer">
-    <span class="footer-lab">Elegance Dental Lab</span>
+    <span class="footer-lab">IN CORE Dental</span>
     <span class="footer-date">تاريخ الطباعة: ${escapeHtml(printDate)}</span>
   </div>
 </body>

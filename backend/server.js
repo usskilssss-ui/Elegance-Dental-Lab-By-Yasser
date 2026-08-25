@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -102,7 +102,7 @@ setupSocket(server);
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Elegance Dental Lab API Backend is running',
+    message: 'IN CORE Dental API Backend is running',
     frontend: 'https://dental-system-kappa.vercel.app'
   });
 });

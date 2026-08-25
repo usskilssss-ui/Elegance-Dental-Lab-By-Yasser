@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Uninstall Print Agent Windows Service
  * Run as Administrator: node uninstall-service.js
  */
@@ -6,7 +6,7 @@ const Service = require('node-windows').Service;
 const path = require('path');
 
 const svc = new Service({
-  name: 'ElegancePrintAgent',
+  name: 'InCorePrintAgent',
   script: path.join(__dirname, 'agent.js'),
 });
 
