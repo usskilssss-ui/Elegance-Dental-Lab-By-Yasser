@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const ALL_STAGES = [
+  'waiting',
+  'secretary',
+  'design',
+  'khart',
+  'finishing',
+  'completed',
+  'exited',
+];
+
 const appSettingsSchema = new mongoose.Schema(
   {
     key: {
@@ -7,6 +17,21 @@ const appSettingsSchema = new mongoose.Schema(
       required: true,
       unique: true,
       default: 'app',
+    },
+    /** White-label branding for this lab deployment */
+    branding: {
+      labName: { type: String, default: 'Elegance Dental Lab' },
+      logoUrl: { type: String, default: '' },
+      primaryColor: { type: String, default: '#2563eb' },
+    },
+    /** Which workflow stages this lab uses (order preserved from ALL_STAGES) */
+    workflow: {
+      enabledStages: {
+        type: [String],
+        default: ALL_STAGES,
+      },
+      allowSkipSecretary: { type: Boolean, default: true },
+      allowSkipKhart: { type: Boolean, default: true },
     },
     whatsapp: {
       enabled: { type: Boolean, default: false },
@@ -16,11 +41,10 @@ const appSettingsSchema = new mongoose.Schema(
         default: 'ultramsg',
       },
       token: { type: String, default: '' },
-      instanceId: { type: String, default: '' }, // UltraMsg
-      phoneNumberId: { type: String, default: '' }, // Meta
+      instanceId: { type: String, default: '' },
+      phoneNumberId: { type: String, default: '' },
       dailyHour: { type: Number, default: 18 },
       labName: { type: String, default: 'Elegance Dental Lab' },
-      // Message templates — placeholders: {lab} {caseNumber} {patient} {count} {list}
       msgCompleted: {
         type: String,
         default:
@@ -33,12 +57,13 @@ const appSettingsSchema = new mongoose.Schema(
       },
       msgDaily: {
         type: String,
-        default:
-          '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
+        default: '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
       },
     },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('AppSettings', appSettingsSchema);
+const AppSettings = mongoose.model('AppSettings', appSettingsSchema);
+AppSettings.ALL_STAGES = ALL_STAGES;
+module.exports = AppSettings;

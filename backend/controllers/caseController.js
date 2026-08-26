@@ -14,6 +14,8 @@ const {
   parseNotesMeta: parseNotesMetaShared,
   calculateCaseCost,
   calculateCaseCostBreakdown,
+  loadActiveMaterials,
+  materialsToDefaultPrices,
   findPricingForDoctor,
 } = require('../services/casePricingService');
 const {
@@ -22,7 +24,6 @@ const {
   assertCanComplete,
   assertCanExit,
   isExitedCase,
-  STATION_ALLOWED_FROM: WORKFLOW_STATION_ALLOWED_FROM,
 } = require('../services/caseWorkflowService');
 
 /** Validate create payload for quantity / empty / work type rigor */
@@ -525,6 +526,8 @@ exports.getFinancialReport = async (req, res) => {
       .sort({ createdAt: -1 });
 
     const pricings = await DoctorPricing.find().lean();
+    const materials = await loadActiveMaterials();
+    const labDefaults = materialsToDefaultPrices(materials);
 
     const rows = cases
       .map((doc) => {
@@ -541,7 +544,13 @@ exports.getFinancialReport = async (req, res) => {
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
         const pricingDoc = findPricingForDoctor(pricings, doctorName);
-        const billedAmount = calculateCaseCost(doc.caseType, notesMeta, pricingDoc?.prices);
+        const billedAmount = calculateCaseCost(
+          doc.caseType,
+          notesMeta,
+          pricingDoc?.prices,
+          materials,
+          labDefaults
+        );
         const storedSalary = Number(doc.salaryAmount || 0);
         const payment = String(doc.paymentStatus || 'unpaid');
         const salaryAmount =
@@ -655,6 +664,8 @@ exports.getDoctorAccountSummary = async (req, res) => {
 
     const pricingDoc = findPricingForDoctor(pricings, doctorName);
     const prices = pricingDoc?.prices || null;
+    const materials = await loadActiveMaterials();
+    const labDefaults = materialsToDefaultPrices(materials);
 
     const billableCases = [];
     let totalDue = 0;
@@ -674,7 +685,13 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (year && Number.isFinite(year) && receivedAt.getFullYear() !== year) continue;
       if (month && Number.isFinite(month) && receivedAt.getMonth() + 1 !== month) continue;
 
-      const breakdown = calculateCaseCostBreakdown(doc.caseType, meta, prices);
+      const breakdown = calculateCaseCostBreakdown(
+        doc.caseType,
+        meta,
+        prices,
+        materials,
+        labDefaults
+      );
       const amount = breakdown.total;
       const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
       const salaryAmount = Number(doc.salaryAmount || 0);
@@ -1207,8 +1224,6 @@ const STATION_TARGET = {
   finishing: 'finishing',
   reception: 'completed',
 };
-
-const STATION_ALLOWED_FROM = WORKFLOW_STATION_ALLOWED_FROM;
 
 const STATION_LABEL_AR = {
   reception: 'سكان 1 — منتهية',

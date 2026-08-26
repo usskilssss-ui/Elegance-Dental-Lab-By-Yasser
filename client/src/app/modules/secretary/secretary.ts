@@ -22,6 +22,7 @@ import { CaseDraft, SecretaryService } from './secretary.service';
 import { PatientLabelPipe } from './patient-label.pipe';
 import { ThemeService } from '../../core/services/theme.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { LabConfigService } from '../../core/services/lab-config.service';
 
 function emptyDraft(): CaseDraft {
   const today = new Date();
@@ -108,6 +109,8 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
+  private readonly labConfig = inject(LabConfigService);
+  brandTitle = 'Elegance';
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
   readonly activeFilter = signal<
@@ -410,8 +413,8 @@ export class Secretary implements OnInit, OnDestroy {
   /** اسم ملف PLY المحفوظ مسبقاً (وضع التعديل) */
   existingPlyFileName: string | null = null;
 
-  /** Work Type chip options */
-  readonly workTypeOptions = [
+  /** Work Type chip options — loaded from lab materials catalog */
+  workTypeOptions: string[] = [
     'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
     'Peek', 'Titanium', 'Try in', 'Mokup',
     'Night Guard', 'Wax', 'Ring'
@@ -659,6 +662,12 @@ export class Secretary implements OnInit, OnDestroy {
     this.reloadCasesFromBackend();
     this.connectRealtimeUpdates();
     this.loadAccountDoctors();
+    this.labConfig.workTypeLabels().subscribe((labels) => {
+      if (labels?.length) this.workTypeOptions = labels;
+    });
+    this.labConfig.loadPublicBranding().subscribe((b) => {
+      this.brandTitle = (b.labName || 'Lab').split(/\s+/)[0] || 'Lab';
+    });
   }
 
   ngOnDestroy(): void {

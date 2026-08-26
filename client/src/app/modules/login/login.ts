@@ -6,6 +6,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
+import { LabConfigService, LabBranding } from '../../core/services/lab-config.service';
 
 @Component({
   selector: 'app-login',
@@ -27,6 +28,12 @@ export class Login implements OnInit {
   submitting = false;
   public themeService = inject(ThemeService);
   public readonly pwa = inject(PwaInstallService);
+  private readonly labConfig = inject(LabConfigService);
+  branding: LabBranding = {
+    labName: 'Elegance Dental Lab',
+    logoUrl: '',
+    primaryColor: '#2563eb',
+  };
 
   constructor(
     private router: Router,
@@ -35,6 +42,9 @@ export class Login implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.labConfig.loadPublicBranding().subscribe((b) => {
+      this.branding = b;
+    });
     const remembered = this.pwa.getRememberedEmail();
     if (remembered) {
       this.email = remembered;

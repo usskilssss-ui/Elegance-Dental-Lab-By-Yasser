@@ -1,25 +1,23 @@
 const mongoose = require('mongoose');
 
-const DoctorPricingSchema = new mongoose.Schema({
-  doctorName: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
+/**
+ * Per-doctor price overrides. Keys match Material.key.
+ * Stored as Mixed so labs can add custom materials without schema migrations.
+ */
+const DoctorPricingSchema = new mongoose.Schema(
+  {
+    doctorName: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    prices: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
-  prices: {
-    emax: { type: Number, default: 1000 },
-    germanZircon: { type: Number, default: 850 },
-    zircon: { type: Number, default: 700 },
-    titanium: { type: Number, default: 2200 },
-    peek: { type: Number, default: 1700 },
-    pmma: { type: Number, default: 250 },
-    nightGuard: { type: Number, default: 300 },
-    mockup: { type: Number, default: 250 },
-    wax: { type: Number, default: 0 },
-    ring: { type: Number, default: 0 },
-    tryIn: { type: Number, default: 0 }
-  }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('DoctorPricing', DoctorPricingSchema);

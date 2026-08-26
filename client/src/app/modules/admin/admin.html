@@ -1,8 +1,8 @@
 <div class="shell">
   <div class="sidebar">
     <div class="logo-area">
-      <div class="logo-name">Elegance Core</div>
-      <div class="logo-sub">Precision Labs v2.1</div>
+      <div class="logo-name">{{ labBranding.labName || 'Lab Core' }}</div>
+      <div class="logo-sub">Lab Settings</div>
     </div>
     <div class="nav-item" [class.active]="activeNav === 'dashboard'" (click)="setNav('dashboard')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -27,6 +27,10 @@
     <div class="nav-item" [class.active]="activeNav === 'archive'" (click)="setNav('archive')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
       الأرشيف
+    </div>
+    <div class="nav-item" [class.active]="activeNav === 'lab'" (click)="setNav('lab')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      إعدادات المعمل
     </div>
     <div class="nav-item" [class.active]="activeNav === 'whatsapp'" (click)="setNav('whatsapp')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -856,49 +860,9 @@
             </div>
             
             <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;margin-bottom:16px;">
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Emax</label>
-                <input type="number" [(ngModel)]="customEmaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">German Zircon</label>
-                <input type="number" [(ngModel)]="customGermanZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Zircon</label>
-                <input type="number" [(ngModel)]="customZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Titanium</label>
-                <input type="number" [(ngModel)]="customTitaniumPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Peek</label>
-                <input type="number" [(ngModel)]="customPeekPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Pmma Cad</label>
-                <input type="number" [(ngModel)]="customPmmaPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Night Guard</label>
-                <input type="number" [(ngModel)]="customNightGuardPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Mokup</label>
-                <input type="number" [(ngModel)]="customMockupPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Wax</label>
-                <input type="number" [(ngModel)]="customWaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Ring</label>
-                <input type="number" [(ngModel)]="customRingPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Try in</label>
-                <input type="number" [(ngModel)]="customTryInPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
+              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;" *ngFor="let m of labMaterials">
+                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">{{ m.label }}</label>
+                <input type="number" [(ngModel)]="customPricesMap[m.key]" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
               </div>
             </div>
 
@@ -1090,6 +1054,123 @@
                 <div class="patient-detail-row"><span>الملاحظات</span><strong>{{ selectedReportCase.secretaryInstructions || 'السكرتيرة لم تضف تفاصيل بعد' }}</strong></div>
               </div>
             </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- LAB SETTINGS -->
+      <ng-container *ngIf="activeNav === 'lab'">
+        <div class="page-header">
+          <div>
+            <div class="page-label">تخصيص العميل</div>
+            <div class="page-title">إعدادات المعمل</div>
+          </div>
+        </div>
+
+        <div class="report-table-card" style="padding:20px;max-width:900px;margin-bottom:20px;">
+          <div style="font-weight:700;font-size:16px;margin-bottom:14px;color:#fff;">الهوية / البراندينج</div>
+          <div class="financial-controls" style="margin-bottom:12px;">
+            <div class="control-card" style="flex:2;">
+              <label>اسم المعمل</label>
+              <input type="text" [(ngModel)]="labBranding.labName" />
+            </div>
+            <div class="control-card" style="flex:1;">
+              <label>لون أساسي</label>
+              <input type="color" [(ngModel)]="labBranding.primaryColor" style="height:38px;padding:2px;" />
+            </div>
+          </div>
+          <div class="control-card" style="margin-bottom:12px;">
+            <label>رابط اللوجو (URL)</label>
+            <input type="text" [(ngModel)]="labBranding.logoUrl" placeholder="https://..." />
+          </div>
+          <div *ngIf="labBranding.logoUrl" style="margin-bottom:12px;">
+            <img [src]="labBranding.logoUrl" alt="logo" style="max-height:64px;border-radius:8px;background:#0f172a;padding:6px;" />
+          </div>
+
+          <div style="font-weight:700;font-size:16px;margin:20px 0 12px;color:#fff;">مراحل المسار</div>
+          <p style="margin:0 0 12px;color:#94a3b8;font-size:13px;">فعّل/عطّل المراحل حسب شغل المعمل. الانتظار / المنتهية / الخارجة ثابتة.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <label *ngFor="let s of labWorkflow.allStages" style="display:flex;align-items:center;gap:6px;background:#1e293b;padding:8px 12px;border-radius:8px;color:#e2e8f0;">
+              <input
+                type="checkbox"
+                [checked]="isStageEnabled(s)"
+                [disabled]="s === 'waiting' || s === 'completed' || s === 'exited'"
+                (change)="toggleStage(s, $any($event.target).checked)"
+              />
+              {{ stageLabelsAr[s] || s }}
+            </label>
+          </div>
+          <label class="remember-row" style="margin-bottom:8px;display:flex;gap:8px;align-items:center;color:#e2e8f0;">
+            <input type="checkbox" [(ngModel)]="labWorkflow.allowSkipSecretary" />
+            <span>السماح بتخطي السكرتارية (انتظار → ديزاين)</span>
+          </label>
+          <label class="remember-row" style="margin-bottom:16px;display:flex;gap:8px;align-items:center;color:#e2e8f0;">
+            <input type="checkbox" [(ngModel)]="labWorkflow.allowSkipKhart" />
+            <span>السماح بتخطي الخرط (ديزاين → فينيش)</span>
+          </label>
+
+          <button type="button" class="finish-btn" (click)="saveLabSettings()" [disabled]="labSaving">
+            {{ labSaving ? 'جاري الحفظ…' : 'حفظ الهوية والمراحل' }}
+          </button>
+          <p *ngIf="labMsg" style="margin:10px 0 0;color:#94a3b8;">{{ labMsg }}</p>
+        </div>
+
+        <div class="report-table-card" style="padding:20px;max-width:1100px;">
+          <div style="font-weight:700;font-size:16px;margin-bottom:14px;color:#fff;">قائمة الماتريال (قابلة للتعديل)</div>
+          <div class="financial-controls" style="margin-bottom:12px;align-items:flex-end;">
+            <div class="control-card" style="flex:1;">
+              <label>الاسم</label>
+              <input type="text" [(ngModel)]="matDraft.label" placeholder="مثال: Zircon" />
+            </div>
+            <div class="control-card" style="flex:1;">
+              <label>مفتاح (اختياري)</label>
+              <input type="text" [(ngModel)]="matDraft.key" placeholder="zircon" />
+            </div>
+            <div class="control-card" style="flex:1;">
+              <label>السعر الافتراضي</label>
+              <input type="number" [(ngModel)]="matDraft.defaultPrice" />
+            </div>
+            <div class="control-card" style="flex:2;">
+              <label>كلمات المطابقة (مفصولة بفاصلة)</label>
+              <input type="text" [(ngModel)]="matKeywordsText" placeholder="zircon, زيركون" />
+            </div>
+            <button type="button" class="export-btn" (click)="addMaterial()">إضافة</button>
+          </div>
+          <p *ngIf="matMsg" style="margin:0 0 12px;color:#94a3b8;">{{ matMsg }}</p>
+
+          <div class="table-wrap" style="overflow:auto;">
+            <table class="staff-table" style="width:100%;min-width:720px;">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>المفتاح</th>
+                  <th>السعر</th>
+                  <th>كلمات المطابقة</th>
+                  <th>نشط</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let m of labMaterials">
+                  <td><input type="text" [(ngModel)]="m.label" style="width:120px;" /></td>
+                  <td style="color:#94a3b8;">{{ m.key }}</td>
+                  <td><input type="number" [(ngModel)]="m.defaultPrice" style="width:90px;" /></td>
+                  <td>
+                    <input
+                      type="text"
+                      [ngModel]="keywordsToText(m)"
+                      (ngModelChange)="setMaterialKeywords(m, $event)"
+                      style="width:180px;"
+                    />
+                  </td>
+                  <td><input type="checkbox" [(ngModel)]="m.active" /></td>
+                  <td style="white-space:nowrap;">
+                    <button type="button" class="export-btn" style="padding:4px 10px;font-size:12px;" (click)="saveMaterialRow(m)">حفظ</button>
+                    <button type="button" class="finish-btn" style="padding:4px 10px;font-size:12px;" (click)="removeMaterial(m)">حذف</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </ng-container>

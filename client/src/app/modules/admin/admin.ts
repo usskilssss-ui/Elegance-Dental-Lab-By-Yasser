@@ -15,6 +15,12 @@ import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { environment } from '../../../environments/environment';
+import {
+  LabConfigService,
+  LabMaterial,
+  LabBranding,
+  LabWorkflow,
+} from '../../core/services/lab-config.service';
 
 export interface StaffMember {
   id: string;
@@ -183,6 +189,57 @@ export class Admin implements OnInit, OnDestroy {
   customWaxPrice = 0;
   customRingPrice = 0;
   customTryInPrice = 0;
+  /** Dynamic per-doctor price overrides keyed by Material.key */
+  customPricesMap: Record<string, number> = {};
+  labMaterials: LabMaterial[] = [];
+  labBranding: LabBranding = {
+    labName: 'Elegance Dental Lab',
+    logoUrl: '',
+    primaryColor: '#2563eb',
+  };
+  labWorkflow: LabWorkflow = {
+    enabledStages: [
+      'waiting',
+      'secretary',
+      'design',
+      'khart',
+      'finishing',
+      'completed',
+      'exited',
+    ],
+    allowSkipSecretary: true,
+    allowSkipKhart: true,
+    allStages: [
+      'waiting',
+      'secretary',
+      'design',
+      'khart',
+      'finishing',
+      'completed',
+      'exited',
+    ],
+  };
+  labDefaultPrices: Record<string, number> = {};
+  labMsg = '';
+  labSaving = false;
+  matDraft: Partial<LabMaterial> = {
+    label: '',
+    key: '',
+    defaultPrice: 0,
+    matchKeywords: [],
+    sortOrder: 100,
+  };
+  matKeywordsText = '';
+  matMsg = '';
+  readonly stageLabelsAr: Record<string, string> = {
+    waiting: 'انتظار',
+    secretary: 'سكرتارية',
+    design: 'ديزاين',
+    khart: 'خرط',
+    finishing: 'فينيش',
+    completed: 'منتهية',
+    exited: 'خارجة',
+  };
 
   currentPrintDate = new Date();
 
@@ -280,7 +337,8 @@ export class Admin implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private socketService: SocketService,
     private http: HttpClient,
-    public themeService: ThemeService
+    public themeService: ThemeService,
+    private labConfig: LabConfigService
   ) {}
 
   logout(): void {
@@ -293,6 +351,7 @@ export class Admin implements OnInit, OnDestroy {
     this.loadFinancialReportFromApi();
     this.loadDoctorPricings();
     this.loadStaffFromApi();
+    this.loadLabConfig();
     if (this.activeNav === 'staff') {
       this.loadStaffFromApi();
     }
@@ -1204,64 +1263,96 @@ export class Admin implements OnInit, OnDestroy {
 
   calculateCaseCost(c: AdminCaseRow): number {
     const doctor = c.doctorName || c.assignedTo || 'غير محدد';
-    const normalizedDoc = doctor.toLowerCase();
-
     const ct = (c.caseType || '').toLowerCase();
-    const isExcluded = ct.includes('redo') || ct.includes('remake') ||
-                       ct.includes('modification') || ct.includes('تعديل') ||
-                       ct.includes('اعاده') || ct.includes('إعادة') ||
-                       ct.includes('غير معروف') || ct.includes('unknown');
+    const isExcluded =
+      ct.includes('redo') ||
+      ct.includes('remake') ||
+      ct.includes('modification') ||
+      ct.includes('تعديل') ||
+      ct.includes('اعاده') ||
+      ct.includes('إعادة') ||
+      ct.includes('غير معروف') ||
+      ct.includes('unknown');
     if (isExcluded) return 0;
 
     const key = this.doctorGroupKey(doctor);
-    const custom = this.doctorPricingsMap.get(key);
-    const prices = {
-      emax: custom?.emax ?? 1000,
-      germanZircon: custom?.germanZircon ?? 850,
-      zircon: custom?.zircon ?? 700,
-      titanium: custom?.titanium ?? 2200,
-      peek: custom?.peek ?? 1700,
-      pmma: custom?.pmma ?? 250,
-      nightGuard: custom?.nightGuard ?? 300,
-      mockup: custom?.mockup ?? 250,
-      wax: custom?.wax ?? 0,
-      ring: custom?.ring ?? 0,
-      tryIn: custom?.tryIn ?? 0
-    };
+    const custom = this.doctorPricingsMap.get(key) || {};
+    const prices: Record<string, number> = { ...this.labDefaultPrices };
+    for (const [k, v] of Object.entries(custom)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) prices[k] = n;
+    }
+    // Legacy fallbacks if materials not loaded yet
+    if (!Object.keys(prices).length) {
+      Object.assign(prices, {
+        emax: 1000,
+        germanZircon: 850,
+        zircon: 700,
+        titanium: 2200,
+        peek: 1700,
+        pmma: 250,
+        nightGuard: 300,
+        mockup: 250,
+        wax: 0,
+        ring: 0,
+        tryIn: 0,
+      });
+    }
 
     let total = 0;
-    const parts = (c.caseType || '').split('+').map(p => p.trim());
+    const parts = (c.caseType || '').split('+').map((p) => p.trim());
     const meta = this.parseNotesMeta(c.rawNotes || '');
     const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
+    const materials =
+      this.labMaterials.length > 0
+        ? this.labMaterials
+        : ([
+            { key: 'emax', label: 'Emax', matchKeywords: ['emax'], defaultPrice: 1000 },
+            {
+              key: 'germanZircon',
+              label: 'German Zircon',
+              matchKeywords: ['german zircon', 'german'],
+              defaultPrice: 850,
+            },
+            { key: 'zircon', label: 'Zircon', matchKeywords: ['zircon'], defaultPrice: 700 },
+            { key: 'titanium', label: 'Titanium', matchKeywords: ['titanium'], defaultPrice: 2200 },
+            { key: 'peek', label: 'Peek', matchKeywords: ['peek'], defaultPrice: 1700 },
+            { key: 'pmma', label: 'Pmma Cad', matchKeywords: ['pmma cad', 'pmma'], defaultPrice: 250 },
+            {
+              key: 'nightGuard',
+              label: 'Night Guard',
+              matchKeywords: ['night guard', 'nightguard', 'guard'],
+              defaultPrice: 300,
+            },
+            {
+              key: 'mockup',
+              label: 'Mockup',
+              matchKeywords: ['mokup', 'mockup', 'mock up', 'موكب'],
+              defaultPrice: 250,
+            },
+            { key: 'wax', label: 'Wax', matchKeywords: ['wax'], defaultPrice: 0 },
+            { key: 'ring', label: 'Ring', matchKeywords: ['ring'], defaultPrice: 0 },
+            { key: 'tryIn', label: 'Try in', matchKeywords: ['try in', 'tryin'], defaultPrice: 0 },
+          ] as LabMaterial[]);
 
     for (const part of parts) {
       const lowerPart = part.toLowerCase();
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
-
-      if (lowerPart.includes('emax')) {
-        total += qty * prices.emax;
-      } else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
-        total += qty * prices.germanZircon;
-      } else if (lowerPart.includes('zircon')) {
-        total += qty * prices.zircon;
-      } else if (lowerPart.includes('titanium')) {
-        total += qty * prices.titanium;
-      } else if (lowerPart.includes('peek')) {
-        total += qty * prices.peek;
-      } else if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
-        total += qty * prices.pmma;
-      } else if (lowerPart.includes('night guard') || lowerPart.includes('nightguard') || lowerPart.includes('guard')) {
-        total += qty * prices.nightGuard;
-      } else if (lowerPart.includes('mokup') || lowerPart.includes('mockup') || lowerPart.includes('mock up') || lowerPart.includes('موكب')) {
-        total += qty * prices.mockup;
-      } else if (lowerPart.includes('wax')) {
-        total += qty * prices.wax;
-      } else if (lowerPart.includes('ring')) {
-        total += qty * prices.ring;
-      } else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-        total += qty * prices.tryIn;
+      let best: LabMaterial | null = null;
+      let bestLen = -1;
+      for (const m of materials) {
+        for (const kw of m.matchKeywords || []) {
+          const k = String(kw).toLowerCase();
+          if (k && lowerPart.includes(k) && k.length > bestLen) {
+            bestLen = k.length;
+            best = m;
+          }
+        }
       }
+      if (!best) continue;
+      const unit = prices[best.key] ?? Number(best.defaultPrice) || 0;
+      total += qty * unit;
     }
     return total;
   }
@@ -1734,6 +1825,8 @@ export class Admin implements OnInit, OnDestroy {
       this.loadArchiveList();
     } else if (nav === 'whatsapp') {
       this.loadWhatsAppSettings();
+    } else if (nav === 'lab') {
+      this.loadLabConfig();
     }
   }
 
@@ -2575,6 +2668,7 @@ export class Admin implements OnInit, OnDestroy {
       'reports',
       'archive',
       'whatsapp',
+      'lab',
       'case-management',
     ]);
     if (nav && allowed.has(nav)) {
@@ -2609,35 +2703,25 @@ export class Admin implements OnInit, OnDestroy {
 
   loadCustomPricesForDoctor(doctorName: string): void {
     const key = this.doctorGroupKey(doctorName);
-    const custom = this.doctorPricingsMap.get(key);
+    const custom = this.doctorPricingsMap.get(key) || {};
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
-    
-    if (custom) {
-      this.customEmaxPrice = custom.emax ?? 1000;
-      this.customGermanZirconPrice = custom.germanZircon ?? 850;
-      this.customZirconPrice = custom.zircon ?? 700;
-      this.customTitaniumPrice = custom.titanium ?? 2200;
-      this.customPeekPrice = custom.peek ?? 1700;
-      this.customPmmaPrice = custom.pmma ?? 250;
-      this.customNightGuardPrice = custom.nightGuard ?? 300;
-      this.customMockupPrice = custom.mockup ?? 250;
-      this.customWaxPrice = custom.wax ?? 0;
-      this.customRingPrice = custom.ring ?? 0;
-      this.customTryInPrice = custom.tryIn ?? 0;
-    } else {
-      this.customEmaxPrice = 1000;
-      this.customGermanZirconPrice = 850;
-      this.customZirconPrice = 700;
-      this.customTitaniumPrice = 2200;
-      this.customPeekPrice = 1700;
-      this.customPmmaPrice = 250;
-      this.customNightGuardPrice = 300;
-      this.customMockupPrice = 250;
-      this.customWaxPrice = 0;
-      this.customRingPrice = 0;
-      this.customTryInPrice = 0;
+    this.customPricesMap = {};
+    for (const m of this.labMaterials) {
+      const def = this.labDefaultPrices[m.key] ?? Number(m.defaultPrice) || 0;
+      this.customPricesMap[m.key] = Number(custom[m.key] ?? def);
     }
+    this.customEmaxPrice = this.customPricesMap['emax'] ?? custom.emax ?? 1000;
+    this.customGermanZirconPrice = this.customPricesMap['germanZircon'] ?? custom.germanZircon ?? 850;
+    this.customZirconPrice = this.customPricesMap['zircon'] ?? custom.zircon ?? 700;
+    this.customTitaniumPrice = this.customPricesMap['titanium'] ?? custom.titanium ?? 2200;
+    this.customPeekPrice = this.customPricesMap['peek'] ?? custom.peek ?? 1700;
+    this.customPmmaPrice = this.customPricesMap['pmma'] ?? custom.pmma ?? 250;
+    this.customNightGuardPrice = this.customPricesMap['nightGuard'] ?? custom.nightGuard ?? 300;
+    this.customMockupPrice = this.customPricesMap['mockup'] ?? custom.mockup ?? 250;
+    this.customWaxPrice = this.customPricesMap['wax'] ?? custom.wax ?? 0;
+    this.customRingPrice = this.customPricesMap['ring'] ?? custom.ring ?? 0;
+    this.customTryInPrice = this.customPricesMap['tryIn'] ?? custom.tryIn ?? 0;
   }
 
   saveDoctorCustomPrices(): void {
@@ -2646,36 +2730,180 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
 
-    const prices = {
-      emax: this.customEmaxPrice,
-      germanZircon: this.customGermanZirconPrice,
-      zircon: this.customZirconPrice,
-      titanium: this.customTitaniumPrice,
-      peek: this.customPeekPrice,
-      pmma: this.customPmmaPrice,
-      nightGuard: this.customNightGuardPrice,
-      mockup: this.customMockupPrice,
-      wax: this.customWaxPrice,
-      ring: this.customRingPrice,
-      tryIn: this.customTryInPrice
-    };
+    const prices: Record<string, number> =
+      Object.keys(this.customPricesMap).length > 0
+        ? { ...this.customPricesMap }
+        : {
+            emax: this.customEmaxPrice,
+            germanZircon: this.customGermanZirconPrice,
+            zircon: this.customZirconPrice,
+            titanium: this.customTitaniumPrice,
+            peek: this.customPeekPrice,
+            pmma: this.customPmmaPrice,
+            nightGuard: this.customNightGuardPrice,
+            mockup: this.customMockupPrice,
+            wax: this.customWaxPrice,
+            ring: this.customRingPrice,
+            tryIn: this.customTryInPrice,
+          };
 
     this.caseApi.updateDoctorPricing(this.reportDoctorFilter, prices).subscribe({
-      next: (res) => {
+      next: () => {
         this.isPricingSaving = false;
         this.pricingSaveSuccess = true;
-        
         const key = this.doctorGroupKey(this.reportDoctorFilter);
         this.doctorPricingsMap.set(key, prices);
-        
         this.loadFinancialReportFromApi();
       },
       error: (err) => {
         this.isPricingSaving = false;
         this.pricingSaveError = 'تعذر حفظ الأسعار المخصصة';
         console.error('Failed to update doctor pricing:', err);
-      }
+      },
     });
+  }
+
+  loadLabConfig(): void {
+    this.labMsg = '';
+    this.labConfig.getLabSettings().subscribe({
+      next: (res) => {
+        this.labBranding = { ...res.branding };
+        this.labWorkflow = { ...res.workflow };
+        this.labMaterials = res.materials || [];
+        this.labDefaultPrices = res.defaultPrices || {};
+        if (this.reportDoctorFilter) {
+          this.loadCustomPricesForDoctor(this.reportDoctorFilter);
+        }
+      },
+      error: (err) => {
+        this.labMsg = 'تعذر تحميل إعدادات المعمل';
+        console.error(err);
+      },
+    });
+  }
+
+  isStageEnabled(stage: string): boolean {
+    return (this.labWorkflow.enabledStages || []).includes(stage);
+  }
+
+  toggleStage(stage: string, enabled: boolean): void {
+    const locked = stage === 'waiting' || stage === 'completed' || stage === 'exited';
+    if (locked) return;
+    const all = this.labWorkflow.allStages || [];
+    const set = new Set(this.labWorkflow.enabledStages || []);
+    if (enabled) set.add(stage);
+    else set.delete(stage);
+    this.labWorkflow.enabledStages = all.filter((s) => set.has(s));
+  }
+
+  saveLabSettings(): void {
+    this.labSaving = true;
+    this.labMsg = '';
+    this.labConfig
+      .updateLabSettings({
+        branding: this.labBranding,
+        workflow: {
+          enabledStages: this.labWorkflow.enabledStages,
+          allowSkipSecretary: this.labWorkflow.allowSkipSecretary,
+          allowSkipKhart: this.labWorkflow.allowSkipKhart,
+        },
+      })
+      .subscribe({
+        next: () => {
+          this.labSaving = false;
+          this.labMsg = 'تم حفظ إعدادات المعمل';
+          this.waLabName = this.labBranding.labName;
+        },
+        error: (err) => {
+          this.labSaving = false;
+          this.labMsg = err?.error?.message || 'تعذر حفظ الإعدادات';
+        },
+      });
+  }
+
+  addMaterial(): void {
+    this.matMsg = '';
+    const label = String(this.matDraft.label || '').trim();
+    if (!label) {
+      this.matMsg = 'اكتب اسم الماتريال';
+      return;
+    }
+    const keywords = this.matKeywordsText
+      .split(/[,|\n]/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    this.labConfig
+      .createMaterial({
+        label,
+        key: this.matDraft.key || label,
+        labelAr: this.matDraft.labelAr || '',
+        defaultPrice: Number(this.matDraft.defaultPrice) || 0,
+        matchKeywords: keywords.length ? keywords : [label.toLowerCase()],
+        sortOrder: Number(this.matDraft.sortOrder) || 100,
+        active: true,
+        showInWorkTypes: true,
+        showInCounters: true,
+      })
+      .subscribe({
+        next: () => {
+          this.matDraft = { label: '', key: '', defaultPrice: 0, matchKeywords: [], sortOrder: 100 };
+          this.matKeywordsText = '';
+          this.matMsg = 'تمت إضافة الماتريال';
+          this.loadLabConfig();
+        },
+        error: (err) => {
+          this.matMsg = err?.error?.message || 'تعذر الإضافة';
+        },
+      });
+  }
+
+  saveMaterialRow(m: LabMaterial): void {
+    if (!m._id) return;
+    this.labConfig
+      .updateMaterial(m._id, {
+        label: m.label,
+        labelAr: m.labelAr,
+        defaultPrice: Number(m.defaultPrice) || 0,
+        matchKeywords: m.matchKeywords,
+        active: m.active,
+        sortOrder: Number(m.sortOrder) || 100,
+        showInWorkTypes: m.showInWorkTypes,
+        showInCounters: m.showInCounters,
+      })
+      .subscribe({
+        next: () => {
+          this.matMsg = `تم حفظ «${m.label}»`;
+          this.loadLabConfig();
+        },
+        error: (err) => {
+          this.matMsg = err?.error?.message || 'تعذر الحفظ';
+        },
+      });
+  }
+
+  removeMaterial(m: LabMaterial): void {
+    if (!m._id) return;
+    if (!confirm(`حذف الماتريال «${m.label}»؟`)) return;
+    this.labConfig.deleteMaterial(m._id).subscribe({
+      next: () => {
+        this.matMsg = 'تم الحذف';
+        this.loadLabConfig();
+      },
+      error: (err) => {
+        this.matMsg = err?.error?.message || 'تعذر الحذف';
+      },
+    });
+  }
+
+  keywordsToText(m: LabMaterial): string {
+    return (m.matchKeywords || []).join(', ');
+  }
+
+  setMaterialKeywords(m: LabMaterial, text: string): void {
+    m.matchKeywords = String(text || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
 
   loadDoctorPayments(): void {

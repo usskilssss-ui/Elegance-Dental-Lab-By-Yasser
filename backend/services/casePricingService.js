@@ -1,22 +1,47 @@
 /**
- * Shared case pricing helpers — mirrors admin calculateCaseCost / isExcludedWorkCaseType.
+ * Shared case pricing helpers — dynamic materials from DB + doctor overrides.
  */
 
-const DEFAULT_PRICES = {
-  emax: 1000,
-  germanZircon: 850,
-  zircon: 700,
-  titanium: 2200,
-  peek: 1700,
-  pmma: 250,
-  nightGuard: 300,
-  mockup: 250,
-  wax: 0,
-  ring: 0,
-  tryIn: 0,
-};
+const Material = require('../models/Material');
+const DEFAULT_MATERIALS = require('../data/defaultMaterials');
 
-/** Normalize doctor name for matching (titles stripped, like WhatsApp normalizeDoctorKey). */
+const FALLBACK_PRICES = Object.fromEntries(
+  DEFAULT_MATERIALS.map((m) => [m.key, Number(m.defaultPrice) || 0])
+);
+
+let materialsCache = null;
+let materialsCacheAt = 0;
+const CACHE_MS = 60_000;
+
+function invalidateMaterialCache() {
+  materialsCache = null;
+  materialsCacheAt = 0;
+}
+
+async function loadActiveMaterials() {
+  const now = Date.now();
+  if (materialsCache && now - materialsCacheAt < CACHE_MS) {
+    return materialsCache;
+  }
+  try {
+    const mats = await Material.find({ active: true }).sort({ sortOrder: 1 }).lean();
+    materialsCache = mats.length ? mats : DEFAULT_MATERIALS;
+  } catch {
+    materialsCache = DEFAULT_MATERIALS;
+  }
+  materialsCacheAt = now;
+  return materialsCache;
+}
+
+function materialsToDefaultPrices(materials) {
+  const prices = { ...FALLBACK_PRICES };
+  for (const m of materials || []) {
+    if (m?.key) prices[m.key] = Number(m.defaultPrice) || 0;
+  }
+  return prices;
+}
+
+/** Normalize doctor name for matching (titles stripped). */
 function normalizeDoctorKey(name) {
   return String(name || '')
     .trim()
@@ -70,66 +95,40 @@ function parseNotesMeta(notes) {
   }
 }
 
-function resolvePrices(custom) {
-  return {
-    emax: custom?.emax ?? DEFAULT_PRICES.emax,
-    germanZircon: custom?.germanZircon ?? DEFAULT_PRICES.germanZircon,
-    zircon: custom?.zircon ?? DEFAULT_PRICES.zircon,
-    titanium: custom?.titanium ?? DEFAULT_PRICES.titanium,
-    peek: custom?.peek ?? DEFAULT_PRICES.peek,
-    pmma: custom?.pmma ?? DEFAULT_PRICES.pmma,
-    nightGuard: custom?.nightGuard ?? DEFAULT_PRICES.nightGuard,
-    mockup: custom?.mockup ?? DEFAULT_PRICES.mockup,
-    wax: custom?.wax ?? DEFAULT_PRICES.wax,
-    ring: custom?.ring ?? DEFAULT_PRICES.ring,
-    tryIn: custom?.tryIn ?? DEFAULT_PRICES.tryIn,
-  };
+function resolvePrices(custom, labDefaults) {
+  const base = { ...(labDefaults || FALLBACK_PRICES) };
+  if (custom && typeof custom === 'object') {
+    for (const [k, v] of Object.entries(custom)) {
+      if (v === undefined || v === null || v === '') continue;
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) base[k] = n;
+    }
+  }
+  return base;
 }
 
 /**
- * Price a case like admin calculateCaseCost.
- * @param {string} caseType
- * @param {object|string} metaOrNotes — notes meta object or raw notes string
- * @param {object} [customPrices] — DoctorPricing.prices
+ * Match a caseType part against material keywords (longest keyword first).
  */
-function resolvePartUnitPrice(lowerPart, prices) {
-  if (lowerPart.includes('emax')) return { label: 'Emax', unitPrice: prices.emax };
-  if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
-    return { label: 'German Zircon', unitPrice: prices.germanZircon };
+function resolvePartUnitPrice(lowerPart, prices, materials) {
+  const mats = materials || DEFAULT_MATERIALS;
+  let best = null;
+  let bestLen = -1;
+  for (const m of mats) {
+    const keywords = (m.matchKeywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
+    for (const kw of keywords) {
+      if (lowerPart.includes(kw) && kw.length > bestLen) {
+        bestLen = kw.length;
+        best = m;
+      }
+    }
   }
-  if (lowerPart.includes('zircon')) return { label: 'Zircon', unitPrice: prices.zircon };
-  if (lowerPart.includes('titanium')) return { label: 'Titanium', unitPrice: prices.titanium };
-  if (lowerPart.includes('peek')) return { label: 'Peek', unitPrice: prices.peek };
-  if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
-    return { label: 'Pmma Cad', unitPrice: prices.pmma };
-  }
-  if (
-    lowerPart.includes('night guard') ||
-    lowerPart.includes('nightguard') ||
-    lowerPart.includes('guard')
-  ) {
-    return { label: 'Night Guard', unitPrice: prices.nightGuard };
-  }
-  if (
-    lowerPart.includes('mokup') ||
-    lowerPart.includes('mockup') ||
-    lowerPart.includes('mock up') ||
-    lowerPart.includes('موكب')
-  ) {
-    return { label: 'Mockup', unitPrice: prices.mockup };
-  }
-  if (lowerPart.includes('wax')) return { label: 'Wax', unitPrice: prices.wax };
-  if (lowerPart.includes('ring')) return { label: 'Ring', unitPrice: prices.ring };
-  if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-    return { label: 'Try in', unitPrice: prices.tryIn };
-  }
-  return null;
+  if (!best) return null;
+  const unitPrice = prices[best.key] ?? Number(best.defaultPrice) || 0;
+  return { label: best.label, key: best.key, unitPrice };
 }
 
-/**
- * Same rules as calculateCaseCost, with per-line qty / unitPrice for UI display.
- */
-function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
+function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materials, labDefaults) {
   if (isNonBillableCase(caseType, metaOrNotes)) {
     return { total: 0, quantity: 0, unitPrice: 0, lines: [] };
   }
@@ -139,7 +138,7 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
       ? metaOrNotes
       : parseNotesMeta(metaOrNotes || '');
 
-  const prices = resolvePrices(customPrices);
+  const prices = resolvePrices(customPrices, labDefaults || materialsToDefaultPrices(materials));
   const parts = String(caseType || '')
     .split('+')
     .map((p) => p.trim())
@@ -154,7 +153,7 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
     const lowerPart = part.toLowerCase();
     const match = part.match(/\((\d+)\)/);
     const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
-    const resolved = resolvePartUnitPrice(lowerPart, prices);
+    const resolved = resolvePartUnitPrice(lowerPart, prices, materials);
     if (!resolved) continue;
 
     const lineTotal = qty * resolved.unitPrice;
@@ -162,6 +161,7 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
     quantity += qty;
     lines.push({
       label: resolved.label,
+      key: resolved.key,
       quantity: qty,
       unitPrice: resolved.unitPrice,
       lineTotal,
@@ -178,8 +178,22 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
   return { total, quantity, unitPrice, lines };
 }
 
-function calculateCaseCost(caseType, metaOrNotes, customPrices) {
-  return calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices).total;
+function calculateCaseCost(caseType, metaOrNotes, customPrices, materials, labDefaults) {
+  return calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materials, labDefaults)
+    .total;
+}
+
+/** Async wrapper that loads materials from DB. */
+async function calculateCaseCostAsync(caseType, metaOrNotes, customPrices) {
+  const materials = await loadActiveMaterials();
+  const labDefaults = materialsToDefaultPrices(materials);
+  return calculateCaseCost(caseType, metaOrNotes, customPrices, materials, labDefaults);
+}
+
+async function calculateCaseCostBreakdownAsync(caseType, metaOrNotes, customPrices) {
+  const materials = await loadActiveMaterials();
+  const labDefaults = materialsToDefaultPrices(materials);
+  return calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materials, labDefaults);
 }
 
 function findPricingForDoctor(pricings, doctorName) {
@@ -193,14 +207,21 @@ function findPricingForDoctor(pricings, doctorName) {
 }
 
 module.exports = {
-  DEFAULT_PRICES,
+  DEFAULT_PRICES: FALLBACK_PRICES,
+  FALLBACK_PRICES,
+  invalidateMaterialCache,
+  loadActiveMaterials,
+  materialsToDefaultPrices,
   normalizeDoctorKey,
   doctorKeysMatch,
   isExcludedWorkCaseType,
   isNonBillableCase,
   parseNotesMeta,
   resolvePrices,
-  calculateCaseCost,
+  resolvePartUnitPrice,
   calculateCaseCostBreakdown,
+  calculateCaseCost,
+  calculateCaseCostAsync,
+  calculateCaseCostBreakdownAsync,
   findPricingForDoctor,
 };

@@ -1,5 +1,6 @@
 /**
  * Strict case workflow rules — forward-only stages, exit only after completed.
+ * Enabled stages come from AppSettings.workflow (lab-configurable).
  */
 
 const STAGE_ORDER = [
@@ -11,6 +12,37 @@ const STAGE_ORDER = [
   'completed',
   'exited',
 ];
+
+let workflowCache = {
+  enabledStages: [...STAGE_ORDER],
+  allowSkipSecretary: true,
+  allowSkipKhart: true,
+};
+
+function setWorkflowConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return;
+  const enabled = Array.isArray(cfg.enabledStages)
+    ? cfg.enabledStages.map((s) => String(s).toLowerCase()).filter((s) => STAGE_ORDER.includes(s))
+    : [...STAGE_ORDER];
+  // Always keep waiting + exited for system integrity
+  const set = new Set(enabled.length ? enabled : STAGE_ORDER);
+  set.add('waiting');
+  set.add('exited');
+  if (!set.has('completed')) set.add('completed');
+  workflowCache = {
+    enabledStages: STAGE_ORDER.filter((s) => set.has(s)),
+    allowSkipSecretary: cfg.allowSkipSecretary !== false,
+    allowSkipKhart: cfg.allowSkipKhart !== false,
+  };
+}
+
+function getWorkflowConfig() {
+  return workflowCache;
+}
+
+function isStageEnabled(stage) {
+  return workflowCache.enabledStages.includes(normalizeStage(stage));
+}
 
 function normalizeStage(stage) {
   const s = String(stage || 'waiting').trim().toLowerCase();
@@ -35,14 +67,50 @@ function isCompletedCase(doc) {
   );
 }
 
+function buildAllowedPairs() {
+  const cfg = workflowCache;
+  const enabled = new Set(cfg.enabledStages);
+  const pairs = new Set();
+
+  const hasSec = enabled.has('secretary');
+  const hasDesign = enabled.has('design');
+  const hasKhart = enabled.has('khart');
+  const hasFin = enabled.has('finishing');
+  const hasComp = enabled.has('completed');
+
+  if (hasSec) {
+    pairs.add('waiting>secretary');
+    pairs.add('secretary>waiting');
+  }
+  if (hasDesign) {
+    if (hasSec && cfg.allowSkipSecretary !== false) {
+      pairs.add('waiting>design');
+    }
+    if (hasSec) pairs.add('secretary>design');
+    if (!hasSec) pairs.add('waiting>design');
+  }
+  if (hasKhart && hasDesign) {
+    pairs.add('design>khart');
+  }
+  if (hasFin) {
+    if (hasKhart && cfg.allowSkipKhart !== false && hasDesign) {
+      pairs.add('design>finishing');
+    }
+    if (hasKhart) pairs.add('khart>finishing');
+    if (!hasKhart && hasDesign) pairs.add('design>finishing');
+    if (!hasDesign && !hasKhart) pairs.add('waiting>finishing');
+  }
+  if (hasComp && hasFin) {
+    pairs.add('finishing>completed');
+  } else if (hasComp && !hasFin && hasDesign) {
+    pairs.add('design>completed');
+  }
+
+  return pairs;
+}
+
 /**
  * Allowed forward transitions for move-stage / scan.
- * - waiting/secretary ↔ each other
- * - waiting|secretary → design
- * - design → khart | finishing (khart optional in lab)
- * - khart → finishing
- * - finishing → completed
- * - completed → exited is NOT allowed here (use exitCase)
  */
 function assertForwardTransition(fromRaw, toRaw) {
   const from = normalizeStage(fromRaw);
@@ -63,17 +131,14 @@ function assertForwardTransition(fromRaw, toRaw) {
     return { ok: false, message: 'الحالة خارجة ولا يمكن نقلها' };
   }
 
-  const pairs = new Set([
-    'waiting>secretary',
-    'secretary>waiting',
-    'waiting>design',
-    'secretary>design',
-    'design>khart',
-    'design>finishing',
-    'khart>finishing',
-    'finishing>completed',
-  ]);
+  if (!isStageEnabled(to) && to !== 'waiting') {
+    return {
+      ok: false,
+      message: `مرحلة «${to}» غير مفعّلة في إعدادات هذا المعمل`,
+    };
+  }
 
+  const pairs = buildAllowedPairs();
   if (pairs.has(`${from}>${to}`)) {
     return { ok: true, same: false };
   }
@@ -85,18 +150,33 @@ function assertForwardTransition(fromRaw, toRaw) {
 }
 
 /** Station scan: only advance into the station’s target from allowed prior stages */
-const STATION_ALLOWED_FROM = {
-  design: new Set(['waiting', 'secretary', 'design']),
-  finishing: new Set(['design', 'khart', 'finishing']),
-  reception: new Set(['finishing', 'completed']),
-};
+function buildStationAllowedFrom() {
+  const cfg = workflowCache;
+  const enabled = new Set(cfg.enabledStages);
+  const designFrom = new Set(['waiting', 'design']);
+  if (enabled.has('secretary')) designFrom.add('secretary');
+
+  const finishingFrom = new Set(['finishing']);
+  if (enabled.has('design')) finishingFrom.add('design');
+  if (enabled.has('khart')) finishingFrom.add('khart');
+
+  const receptionFrom = new Set(['completed']);
+  if (enabled.has('finishing')) receptionFrom.add('finishing');
+
+  return {
+    design: designFrom,
+    finishing: finishingFrom,
+    reception: receptionFrom,
+  };
+}
 
 function assertStationTransition(station, fromRaw, targetStage) {
   const from = normalizeStage(fromRaw);
   if (from === 'exited') {
     return { ok: false, message: 'الحالة خارجة بالفعل ولا يمكن نقلها' };
   }
-  const allowed = STATION_ALLOWED_FROM[station];
+  const map = buildStationAllowedFrom();
+  const allowed = map[station];
   if (!allowed || !allowed.has(from)) {
     return {
       ok: false,
@@ -106,7 +186,6 @@ function assertStationTransition(station, fromRaw, targetStage) {
   if (from === targetStage) {
     return { ok: true, same: true };
   }
-  // Must also be a valid forward edge
   return assertForwardTransition(from, targetStage);
 }
 
@@ -118,10 +197,18 @@ function assertCanComplete(doc) {
     return { ok: true, already: true };
   }
   const stage = normalizeStage(doc?.currentStage);
-  if (stage !== 'finishing' && stage !== 'completed') {
+  const enabled = new Set(workflowCache.enabledStages);
+  if (enabled.has('finishing')) {
+    if (stage !== 'finishing' && stage !== 'completed') {
+      return {
+        ok: false,
+        message: 'لا يمكن إكمال الحالة إلا بعد مرحلة الفينيش',
+      };
+    }
+  } else if (enabled.has('design') && stage !== 'design' && stage !== 'completed') {
     return {
       ok: false,
-      message: 'لا يمكن إكمال الحالة إلا بعد مرحلة الفينيش',
+      message: 'لا يمكن إكمال الحالة إلا بعد مرحلة الديزاين',
     };
   }
   return { ok: true, already: false };
@@ -150,5 +237,7 @@ module.exports = {
   assertStationTransition,
   assertCanComplete,
   assertCanExit,
-  STATION_ALLOWED_FROM,
+  setWorkflowConfig,
+  getWorkflowConfig,
+  isStageEnabled,
 };
