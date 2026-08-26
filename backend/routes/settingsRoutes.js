@@ -4,6 +4,13 @@ const settingsController = require('../controllers/settingsController');
 
 const router = express.Router();
 
+// Public white-label branding (login page)
+router.get('/public', settingsController.getPublicLabSettings);
+
+// Lab config (any authenticated user can read; admin writes)
+router.get('/lab', authenticate, settingsController.getLabSettings);
+router.put('/lab', authenticate, authorize('admin'), settingsController.updateLabSettings);
+
 router.use(authenticate, authorize('admin'));
 
 router.get('/whatsapp', settingsController.getWhatsAppSettings);

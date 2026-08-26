@@ -25,6 +25,7 @@ const printRoutes = require('./routes/printRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const monthArchiveRoutes = require('./routes/monthArchiveRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const materialRoutes = require('./routes/materialRoutes');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -127,6 +128,7 @@ app.use('/api/print', printRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/month-archive', monthArchiveRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/materials', materialRoutes);
 
 // Static files with proper CORS headers
 // Prefer UPLOAD_DIR (Railway Volume). Default local ./uploads is wiped on redeploy.
@@ -179,6 +181,19 @@ const startServer = async () => {
     const PrintJob = require('./models/PrintJob');
     if (typeof PrintJob.ensurePrintJobTtlIndex === 'function') {
       await PrintJob.ensurePrintJobTtlIndex();
+    }
+
+    // Seed lab materials + load workflow config from AppSettings
+    try {
+      const { ensureDefaultMaterials, getOrCreateLabSettings } = require('./services/labConfigService');
+      const { setWorkflowConfig } = require('./services/caseWorkflowService');
+      const seeded = await ensureDefaultMaterials();
+      if (seeded.created) console.log(`[lab-config] seeded ${seeded.created} default materials`);
+      const lab = await getOrCreateLabSettings();
+      setWorkflowConfig(lab.workflow);
+      console.log('[lab-config] branding:', lab.branding?.labName || lab.whatsapp?.labName || 'Elegance');
+    } catch (e) {
+      console.warn('[lab-config] init skipped:', e.message);
     }
 
     // Start server

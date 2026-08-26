@@ -19,6 +19,7 @@ import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { LabConfigService } from '../../core/services/lab-config.service';
 
 function todayYmd(): string {
   const d = new Date();
@@ -75,6 +76,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
   public readonly pwa = inject(PwaInstallService);
+  private readonly labConfig = inject(LabConfigService);
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
@@ -118,7 +120,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   pinError = '';
   pinSaving = false;
 
-  readonly workTypeOptions = [
+  workTypeOptions = [
     'Zircon',
     'Emax',
     'Pmma Cad',
@@ -130,6 +132,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     'Wax',
     'Ring',
   ];
+  brandTitle = 'Elegance';
 
   readonly caseTypeOptions = [
     { value: 'New', label: 'جديد' },
@@ -315,6 +318,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
         },
       } as Subscription);
     }
+    this.labConfig.workTypeLabels().subscribe((labels) => {
+      if (labels?.length) this.workTypeOptions = labels;
+    });
+    this.labConfig.loadPublicBranding().subscribe((b) => {
+      this.brandTitle = (b.labName || 'Lab').split(/\s+/)[0] || 'Lab';
+    });
   }
 
   ngOnDestroy(): void {
