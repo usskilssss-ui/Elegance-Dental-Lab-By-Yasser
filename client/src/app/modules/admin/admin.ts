@@ -1351,7 +1351,7 @@ export class Admin implements OnInit, OnDestroy {
         }
       }
       if (!best) continue;
-      const unit = prices[best.key] ?? Number(best.defaultPrice) || 0;
+      const unit = prices[best.key] ?? (Number(best.defaultPrice) || 0);
       total += qty * unit;
     }
     return total;
@@ -2708,7 +2708,7 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveError = '';
     this.customPricesMap = {};
     for (const m of this.labMaterials) {
-      const def = this.labDefaultPrices[m.key] ?? Number(m.defaultPrice) || 0;
+      const def = this.labDefaultPrices[m.key] ?? (Number(m.defaultPrice) || 0);
       this.customPricesMap[m.key] = Number(custom[m.key] ?? def);
     }
     this.customEmaxPrice = this.customPricesMap['emax'] ?? custom.emax ?? 1000;
