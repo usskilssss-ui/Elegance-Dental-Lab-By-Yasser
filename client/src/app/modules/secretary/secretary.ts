@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -14,6 +14,7 @@ import {
   toStoredCaseImagePath,
 } from '../../core/mappers/dental-case-api.mapper';
 import { buildPrintData } from '../../core/utils/print-job.util';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 import { environment } from '../../../environments/environment';
 
 import { SocketService } from '../../core/services/socket.service';
@@ -1097,24 +1098,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   private formatCaseApiError(err: unknown): string {
-    if (err instanceof HttpErrorResponse) {
-      const body = err.error as Record<string, unknown> | undefined;
-      const msg = body?.['message'];
-      const detail = body?.['error'];
-      if (typeof msg === 'string' && typeof detail === 'string' && detail.trim()) {
-        return `${msg}: ${detail}`;
-      }
-      if (msg && typeof msg === 'string') return msg;
-      const errs = body?.['errors'];
-      if (Array.isArray(errs) && errs[0]?.msg) return String(errs[0].msg);
-      if (err.status === 403) {
-        if (typeof msg === 'string' && /attach scans|PLY/i.test(msg)) {
-          return 'لا يمكن إرفاق مسح لهذه الحالة إلا من السكرتير الذي أنشأها.';
-        }
-        return 'لا يمكنك تعديل أو حذف حالة لم تنشئها.';
-      }
-    }
-    return 'تعذر الحفظ — تحقق من البيانات والاتصال بالخادم';
+    return formatCaseWorkflowError(err, 'تعذر الحفظ — تحقق من البيانات والاتصال بالخادم');
   }
 
   confirmDelete(c: any): void {
@@ -1140,8 +1124,13 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   confirmExit(c: any): void {
-    if (c.status === 'exited') {
+    if (c.status === 'exited' || c.currentStage === 'exited') {
       this.flash('هذه الحالة خارجة بالفعل');
+      return;
+    }
+    const stage = String(c.currentStage || c.status || '');
+    if (stage !== 'completed' && c.status !== 'completed') {
+      this.flash('لا يمكن إخراج الحالة إلا بعد أن تكون منتهية');
       return;
     }
     const ok = confirm(`هل تريد إخراج الحالة ${c.caseNumber} نهائيًا؟`);

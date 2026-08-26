@@ -10,6 +10,7 @@ import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mappe
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 @Component({
   selector: 'app-finishing',
@@ -98,12 +99,12 @@ export class Finishing implements OnInit, OnDestroy {
     this.caseApi.completeCase(c.id).subscribe({
       next: () => {
         this.exitingId = null;
-        this.showToast('تم إخراج الحالة بنجاح ✅');
+        this.showToast('تم إكمال الحالة بنجاح ✅');
         this.reloadCasesFromBackend();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.exitingId = null;
-        this.showToast('فشل إخراج الحالة، حاول مرة أخرى');
+        this.showToast(formatCaseWorkflowError(err, 'فشل إكمال الحالة — تأكد أنها في الفينيش'));
       },
     });
   }

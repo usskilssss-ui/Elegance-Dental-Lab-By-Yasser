@@ -25,6 +25,38 @@ const {
   STATION_ALLOWED_FROM: WORKFLOW_STATION_ALLOWED_FROM,
 } = require('../services/caseWorkflowService');
 
+/** Validate create payload for quantity / empty / work type rigor */
+function validateCreateCaseBusinessRules({ caseType, notes }) {
+  const ct = String(caseType || '').trim();
+  if (!ct) {
+    return 'نوع العمل مطلوب';
+  }
+
+  const meta = parseNotesMeta(notes || '');
+  const lower = ct.toLowerCase();
+  const isEmpty =
+    lower.includes('empty') ||
+    ct.includes('غير معروف') ||
+    lower === 'empty';
+
+  if (isEmpty) {
+    return null;
+  }
+
+  if (isNonBillableCase(ct, meta)) {
+    // Redo / modification: allow create without positive qty
+    return null;
+  }
+
+  const qty = Number(meta.quantity ?? meta.qty ?? 0);
+  const hasParenQty = /\(\d+\)/.test(ct);
+  if (!hasParenQty && (!Number.isFinite(qty) || qty < 1)) {
+    return 'الكمية يجب أن تكون 1 على الأقل (إلا في حالات الفاضي / الإعادة / التعديل)';
+  }
+
+  return null;
+}
+
 function normalizeDocId(ref) {
   if (ref === undefined || ref === null) return '';
   if (typeof ref === 'object' && ref._id !== undefined) return String(ref._id);
@@ -149,6 +181,11 @@ exports.createCase = async (req, res) => {
     if (req.user?.role === 'doctor') {
       notes = forceDoctorNameInNotes(notes, req.user.fullName);
       requesterType = 'doctor';
+    }
+
+    const businessError = validateCreateCaseBusinessRules({ caseType, notes });
+    if (businessError) {
+      return res.status(400).json({ success: false, message: businessError });
     }
 
     const normalizedRequesterType = requesterType === 'student' ? 'student' : 'doctor';
@@ -487,6 +524,8 @@ exports.getFinancialReport = async (req, res) => {
       .populate('createdBy', 'fullName role')
       .sort({ createdAt: -1 });
 
+    const pricings = await DoctorPricing.find().lean();
+
     const rows = cases
       .map((doc) => {
         const notesMeta = parseNotesMeta(doc.notes || '');
@@ -495,13 +534,22 @@ exports.getFinancialReport = async (req, res) => {
         const doctorNameRaw =
           notesMeta.doctor ||
           notesMeta.doctorName ||
+          doc.referringDoctor ||
           (doc.assignedTo && doc.assignedTo.fullName) ||
           'غير محدد';
         const doctorName = String(doctorNameRaw).trim() || 'غير محدد';
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
-        const salaryAmount = Number(doc.salaryAmount || 0);
+        const pricingDoc = findPricingForDoctor(pricings, doctorName);
+        const billedAmount = calculateCaseCost(doc.caseType, notesMeta, pricingDoc?.prices);
+        const storedSalary = Number(doc.salaryAmount || 0);
         const payment = String(doc.paymentStatus || 'unpaid');
+        const salaryAmount =
+          billedAmount > 0
+            ? billedAmount
+            : Number.isFinite(storedSalary)
+              ? storedSalary
+              : 0;
 
         return {
           id: String(doc._id),
@@ -511,12 +559,16 @@ exports.getFinancialReport = async (req, res) => {
           doctorName,
           assignedTo: doc.assignedTo ? String(doc.assignedTo.fullName || '') : null,
           currentStage: String(doc.currentStage || ''),
-          salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
+          salaryAmount,
+          pricedAmount: billedAmount,
+          storedSalaryAmount: Number.isFinite(storedSalary) ? storedSalary : 0,
           paymentStatus: payment === 'paid' ? 'paid' : 'unpaid',
           paidAt: doc.paidAt || null,
           receivedAt: createdAt,
           receivedDateDisplay: createdAt.toISOString(),
-          dueDate: doc.dueDate || null, notes: doc.notes || '', exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+          dueDate: doc.dueDate || null,
+          notes: doc.notes || '',
+          exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
         };
       })
       .filter(Boolean)
