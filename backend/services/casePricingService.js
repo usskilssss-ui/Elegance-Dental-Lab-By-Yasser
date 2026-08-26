@@ -50,6 +50,16 @@ function isExcludedWorkCaseType(caseType) {
   );
 }
 
+/** True when case must not count in billing / materials (type or meta flags). */
+function isNonBillableCase(caseType, metaOrNotes) {
+  if (isExcludedWorkCaseType(caseType)) return true;
+  const meta =
+    metaOrNotes && typeof metaOrNotes === 'object' && !Array.isArray(metaOrNotes)
+      ? metaOrNotes
+      : parseNotesMeta(metaOrNotes || '');
+  return !!(meta.isRedoCase || meta.isModificationCase);
+}
+
 function parseNotesMeta(notes) {
   const prefix = '__META__\n';
   if (!notes || typeof notes !== 'string' || !notes.startsWith(prefix)) return {};
@@ -120,7 +130,7 @@ function resolvePartUnitPrice(lowerPart, prices) {
  * Same rules as calculateCaseCost, with per-line qty / unitPrice for UI display.
  */
 function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
-  if (isExcludedWorkCaseType(caseType)) {
+  if (isNonBillableCase(caseType, metaOrNotes)) {
     return { total: 0, quantity: 0, unitPrice: 0, lines: [] };
   }
 
@@ -128,10 +138,6 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices) {
     metaOrNotes && typeof metaOrNotes === 'object' && !Array.isArray(metaOrNotes)
       ? metaOrNotes
       : parseNotesMeta(metaOrNotes || '');
-
-  if (meta.isRedoCase || meta.isModificationCase) {
-    return { total: 0, quantity: 0, unitPrice: 0, lines: [] };
-  }
 
   const prices = resolvePrices(customPrices);
   const parts = String(caseType || '')
@@ -191,6 +197,7 @@ module.exports = {
   normalizeDoctorKey,
   doctorKeysMatch,
   isExcludedWorkCaseType,
+  isNonBillableCase,
   parseNotesMeta,
   resolvePrices,
   calculateCaseCost,

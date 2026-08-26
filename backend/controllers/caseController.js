@@ -10,11 +10,20 @@ const {
   normalizeDoctorKey: normalizeDoctorKeyStrict,
   doctorKeysMatch,
   isExcludedWorkCaseType: isExcludedWorkCaseTypeShared,
+  isNonBillableCase,
   parseNotesMeta: parseNotesMetaShared,
   calculateCaseCost,
   calculateCaseCostBreakdown,
   findPricingForDoctor,
 } = require('../services/casePricingService');
+const {
+  assertForwardTransition,
+  assertStationTransition,
+  assertCanComplete,
+  assertCanExit,
+  isExitedCase,
+  STATION_ALLOWED_FROM: WORKFLOW_STATION_ALLOWED_FROM,
+} = require('../services/caseWorkflowService');
 
 function normalizeDocId(ref) {
   if (ref === undefined || ref === null) return '';
@@ -481,6 +490,8 @@ exports.getFinancialReport = async (req, res) => {
     const rows = cases
       .map((doc) => {
         const notesMeta = parseNotesMeta(doc.notes || '');
+        if (isNonBillableCase(doc.caseType, notesMeta)) return null;
+
         const doctorNameRaw =
           notesMeta.doctor ||
           notesMeta.doctorName ||
@@ -508,6 +519,7 @@ exports.getFinancialReport = async (req, res) => {
           dueDate: doc.dueDate || null, notes: doc.notes || '', exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
         };
       })
+      .filter(Boolean)
       .filter((row) => {
         const rowDate = new Date(row.receivedAt);
         if (year && Number(year) !== rowDate.getFullYear()) return false;
@@ -614,8 +626,9 @@ exports.getDoctorAccountSummary = async (req, res) => {
       const amount = breakdown.total;
       const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
       const salaryAmount = Number(doc.salaryAmount || 0);
-      if (paymentStatus === 'paid' && Number.isFinite(salaryAmount)) {
-        paidFromCases += salaryAmount;
+      // Paid amount must follow DoctorPricing (same as due), not a stale salaryAmount
+      if (paymentStatus === 'paid') {
+        paidFromCases += amount;
       }
 
       totalDue += amount;
@@ -808,6 +821,13 @@ exports.claimCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
+    if (isExitedCase(dentalCase)) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استلام حالة خارجة',
+      });
+    }
+
     // Check if already assigned
     if (dentalCase.assignedTo && dentalCase.assignedTo.toString() !== req.user.id) {
       return res.status(400).json({
@@ -938,7 +958,7 @@ exports.assignCase = async (req, res) => {
   }
 };
 
-// Move case to next stage
+// Move case to next stage (forward-only)
 exports.moveStage = async (req, res) => {
   try {
     const { stage } = req.body;
@@ -956,6 +976,18 @@ exports.moveStage = async (req, res) => {
     }
 
     const oldStage = dentalCase.currentStage;
+    const transition = assertForwardTransition(oldStage, stage);
+    if (!transition.ok) {
+      return res.status(400).json({ success: false, message: transition.message });
+    }
+    if (transition.same) {
+      return res.status(200).json({
+        success: true,
+        message: 'Case already at this stage',
+        case: dentalCase,
+      });
+    }
+
     dentalCase.currentStage = stage;
 
     // Sync status with stage for key transitions
@@ -966,7 +998,7 @@ exports.moveStage = async (req, res) => {
     } else if (stage === 'waiting') {
       dentalCase.status = 'waiting';
     } else {
-      // secretary | design | khart | finishing (reopens completed)
+      // secretary | design | khart | finishing
       dentalCase.status = 'in_progress';
     }
 
@@ -1124,12 +1156,7 @@ const STATION_TARGET = {
   reception: 'completed',
 };
 
-const STATION_ALLOWED_FROM = {
-  // Any non-exited stage → target station
-  design: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-  finishing: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-  reception: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-};
+const STATION_ALLOWED_FROM = WORKFLOW_STATION_ALLOWED_FROM;
 
 const STATION_LABEL_AR = {
   reception: 'سكان 1 — منتهية',
@@ -1180,10 +1207,11 @@ exports.scanAtStation = async (req, res) => {
     const oldStage = String(dentalCase.currentStage || 'waiting');
     const targetStage = STATION_TARGET[station];
 
-    if (oldStage === 'exited') {
+    const stationGate = assertStationTransition(station, oldStage, targetStage);
+    if (!stationGate.ok) {
       return res.status(400).json({
         success: false,
-        message: 'الحالة خارجة بالفعل ولا يمكن نقلها',
+        message: stationGate.message,
         case: {
           id: dentalCase._id,
           caseNumber: dentalCase.caseNumber,
@@ -1194,7 +1222,7 @@ exports.scanAtStation = async (req, res) => {
     }
 
     // Already at target → acknowledge without error (re-scan OK)
-    if (oldStage === targetStage) {
+    if (stationGate.same || oldStage === targetStage) {
       return res.status(200).json({
         success: true,
         alreadyAtStage: true,
@@ -1209,22 +1237,8 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    if (!STATION_ALLOWED_FROM[station].has(oldStage)) {
-      return res.status(400).json({
-        success: false,
-        message: `لا يمكن نقل الحالة من «${oldStage}» إلى محطة ${STATION_LABEL_AR[station]}`,
-        case: {
-          id: dentalCase._id,
-          caseNumber: dentalCase.caseNumber,
-          patientName: dentalCase.patientName,
-          currentStage: oldStage,
-        },
-      });
-    }
-
     dentalCase.currentStage = targetStage;
-    // Keep status in sync with stage — otherwise completed cases stay "منتهية" in the UI
-    // even after سكان 2/3 moves them back to design/finishing.
+    // Keep status in sync with stage
     if (targetStage === 'completed') {
       dentalCase.status = 'completed';
     } else if (targetStage === 'exited') {
@@ -1232,7 +1246,6 @@ exports.scanAtStation = async (req, res) => {
     } else if (targetStage === 'waiting') {
       dentalCase.status = 'waiting';
     } else {
-      // secretary | design | khart | finishing (reopens completed)
       dentalCase.status = 'in_progress';
     }
     if (targetStage !== 'waiting') {
@@ -1333,6 +1346,18 @@ exports.completeCase = async (req, res) => {
 
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
+    }
+
+    const gate = assertCanComplete(dentalCase);
+    if (!gate.ok) {
+      return res.status(400).json({ success: false, message: gate.message });
+    }
+    if (gate.already) {
+      return res.status(200).json({
+        success: true,
+        message: 'Case already completed',
+        case: dentalCase,
+      });
     }
 
     dentalCase.status = 'completed';
@@ -1495,8 +1520,9 @@ exports.exitCase = async (req, res) => {
       return res.status(403).json({ message: 'Only admin or secretary can exit cases' });
     }
 
-    if (dentalCase.status === 'exited') {
-      return res.status(400).json({ message: 'Case is already exited' });
+    const exitGate = assertCanExit(dentalCase);
+    if (!exitGate.ok) {
+      return res.status(400).json({ success: false, message: exitGate.message });
     }
 
     dentalCase.status = 'exited';
@@ -1575,6 +1601,7 @@ exports.releaseCase = async (req, res) => {
     dentalCase.assignedTo = null;
     dentalCase.assignedAt = null;
     dentalCase.status = 'waiting';
+    dentalCase.currentStage = 'waiting';
 
     await dentalCase.save();
 
@@ -1633,7 +1660,23 @@ exports.updateCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
+    // Exited cases: only admin may edit (financials use dedicated endpoint)
+    if (isExitedCase(dentalCase) && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'لا يمكن تعديل حالة خارجة — راجع الإدارة',
+      });
+    }
 
+    if (req.user.role === 'secretary') {
+      const createdBy = normalizeDocId(dentalCase.createdBy);
+      if (createdBy && createdBy !== String(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'يمكنك تعديل الحالات التي أنشأتها فقط',
+        });
+      }
+    }
 
     if (req.user.role === 'designer') {
       // Allow designer to edit any case; ownership is reassigned automatically on edit.
@@ -1751,6 +1794,12 @@ exports.updateCase = async (req, res) => {
     if (dueDate !== undefined) dentalCase.dueDate = new Date(dueDate);
 
     if (stageTimestamps !== undefined && typeof stageTimestamps === 'object' && stageTimestamps !== null) {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'تعديل تواريخ المراحل متاح للإدارة فقط',
+        });
+      }
       if (!dentalCase.stageTimestamps) {
         dentalCase.stageTimestamps = {};
       }
@@ -1758,6 +1807,17 @@ exports.updateCase = async (req, res) => {
         dentalCase.stageTimestamps[key] = val ? new Date(String(val)) : null;
       }
       dentalCase.markModified('stageTimestamps');
+    }
+
+    // Exited: admin still cannot casually rewrite caseType/salary via general update
+    // (use /financials for money). Allow notes/priority only unless explicit financials.
+    if (isExitedCase(dentalCase) && req.user.role === 'admin') {
+      if (caseType !== undefined || salaryAmount !== undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'لتعديل المبلغ أو نوع الشغل بعد الخروج استخدم مسار الماليات أو أعد فتح الحالة',
+        });
+      }
     }
 
     await dentalCase.save();
@@ -1850,7 +1910,7 @@ exports.updateCaseFinancials = async (req, res) => {
   }
 };
 
-// Delete case (secretary: only own; admin: any)
+// Delete case (secretary: own + not exited; admin: any)
 exports.deleteCase = async (req, res) => {
   try {
     const dentalCase = await DentalCase.findById(req.params.id);
@@ -1859,11 +1919,32 @@ exports.deleteCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
-
+    const role = req.user?.role;
+    if (role === 'secretary') {
+      const createdBy = normalizeDocId(dentalCase.createdBy);
+      if (createdBy && createdBy !== String(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'يمكنك حذف الحالات التي أنشأتها فقط',
+        });
+      }
+      if (isExitedCase(dentalCase)) {
+        return res.status(403).json({
+          success: false,
+          message: 'لا يمكن للسكرتير حذف حالة خارجة — راجع الإدارة',
+        });
+      }
+    }
 
     const caseId = String(dentalCase._id);
     const caseNumber = dentalCase.caseNumber;
     await DentalCase.findByIdAndDelete(req.params.id);
+
+    try {
+      await Notification.deleteMany({ caseId: dentalCase._id });
+    } catch (cleanupErr) {
+      console.warn('deleteCase notification cleanup failed:', cleanupErr.message);
+    }
 
     emitToAll('case:deleted', {
       caseId,

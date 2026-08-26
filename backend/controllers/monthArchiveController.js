@@ -8,6 +8,7 @@ const DoctorPricing = require('../models/DoctorPricing');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const MonthArchive = require('../models/MonthArchive');
+const { isNonBillableCase } = require('../services/casePricingService');
 
 function parseNotesMeta(notes) {
   const prefix = '__META__\n';
@@ -105,8 +106,11 @@ function buildSummary(cases) {
 
   for (const doc of cases) {
     const meta = parseNotesMeta(doc.notes || '');
+    const skipBillable = isNonBillableCase(doc.caseType, meta);
     const qty = Number(meta.quantity || meta.qty || 1) || 1;
-    const units = classifyCaseTypeUnits(doc.caseType, qty);
+    const units = skipBillable
+      ? { zircon: 0, emax: 0, germanZircon: 0, titanium: 0, peek: 0, pmma: 0, nightGuard: 0, other: 0 }
+      : classifyCaseTypeUnits(doc.caseType, qty);
     Object.keys(units).forEach((k) => {
       byTypeUnits[k] += units[k];
     });
@@ -130,7 +134,7 @@ function buildSummary(cases) {
     d.emaxUnits += units.emax;
     d.germanZirconUnits += units.germanZircon;
 
-    if (doc.currentStage === 'exited') {
+    if (doc.currentStage === 'exited' && !skipBillable) {
       exitedCases += 1;
       const amount = Number(doc.salaryAmount || 0);
       totalAmount += amount;

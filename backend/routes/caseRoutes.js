@@ -46,19 +46,8 @@ const updateFinancialsValidation = [
   body('paymentStatus').optional().isIn(['paid', 'unpaid']),
 ];
 
-const { verifyToken } = require('../config/jwt');
-
-// Get all cases (public or authenticated - for doctor suggestions)
-router.get('/', (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (token) {
-    try {
-      const decoded = verifyToken(token);
-      if (decoded) req.user = { userId: decoded.userId, role: decoded.role };
-    } catch (e) {}
-  }
-  next();
-}, caseController.getAllCases);
+// Get all cases — authentication required
+router.get('/', authenticate, caseController.getAllCases);
 
 // All other case routes require authentication
 router.use(authenticate);
@@ -99,8 +88,12 @@ router.put('/:id', authorize('admin', 'secretary', 'designer', 'finisher', 'doct
 router.put('/:id/financials', authorize('admin'), updateFinancialsValidation, caseController.updateCaseFinancials);
 router.delete('/:id', authorize('admin', 'secretary'), caseController.deleteCase);
 
-// Claim case (any authenticated user)
-router.put('/:id/claim', caseController.claimCase);
+// Claim case — lab staff only
+router.put(
+  '/:id/claim',
+  authorize('admin', 'designer', 'finisher'),
+  caseController.claimCase
+);
 
 // Assign case - Admin only
 router.put(
@@ -110,8 +103,13 @@ router.put(
   caseController.assignCase
 );
 
-// Move stage - Admin and role specific
-router.put('/:id/move-stage', moveStageValidation, caseController.moveStage);
+// Move stage — forward-only (enforced in controller)
+router.put(
+  '/:id/move-stage',
+  authorize('admin', 'secretary', 'designer', 'finisher'),
+  moveStageValidation,
+  caseController.moveStage
+);
 
 // Upload case image (designer / finisher / admin)
 router.post('/:id/upload-image', authorize('admin', 'designer', 'finisher'), uploadCaseImage.single('image'), caseController.uploadCaseImage);
@@ -143,8 +141,12 @@ router.post(
   caseController.uploadCasePly
 );
 
-// Complete case
-router.put('/:id/complete', caseController.completeCase);
+// Complete case — finishing staff / admin / secretary
+router.put(
+  '/:id/complete',
+  authorize('admin', 'secretary', 'finisher', 'scanner1'),
+  caseController.completeCase
+);
 router.put('/:id/exit', authorize('admin', 'secretary'), caseController.exitCase);
 router.put(
   '/:id/request-revision',

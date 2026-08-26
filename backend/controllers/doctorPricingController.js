@@ -17,15 +17,28 @@ exports.updatePricing = async (req, res) => {
     }
 
     const normalizedName = doctorName.trim();
+    const cleanedPrices = {};
+    if (prices && typeof prices === 'object') {
+      for (const [key, val] of Object.entries(prices)) {
+        const n = Number(val);
+        if (!Number.isFinite(n) || n < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `السعر «${key}» يجب أن يكون رقمًا ≥ 0`,
+          });
+        }
+        cleanedPrices[key] = n;
+      }
+    }
 
     let pricing = await DoctorPricing.findOne({ doctorName: normalizedName });
     if (pricing) {
-      pricing.prices = { ...pricing.prices, ...prices };
+      pricing.prices = { ...pricing.prices, ...cleanedPrices };
       await pricing.save();
     } else {
       pricing = await DoctorPricing.create({
         doctorName: normalizedName,
-        prices
+        prices: cleanedPrices
       });
     }
 

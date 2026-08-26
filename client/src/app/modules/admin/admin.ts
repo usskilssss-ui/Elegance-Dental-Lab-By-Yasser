@@ -1130,17 +1130,23 @@ export class Admin implements OnInit, OnDestroy {
     return this.dashboardMetrics.staffEfficiency;
   }
 
-  /** الحالات الخارجة فقط وليست إعادة ولا تعديل */
+  /** الحالات الخارجة فقط وليست إعادة ولا تعديل ولا فاضي */
   get exitedNonRedoCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;
       
       const ct = (c.caseType || '').toLowerCase();
-      // استبعاد الإعادة والتعديل
-      const isRedo = ct.includes('redo') || ct.includes('remake') ||
-                     ct.includes('modification') ||
-                     ct.includes('اعاده') || ct.includes('إعادة');
-      return !isRedo;
+      const isExcluded =
+        ct.includes('redo') ||
+        ct.includes('remake') ||
+        ct.includes('modification') ||
+        ct.includes('تعديل') ||
+        ct.includes('اعاده') ||
+        ct.includes('إعادة') ||
+        ct.includes('empty') ||
+        ct.includes('غير معروف') ||
+        ct.includes('unknown');
+      return !isExcluded;
     });
   }
 
