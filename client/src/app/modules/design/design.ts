@@ -16,6 +16,7 @@ import {
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 export type CasePriority = 'emergency' | 'normal' | 'low';
 export type CaseStatus =
@@ -675,9 +676,20 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   private moveStageByStatus(status: CaseStatus): void {
     if (!this.selectedCase) return;
+
+    if (status === 'exited') {
+      this.caseApi.exitCase(this.selectedCase.id).subscribe({
+        next: () => this.reloadCasesFromBackend(false),
+        error: (err: unknown) => {
+          this.showToast(formatCaseWorkflowError(err, 'تعذر إخراج الحالة'));
+          this.sharedCasesService.syncCase({ ...this.selectedCase! });
+        },
+      });
+      return;
+    }
+
     const apiStage =
       status === 'finished'    ? 'completed' :
-      status === 'exited'      ? 'exited' :
       status === 'under-khart' ? 'khart' :
       status === 'in-progress' ? 'design' : 'secretary';
 
@@ -688,15 +700,18 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
           next: () => {
             this.reloadCasesFromBackend(false);
           },
-          error: () => {
+          error: (err: unknown) => {
+            this.showToast(formatCaseWorkflowError(err, 'تعذر نقل مرحلة الحالة'));
             this.sharedCasesService.syncCase({ ...this.selectedCase! });
           },
         });
       },
       error: (err) => {
-        const msg = String(err?.error?.message || '');
-        if (msg.includes('assigned to you')) {
+        const msg = formatCaseWorkflowError(err, '');
+        if (msg.includes('assigned to you') || msg.includes('مسندة')) {
           this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+        } else if (msg) {
+          this.showToast(msg);
         }
         this.sharedCasesService.syncCase({ ...this.selectedCase! });
       },
@@ -706,9 +721,20 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   updateCaseStatusFromCard(c: DentalCase, status: CaseStatus): void {
     if (c.status === status) return;
     c.status = status;
+
+    if (status === 'exited') {
+      this.caseApi.exitCase(c.id).subscribe({
+        next: () => this.reloadCasesFromBackend(false),
+        error: (err: unknown) => {
+          this.showToast(formatCaseWorkflowError(err, 'تعذر إخراج الحالة'));
+          this.sharedCasesService.syncCase({ ...c });
+        },
+      });
+      return;
+    }
+
     const apiStage =
       status === 'finished'    ? 'completed' :
-      status === 'exited'      ? 'exited' :
       status === 'under-khart' ? 'khart' :
       status === 'in-progress' ? 'design' : 'secretary';
 
@@ -719,15 +745,18 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
           next: () => {
             this.reloadCasesFromBackend(false);
           },
-          error: () => {
+          error: (err: unknown) => {
+            this.showToast(formatCaseWorkflowError(err, 'تعذر نقل مرحلة الحالة'));
             this.sharedCasesService.syncCase({ ...c });
           },
         });
       },
       error: (err) => {
-        const msg = String(err?.error?.message || '');
-        if (msg.includes('assigned to you')) {
+        const msg = formatCaseWorkflowError(err, '');
+        if (msg.includes('assigned to you') || msg.includes('مسندة')) {
           this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+        } else if (msg) {
+          this.showToast(msg);
         }
         this.sharedCasesService.syncCase({ ...c });
       },
