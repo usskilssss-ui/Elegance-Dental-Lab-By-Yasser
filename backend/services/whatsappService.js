@@ -269,12 +269,9 @@ async function findDoctorUserByCase(dentalCase) {
   const exact = users.find((u) => normalizeDoctorKey(u.fullName) === key);
   if (exact) return exact;
 
-  // Partial match when names differ slightly (clinic nickname vs account name)
-  const partial = users.find((u) => {
-    const uk = normalizeDoctorKey(u.fullName);
-    return uk && (uk.includes(key) || key.includes(uk));
-  });
-  return partial || null;
+  // No fuzzy/partial name match — prevents messaging the wrong doctor
+  console.warn('[whatsapp] no exact doctor user match for:', doctorName);
+  return null;
 }
 
 function labLabel() {
