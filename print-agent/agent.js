@@ -867,6 +867,8 @@ async function buildPrintHtml(c) {
     }
     .barcode-hint { font-size: 9px; color: #333; margin-top: 1px; }
     .section { margin-bottom: 10px; }
+    /* نزل قسم تفاصيل العمل شوية تحت بيانات الطبيب */
+    .section-work { margin-top: 8mm; }
     .section-title {
       font-size: 14px; font-weight: 700; color: #000;
       border-right: 3px solid #000; padding-right: 8px; margin-bottom: 5px;
@@ -878,9 +880,9 @@ async function buildPrintHtml(c) {
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    /* نزل مخطط الأسنان فقط شوية تحت تفاصيل العمل */
+    /* نزل مخطط الأسنان شوية كمان تحت تفاصيل العمل */
     .teeth-section {
-      margin-top: 10mm;
+      margin-top: 16mm;
       margin-bottom: 0;
     }
     .teeth-title {
@@ -953,7 +955,7 @@ async function buildPrintHtml(c) {
     <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
     <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
   </div>
-  <div class="section">
+  <div class="section section-work">
     <div class="section-title">تفاصيل العمل</div>
     <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
     ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}
