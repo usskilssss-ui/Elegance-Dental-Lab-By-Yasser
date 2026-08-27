@@ -962,10 +962,10 @@
           </div>
         </div>
 
-        <div class="report-table-card" style="padding:20px;max-width:1100px;">
-          <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;line-height:1.6;">
+        <div class="report-table-card lab-materials-card" style="padding:20px;max-width:1100px;">
+          <p class="lab-materials-hint">
             هنا تضيف أو تحذف ماتريال وتعدّل السعر الافتراضي.
-            أسعار كل دكتور لوحده من شاشة <strong style="color:#e2e8f0;">التقارير</strong> بعد اختيار الطبيب.
+            أسعار كل دكتور لوحده من شاشة <strong>التقارير</strong> بعد اختيار الطبيب.
           </p>
 
           <div class="financial-controls" style="margin-bottom:12px;align-items:flex-end;">
@@ -981,11 +981,11 @@
               {{ matSaving ? 'جاري…' : 'إضافة ماتريال' }}
             </button>
           </div>
-          <p *ngIf="matMsg" style="margin:0 0 12px;" [style.color]="matMsgError ? '#f87171' : '#94a3b8'">{{ matMsg }}</p>
-          <p *ngIf="labMsg" style="margin:0 0 12px;color:#f87171;">{{ labMsg }}</p>
+          <p *ngIf="matMsg" class="lab-materials-msg" [class.err]="matMsgError">{{ matMsg }}</p>
+          <p *ngIf="labMsg" class="lab-materials-msg err">{{ labMsg }}</p>
 
           <div class="table-wrap" style="overflow:auto;" *ngIf="labMaterials.length">
-            <table class="staff-table" style="width:100%;min-width:560px;">
+            <table class="staff-table lab-materials-table" style="width:100%;min-width:560px;">
               <thead>
                 <tr>
                   <th>الماتريال</th>
@@ -997,10 +997,10 @@
               <tbody>
                 <tr *ngFor="let m of labMaterials">
                   <td>
-                    <input type="text" [(ngModel)]="m.label" style="width:160px;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;" />
+                    <input type="text" class="lab-mat-input" [(ngModel)]="m.label" />
                   </td>
                   <td>
-                    <input type="number" [(ngModel)]="m.defaultPrice" min="0" style="width:110px;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;" />
+                    <input type="number" class="lab-mat-input lab-mat-input--price" [(ngModel)]="m.defaultPrice" min="0" />
                   </td>
                   <td>
                     <input type="checkbox" [(ngModel)]="m.active" title="نشط" />
@@ -1013,7 +1013,7 @@
               </tbody>
             </table>
           </div>
-          <p *ngIf="!labMaterials.length && !labMsg" style="margin:12px 0 0;color:#94a3b8;">لا توجد ماتريال بعد — أضف أول خام من فوق.</p>
+          <p *ngIf="!labMaterials.length && !labMsg" class="lab-materials-hint" style="margin-top:12px;">لا توجد ماتريال بعد — أضف أول خام من فوق.</p>
         </div>
       </ng-container>
 
