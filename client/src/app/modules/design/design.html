@@ -168,10 +168,13 @@
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
               العدد: {{ c.quantity }}
             </span>
+            <span class="spec-pill" *ngIf="c.branch || c.clinic">فرع: {{ c.branch || c.clinic }}</span>
+            <span class="spec-pill intake-pill" *ngIf="c.intakeType === 'scan' || c.plyScanUrl">سكان</span>
+            <span class="spec-pill intake-pill impression" *ngIf="c.intakeType === 'impression' && !c.plyScanUrl">امبرشن</span>
           </div>
           <a *ngIf="c.plyScanUrl" class="ply-download-btn scan-badge" [href]="c.plyScanUrl" [attr.download]="c.plyFileName || 'scan'" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()" title="تحميل ملف السكان">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span class="ply-text">سكان مرفوع</span>
+            <span class="ply-text">تحميل السكان{{ c.plyFileName ? ' — ' + c.plyFileName : '' }}</span>
           </a>
         </div>
 

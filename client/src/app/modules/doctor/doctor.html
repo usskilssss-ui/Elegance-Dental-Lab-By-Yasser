@@ -317,6 +317,9 @@
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                     تنزيل السكان
+                    @if (c.plyFileName) {
+                      <span class="case-ply-name">({{ c.plyFileName }})</span>
+                    }
                   </a>
                 }
               </div>
@@ -341,6 +344,21 @@
                 }
                 <span class="spec-item">Qty: {{ c.quantity }}</span>
               </div>
+              @if (c.plyScanUrl) {
+                <a
+                  class="case-ply-link"
+                  [href]="c.plyScanUrl"
+                  [attr.download]="c.plyFileName || 'scan'"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  (click)="$event.stopPropagation()"
+                >
+                  تحميل ملف السكان
+                  @if (c.plyFileName) {
+                    <span class="case-ply-name">({{ c.plyFileName }})</span>
+                  }
+                </a>
+              }
             </div>
             <div class="case-meta">
               @if (c.status === 'exited') {
@@ -410,6 +428,25 @@
               <span class="meta-pill" [class]="intakeBadgeClass(dc)">{{ intakeLabel(dc) }}</span>
             </strong>
           </div>
+          @if (dc.plyScanUrl) {
+            <div class="detail-row">
+              <span>ملف السكان</span>
+              <strong>
+                <a
+                  class="case-ply-link"
+                  [href]="dc.plyScanUrl"
+                  [attr.download]="dc.plyFileName || 'scan'"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  تحميل ملف السكان
+                  @if (dc.plyFileName) {
+                    <span class="case-ply-name">({{ dc.plyFileName }})</span>
+                  }
+                </a>
+              </strong>
+            </div>
+          }
           @if (dc.color) {
             <div class="detail-row"><span>اللون</span><strong>{{ dc.color }}</strong></div>
           }
