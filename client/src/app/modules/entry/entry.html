@@ -348,6 +348,18 @@
                 </p>
               }
             </label>
+            <label class="form-field">
+              <span>أو لصق لينك السكان <span class="label-optional">(اختياري)</span></span>
+              <input
+                type="url"
+                name="plyScanLink"
+                [(ngModel)]="plyScanLink"
+                placeholder="https://…"
+                dir="ltr"
+                autocomplete="off"
+                (ngModelChange)="onPlyLinkChange()"
+              />
+            </label>
           }
 
           <!-- Case Type -->

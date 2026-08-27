@@ -2277,6 +2277,72 @@ exports.uploadCasePly = async (req, res) => {
   }
 };
 
+/** Attach an external scan URL (Drive / WeTransfer / etc.) instead of uploading a file */
+exports.setCasePlyLink = async (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url ?? req.body?.plyUrl ?? '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ message: 'أدخل لينك السكان' });
+    }
+    if (rawUrl.length > 2000) {
+      return res.status(400).json({ message: 'لينك السكان طويل جدًا' });
+    }
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ message: 'لينك غير صالح' });
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).json({ message: 'اللينك لازم يبدأ بـ http أو https' });
+    }
+    if (!parsed.hostname) {
+      return res.status(400).json({ message: 'لينك غير صالح' });
+    }
+
+    const dentalCase = await DentalCase.findById(req.params.id);
+    if (!dentalCase) {
+      return res.status(404).json({ message: 'Case not found' });
+    }
+
+    const prefix = '__META__\n';
+    const raw = dentalCase.notes || '';
+    let meta = parseNotesMeta(raw);
+    if (!raw.startsWith(prefix) && raw.trim()) {
+      meta = { ...meta, instructions: raw.slice(0, 8000) };
+    }
+    if (!meta || typeof meta !== 'object') meta = {};
+
+    const label =
+      String(req.body?.fileName ?? req.body?.plyFileName ?? '').trim().slice(0, 280) ||
+      parsed.hostname ||
+      'لينك سكان';
+
+    meta.plyScanPath = rawUrl;
+    meta.plyFileName = label;
+
+    dentalCase.notes = sanitizeNotesMetaString(`${prefix}${JSON.stringify(meta)}`);
+    dentalCase.plyScanPath = rawUrl;
+    dentalCase.plyFileName = label;
+    await dentalCase.save();
+
+    emitCaseUpdated(dentalCase, req.user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'تم حفظ لينك السكان',
+      plyUrl: rawUrl,
+      plyFileName: label,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to save scan link',
+      error: error.message,
+    });
+  }
+};
+
 // Upload case design image (designer / finisher)
 exports.uploadCaseImage = async (req, res) => {
   try {

@@ -534,7 +534,7 @@
 
           @if (intakeType === 'scan') {
             <label class="form-field form-field--ply">
-              <span>رفع ملف السكان (.ply / .stl / .obj / .rar / .zip) <abbr title="مطلوب">*</abbr></span>
+              <span>رفع ملف السكان (.ply / .stl / .obj / .rar / .zip) <abbr title="مطلوب مع اللينك أو بدونه">*</abbr></span>
               <input
                 id="doctorPlyInput"
                 class="ply-file-input"
@@ -547,9 +547,21 @@
                   تم اختيار: <strong>{{ selectedPlyFile.name }}</strong>
                   <button type="button" class="btn-text" (click)="clearPlySelection()">إزالة</button>
                 </p>
-              } @else if (existingPlyFileName) {
-                <p class="ply-existing">ملف محفوظ: {{ existingPlyFileName }} (اختَر ملفًا جديدًا للاستبدال)</p>
+              } @else if (existingPlyFileName && !plyScanLink.trim()) {
+                <p class="ply-existing">ملف محفوظ: {{ existingPlyFileName }} (اختَر ملفًا جديدًا أو لصق لينك للاستبدال)</p>
               }
+            </label>
+            <label class="form-field">
+              <span>أو لصق لينك السكان <span class="label-optional">(لو السكان جاهز على درايف / رابط)</span></span>
+              <input
+                type="url"
+                name="plyScanLink"
+                [(ngModel)]="plyScanLink"
+                placeholder="https://…"
+                dir="ltr"
+                autocomplete="off"
+                (ngModelChange)="onPlyLinkChange()"
+              />
             </label>
           }
 

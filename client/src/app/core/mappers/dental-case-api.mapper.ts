@@ -22,13 +22,23 @@ export function toStoredCaseImagePath(rawUrl: string): string {
   if (/^https?:\/\//i.test(clean)) {
     try {
       const parsed = new URL(clean);
-      return parsed.pathname || '';
+      // Our own uploads host → store pathname only
+      if (MEDIA_BASE_URL && clean.startsWith(MEDIA_BASE_URL)) {
+        return parsed.pathname || '';
+      }
+      // External scan links (Drive / WeTransfer / lab cloud) → keep full URL
+      return clean;
     } catch {
       return '';
     }
   }
 
   return clean.startsWith('/') ? clean : `/${clean}`;
+}
+
+export function isExternalScanUrl(rawUrl: string | undefined | null): boolean {
+  const clean = String(rawUrl || '').trim();
+  return /^https?:\/\//i.test(clean);
 }
 
 export function sanitizeCaseImageListForStorage(images: string[] | undefined): string[] {
