@@ -168,6 +168,21 @@ export class StationScanComponent implements OnInit, OnDestroy {
     return '';
   }
 
+  /** Notes for queue cards (work detail + free-text instructions / design notes). */
+  cardNotes(c: DentalCase): string {
+    const parts: string[] = [];
+    const detail = String(c.workDetail || '').trim();
+    const design = String(c.designNotes || '').trim();
+    const instr = String(c.instructions || '').trim();
+    if (detail) parts.push(detail);
+    // Skip auto-generated instruction blocks (always contain "نوع العمل:")
+    if (instr && !instr.includes('نوع العمل:') && instr !== detail) {
+      parts.push(instr);
+    }
+    if (design && design !== detail) parts.push(design);
+    return parts.join(' — ');
+  }
+
   private stationApiStage(): string {
     const s = this.station();
     if (s === 'reception') return 'completed';
