@@ -551,6 +551,12 @@
                 <span class="wt-error">{{ workTypeError }}</span>
               }
 
+              @if (formDraft.caseType !== 'Empty' && !hasWorkTypesWithQuantity) {
+                <p class="wt-error" style="color:#94a3b8;margin:8px 0 0;">
+                  اختَر نوع العمل من الأزرار فوق (مثلاً Zircon) عشان يظهر مخطط الأسنان
+                </p>
+              }
+
               @if (isWorkTypeSelected('Night Guard')) {
                 <div class="night-guard-sub-container">
                   <span class="night-guard-sub-title">نوع الـ Night Guard:</span>
