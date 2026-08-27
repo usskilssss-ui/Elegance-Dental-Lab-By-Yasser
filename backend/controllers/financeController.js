@@ -1,10 +1,10 @@
-const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
 const DoctorPayment = require('../models/DoctorPayment');
 const Material = require('../models/Material');
 const MaterialPurchase = require('../models/MaterialPurchase');
 const MaterialStockMovement = require('../models/MaterialStockMovement');
 const PayrollPayment = require('../models/PayrollPayment');
+const PayrollEmployee = require('../models/PayrollEmployee');
 const OperatingExpense = require('../models/OperatingExpense');
 const {
   recordPurchase,
@@ -284,14 +284,35 @@ exports.updateMaterialStockSettings = async (req, res) => {
 
 exports.listPayrollEmployees = async (req, res) => {
   try {
-    const users = await User.find({
-      isActive: true,
-      role: { $nin: ['doctor'] },
-    })
-      .select('fullName role email baseSalary defaultPieceRate payType payrollEnabled')
-      .sort({ fullName: 1 })
-      .lean();
-    return res.json({ success: true, employees: users });
+    const includeInactive = String(req.query.all || '') === '1';
+    const q = includeInactive ? {} : { isActive: true };
+    const employees = await PayrollEmployee.find(q).sort({ name: 1 }).lean();
+    return res.json({ success: true, employees });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.createPayrollEmployee = async (req, res) => {
+  try {
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'اسم الموظف مطلوب' });
+    }
+    const payType = ['fixed', 'piece', 'mixed'].includes(body.payType) ? body.payType : 'fixed';
+    const doc = await PayrollEmployee.create({
+      name,
+      jobTitle: String(body.jobTitle || '').trim(),
+      phone: String(body.phone || '').trim(),
+      baseSalary: Math.max(0, Number(body.baseSalary) || 0),
+      defaultPieceRate: Math.max(0, Number(body.defaultPieceRate) || 0),
+      payType,
+      payrollEnabled: body.payrollEnabled !== false,
+      isActive: body.isActive !== false,
+      notes: String(body.notes || '').trim(),
+    });
+    return res.status(201).json({ success: true, employee: doc });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -299,30 +320,41 @@ exports.listPayrollEmployees = async (req, res) => {
 
 exports.updateEmployeePayroll = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    const emp = await PayrollEmployee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
     const body = req.body || {};
-    if (typeof body.payrollEnabled === 'boolean') user.payrollEnabled = body.payrollEnabled;
-    if (body.baseSalary !== undefined) user.baseSalary = Math.max(0, Number(body.baseSalary) || 0);
+    if (body.name !== undefined) {
+      const name = String(body.name || '').trim();
+      if (!name) return res.status(400).json({ success: false, message: 'اسم الموظف مطلوب' });
+      emp.name = name;
+    }
+    if (body.jobTitle !== undefined) emp.jobTitle = String(body.jobTitle || '').trim();
+    if (body.phone !== undefined) emp.phone = String(body.phone || '').trim();
+    if (typeof body.payrollEnabled === 'boolean') emp.payrollEnabled = body.payrollEnabled;
+    if (typeof body.isActive === 'boolean') emp.isActive = body.isActive;
+    if (body.baseSalary !== undefined) emp.baseSalary = Math.max(0, Number(body.baseSalary) || 0);
     if (body.defaultPieceRate !== undefined) {
-      user.defaultPieceRate = Math.max(0, Number(body.defaultPieceRate) || 0);
+      emp.defaultPieceRate = Math.max(0, Number(body.defaultPieceRate) || 0);
     }
     if (body.payType && ['fixed', 'piece', 'mixed'].includes(body.payType)) {
-      user.payType = body.payType;
+      emp.payType = body.payType;
     }
-    await user.save();
-    return res.json({
-      success: true,
-      employee: {
-        _id: user._id,
-        fullName: user.fullName,
-        role: user.role,
-        baseSalary: user.baseSalary,
-        defaultPieceRate: user.defaultPieceRate,
-        payType: user.payType,
-        payrollEnabled: user.payrollEnabled,
-      },
-    });
+    if (body.notes !== undefined) emp.notes = String(body.notes || '').trim();
+    await emp.save();
+    return res.json({ success: true, employee: emp });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.deletePayrollEmployee = async (req, res) => {
+  try {
+    const emp = await PayrollEmployee.findById(req.params.id);
+    if (!emp) return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
+    emp.isActive = false;
+    emp.payrollEnabled = false;
+    await emp.save();
+    return res.json({ success: true, employee: emp });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -342,13 +374,13 @@ exports.listPayroll = async (req, res) => {
 exports.upsertPayroll = async (req, res) => {
   try {
     const body = req.body || {};
-    const employeeId = body.employeeId || body.employee;
+    const payrollEmployeeId = body.payrollEmployeeId || body.employeeId || body.employee;
     const year = Number(body.year);
     const month = Number(body.month);
-    if (!employeeId || !year || !month) {
+    if (!payrollEmployeeId || !year || !month) {
       return res.status(400).json({ success: false, message: 'الموظف والسنة والشهر مطلوبين' });
     }
-    const employee = await User.findById(employeeId);
+    const employee = await PayrollEmployee.findById(payrollEmployeeId);
     if (!employee) return res.status(404).json({ success: false, message: 'الموظف غير موجود' });
 
     const calc = computePayrollTotal({
@@ -363,10 +395,14 @@ exports.upsertPayroll = async (req, res) => {
     });
 
     const status = body.status === 'paid' ? 'paid' : 'draft';
+    const employeeKey = `ext:${employee._id}`;
     const update = {
-      employee: employee._id,
-      employeeName: employee.fullName,
-      employeeRole: employee.role,
+      employeeKey,
+      source: 'external',
+      payrollEmployee: employee._id,
+      employee: null,
+      employeeName: employee.name,
+      employeeRole: employee.jobTitle || '',
       year,
       month,
       baseAmount: calc.base,
@@ -388,7 +424,7 @@ exports.upsertPayroll = async (req, res) => {
     }
 
     const row = await PayrollPayment.findOneAndUpdate(
-      { employee: employee._id, year, month },
+      { employeeKey, year, month },
       { $set: update },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -403,23 +439,26 @@ exports.generatePayrollDrafts = async (req, res) => {
   try {
     const year = Number(req.body?.year) || new Date().getFullYear();
     const month = Number(req.body?.month) || new Date().getMonth() + 1;
-    const employees = await User.find({
+    const employees = await PayrollEmployee.find({
       isActive: true,
       payrollEnabled: true,
-      role: { $nin: ['doctor'] },
     });
 
     const created = [];
     for (const emp of employees) {
-      const existing = await PayrollPayment.findOne({ employee: emp._id, year, month });
+      const employeeKey = `ext:${emp._id}`;
+      const existing = await PayrollPayment.findOne({ employeeKey, year, month });
       if (existing) continue;
       const base =
         emp.payType === 'piece' ? 0 : Math.max(0, Number(emp.baseSalary) || 0);
       const pieceRate = Math.max(0, Number(emp.defaultPieceRate) || 0);
       const row = await PayrollPayment.create({
-        employee: emp._id,
-        employeeName: emp.fullName,
-        employeeRole: emp.role,
+        employeeKey,
+        source: 'external',
+        payrollEmployee: emp._id,
+        employee: null,
+        employeeName: emp.name,
+        employeeRole: emp.jobTitle || '',
         year,
         month,
         baseAmount: base,

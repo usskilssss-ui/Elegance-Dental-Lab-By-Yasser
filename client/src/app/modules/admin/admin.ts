@@ -251,8 +251,6 @@ export class Admin implements OnInit, OnDestroy {
   isPricingSaving = false;
   financialYearFilter = '';
   financialMonthFilter = '';
-  /** lab-ledger = new profit/inventory/payroll; doctors = existing AR */
-  financeOuterTab: 'lab-ledger' | 'doctors' = 'lab-ledger';
   financePanelYear = new Date().getFullYear();
   financePanelMonth = new Date().getMonth() + 1;
   financialDoctorSearch = '';
@@ -1844,11 +1842,6 @@ export class Admin implements OnInit, OnDestroy {
     const now = new Date();
     this.financePanelYear = Number(this.financialYearFilter) || now.getFullYear();
     this.financePanelMonth = Number(this.financialMonthFilter) || now.getMonth() + 1;
-  }
-
-  setFinanceOuterTab(tab: 'lab-ledger' | 'doctors'): void {
-    this.financeOuterTab = tab;
-    if (tab === 'lab-ledger') this.syncFinancePanelPeriod();
   }
 
   onFinancePanelYearChange(year: number | string): void {

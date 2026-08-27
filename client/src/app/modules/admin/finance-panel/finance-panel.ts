@@ -60,6 +60,16 @@ export class FinancePanel implements OnInit, OnChanges {
 
   payrollEdit: Record<string, any> = {};
 
+  newEmployee = {
+    name: '',
+    jobTitle: '',
+    phone: '',
+    baseSalary: 0,
+    defaultPieceRate: 0,
+    payType: 'fixed' as 'fixed' | 'piece' | 'mixed',
+    payrollEnabled: true,
+  };
+
   ngOnInit(): void {
     this.reload();
   }
@@ -213,15 +223,54 @@ export class FinancePanel implements OnInit, OnChanges {
   saveEmployeePay(emp: any) {
     this.api
       .updateEmployeePayroll(emp._id, {
+        name: emp.name,
+        jobTitle: emp.jobTitle || '',
+        phone: emp.phone || '',
         payrollEnabled: !!emp.payrollEnabled,
         baseSalary: Number(emp.baseSalary) || 0,
         defaultPieceRate: Number(emp.defaultPieceRate) || 0,
         payType: emp.payType || 'fixed',
       })
       .subscribe({
-        next: () => (this.okMsg = `تم حفظ إعدادات ${emp.fullName}`),
+        next: () => (this.okMsg = `تم حفظ إعدادات ${emp.name}`),
         error: (err) => (this.error = err?.error?.message || 'فشل الحفظ'),
       });
+  }
+
+  addEmployee() {
+    this.error = '';
+    this.okMsg = '';
+    if (!String(this.newEmployee.name || '').trim()) {
+      this.error = 'اكتب اسم الموظف';
+      return;
+    }
+    this.api.createPayrollEmployee({ ...this.newEmployee }).subscribe({
+      next: () => {
+        this.okMsg = 'تمت إضافة الموظف';
+        this.newEmployee = {
+          name: '',
+          jobTitle: '',
+          phone: '',
+          baseSalary: 0,
+          defaultPieceRate: 0,
+          payType: 'fixed',
+          payrollEnabled: true,
+        };
+        this.loadPayroll();
+      },
+      error: (err) => (this.error = err?.error?.message || 'فشل إضافة الموظف'),
+    });
+  }
+
+  removeEmployee(emp: any) {
+    if (!confirm(`إيقاف الموظف ${emp.name} من الرواتب؟`)) return;
+    this.api.deletePayrollEmployee(emp._id).subscribe({
+      next: () => {
+        this.okMsg = 'تم إيقاف الموظف';
+        this.loadPayroll();
+      },
+      error: (err) => (this.error = err?.error?.message || 'فشل الإيقاف'),
+    });
   }
 
   generateDrafts() {
@@ -238,7 +287,7 @@ export class FinancePanel implements OnInit, OnChanges {
     const edit = this.payrollEdit[row._id] || {};
     this.api
       .upsertPayroll({
-        employeeId: row.employee,
+        payrollEmployeeId: row.payrollEmployee || row.employee,
         year: this.y(),
         month: this.m(),
         ...edit,
