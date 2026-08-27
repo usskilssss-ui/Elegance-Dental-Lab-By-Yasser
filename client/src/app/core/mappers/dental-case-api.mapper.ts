@@ -269,9 +269,9 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const finishingNotes = String(meta['finishingNotes'] ?? '');
   const selectedFileName = String(meta['selectedFileName'] ?? '');
   const uiStatusOverride = String(meta['uiStatusOverride'] ?? '');
-  const plyPathRaw = meta['plyScanPath'];
-  const plyScanPath = typeof plyPathRaw === 'string' ? plyPathRaw : '';
-  const plyFileName = String(meta['plyFileName'] ?? '');
+  const plyPathRaw = doc['plyScanPath'] || meta['plyScanPath'];
+  const plyScanPath = typeof plyPathRaw === 'string' ? plyPathRaw.trim() : '';
+  const plyFileName = String(doc['plyFileName'] ?? meta['plyFileName'] ?? '').trim();
   const plyScanUrl = plyScanPath ? normalizeCaseImageUrl(plyScanPath) : '';
   const intakeRaw = String(meta['intakeType'] ?? '').toLowerCase();
   const intakeType: 'impression' | 'scan' | undefined =

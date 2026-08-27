@@ -302,7 +302,7 @@
                 <span class="meta-pill" [class]="intakeBadgeClass(c)">{{ intakeLabel(c) }}</span>
                 @if (c.plyScanUrl) {
                   <a
-                    class="scan-badge"
+                    class="scan-badge scan-badge--download"
                     [href]="c.plyScanUrl"
                     [attr.download]="c.plyFileName || 'scan'"
                     target="_blank"
@@ -316,11 +316,13 @@
                       <polyline points="7 10 12 15 17 10"/>
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
-                    تنزيل السكان
+                    تحميل السكان
                     @if (c.plyFileName) {
                       <span class="case-ply-name">({{ c.plyFileName }})</span>
                     }
                   </a>
+                } @else if (c.intakeType === 'scan') {
+                  <span class="scan-badge scan-badge--missing" title="لم يتم رفع ملف السكان">لا يوجد ملف للتحميل</span>
                 }
               </div>
               <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">

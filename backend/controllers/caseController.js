@@ -358,7 +358,7 @@ exports.getAllCases = async (req, res) => {
         .populate('assignedTo', 'fullName email role')
         .populate('createdBy', 'fullName email role')
         .select(
-          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
+          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor plyScanPath plyFileName currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
         )
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -1917,8 +1917,26 @@ exports.updateCase = async (req, res) => {
       dentalCase.salaryAmount = parsedSalary;
     }
     if (notes !== undefined) {
+      const prevMeta = parseNotesMeta(dentalCase.notes || '');
+      const prevPlyPath = String(dentalCase.plyScanPath || prevMeta.plyScanPath || '').trim();
+      const prevPlyName = String(dentalCase.plyFileName || prevMeta.plyFileName || '').trim();
+
       dentalCase.notes = sanitizeNotesMetaString(notes);
       dentalCase.referringDoctor = referringDoctorFromNotes(dentalCase.notes);
+
+      // Never drop an uploaded scan when the client rebuilds notes without ply fields
+      if (prevPlyPath) {
+        const nextMeta = parseNotesMeta(dentalCase.notes || '');
+        if (!nextMeta.plyScanPath) {
+          nextMeta.plyScanPath = prevPlyPath;
+          nextMeta.plyFileName = prevPlyName || nextMeta.plyFileName || '';
+          dentalCase.notes = sanitizeNotesMetaString(`__META__\n${JSON.stringify(nextMeta)}`);
+        }
+        if (!dentalCase.plyScanPath) {
+          dentalCase.plyScanPath = prevPlyPath;
+          dentalCase.plyFileName = prevPlyName || dentalCase.plyFileName || '';
+        }
+      }
     }
     if (caseType !== undefined) dentalCase.caseType = caseType;
     if (priority !== undefined) {
@@ -2230,6 +2248,8 @@ exports.uploadCasePly = async (req, res) => {
     meta.plyFileName = String(req.file.originalname || req.file.filename || '').slice(0, 280);
 
     dentalCase.notes = sanitizeNotesMetaString(`${prefix}${JSON.stringify(meta)}`);
+    dentalCase.plyScanPath = meta.plyScanPath;
+    dentalCase.plyFileName = meta.plyFileName;
     await dentalCase.save();
 
     emitCaseUpdated(dentalCase, req.user);
