@@ -127,7 +127,7 @@ export class ToothChartComponent {
       const preferSeed = component.some((f) => byFdi.get(f)?.groupId === seedGroup);
       const gid = preferSeed ? seedGroup : newGroupId();
       for (const fdi of component) {
-        rebuilt.push({ fdi: fdi as ToothFdi, material, groupId: gid });
+        rebuilt.push({ fdi, material, groupId: gid });
       }
     }
     return [...others, ...rebuilt];
