@@ -273,6 +273,7 @@
           class="case-card doctor-case-card"
           [class.is-important]="isImportant(c.id)"
           [class.is-urgent]="c.priority === 'emergency'"
+          [class.case-card--urgent]="c.priority === 'emergency'"
           [attr.data-case-id]="c.id"
           (click)="openDetails(c)"
           role="button"
@@ -299,6 +300,14 @@
                 @if (c.priority === 'emergency') {
                   <span class="urgent-pill">مستعجل</span>
                 }
+              </div>
+              <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">
+                {{ getCasePhase(c).label }}
+              </span>
+            </div>
+            <div class="case-people">
+              <div class="patient">{{ c.patient | patientLabel }}</div>
+              <div class="case-badges-row">
                 <span class="meta-pill" [class]="intakeBadgeClass(c)">{{ intakeLabel(c) }}</span>
                 @if (c.plyScanUrl) {
                   <a
@@ -322,12 +331,6 @@
                   <span class="scan-badge scan-badge--missing">لا يوجد ملف للتحميل</span>
                 }
               </div>
-              <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">
-                {{ getCasePhase(c).label }}
-              </span>
-            </div>
-            <div class="case-people">
-              <div class="patient">{{ c.patient | patientLabel }}</div>
             </div>
             <div class="case-work">
               <div class="work-type">{{ formatWorkTypeForDisplay(c.workType) }}</div>
@@ -356,6 +359,9 @@
                 <div class="date-block">
                   <span class="date-label">تاريخ الخروج</span>
                   <span class="date-value">{{ formatDateTime(c.exitedAt || c.deliveryDate || caseReceivedStamp(c)).date }}</span>
+                  @if (formatDateTime(c.exitedAt || c.deliveryDate || caseReceivedStamp(c)).time) {
+                    <span class="time-value">{{ formatDateTime(c.exitedAt || c.deliveryDate || caseReceivedStamp(c)).time }}</span>
+                  }
                 </div>
               } @else {
                 <div class="date-block">
@@ -365,14 +371,23 @@
                     <span class="time-value">{{ formatDateTime(caseReceivedStamp(c)).time }}</span>
                   }
                 </div>
+                @if (c.deliveryDate) {
+                  <div class="date-block">
+                    <span class="date-label">تاريخ التسليم</span>
+                    <span class="date-value">{{ formatDateTime(c.deliveryDate).date }}</span>
+                    @if (formatDateTime(c.deliveryDate).time) {
+                      <span class="time-value">{{ formatDateTime(c.deliveryDate).time }}</span>
+                    }
+                  </div>
+                }
               }
             </div>
-            @if (canEdit(c)) {
-              <div class="doctor-card-actions" (click)="$event.stopPropagation()">
-                <button type="button" class="btn-secondary doctor-edit-btn" (click)="openEdit(c)">تعديل</button>
-              </div>
-            }
           </div>
+          @if (canEdit(c)) {
+            <div class="case-actions" (click)="$event.stopPropagation()">
+              <button type="button" class="btn-secondary doctor-edit-btn" (click)="openEdit(c)">تعديل</button>
+            </div>
+          }
         </article>
       }
     </section>

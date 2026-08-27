@@ -56,10 +56,64 @@
   min-width: 0;
 }
 
-.doctor-portal .case-head {
-  max-width: none;
-  min-width: 0;
-  flex: 1 1 220px;
+/* Restore topbar theme/control buttons to the secretary control style */
+.doctor-portal .topbar .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--muted, #64748b);
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.doctor-portal .topbar .icon-btn:hover {
+  background: var(--border-primary);
+  color: var(--primary, #2563eb);
+}
+
+.doctor-portal .topbar .icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+:host-context(body.dark-theme) .doctor-portal .topbar .icon-btn,
+.dark-theme .doctor-portal .topbar .icon-btn {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+:host-context(body.dark-theme) .doctor-portal .topbar .icon-btn:hover,
+.dark-theme .doctor-portal .topbar .icon-btn:hover {
+  background: var(--border-primary);
+  color: var(--accent-blue);
+}
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 280px;
+  gap: 4px;
+}
+
+.doctor-portal .case-people .patient {
+  text-align: center;
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.doctor-portal .case-people .case-badges-row {
+  justify-content: center;
 }
 
 .doctor-portal .case-id {
@@ -68,21 +122,10 @@
   overflow-wrap: normal;
 }
 
-.doctor-portal .scan-badge--download {
-  flex-shrink: 0;
-}
-
-.doctor-portal .case-main {
-  display: flex;
-  flex-wrap: wrap;
+.doctor-portal .doctor-case-card .case-actions {
+  margin-right: 0;
+  margin-inline-start: 0.75rem;
   align-items: center;
-  gap: 1rem 1.5rem;
-}
-
-.doctor-portal .case-people,
-.doctor-portal .case-work,
-.doctor-portal .case-meta {
-  max-width: none;
 }
 
 .important-star {
@@ -119,27 +162,6 @@
 .urgent-pill {
   background: #fef2f2;
   color: #dc2626;
-}
-
-.scan-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.22rem 0.55rem;
-  border-radius: 999px;
-  background: #ccfbf1;
-  color: #0f766e;
-  border: 1px solid #99f6e4;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-decoration: none;
-  white-space: nowrap;
-  line-height: 1.2;
-}
-
-.scan-badge:hover {
-  background: #99f6e4;
-  color: #115e59;
 }
 
 .important-pill {
@@ -210,10 +232,10 @@
   height: auto;
   min-height: 44px;
   padding: 0.4rem 0.5rem;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--border, #cbd5e1);
   border-radius: 12px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text-secondary, #475569);
   cursor: pointer;
   width: 100%;
   box-sizing: border-box;
@@ -232,20 +254,48 @@
   background: none;
   font: inherit;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--accent-blue, #2563eb);
   cursor: pointer;
   text-decoration: underline;
-}
-
-.doctor-card-actions {
-  margin-top: 10px;
-  display: flex;
-  justify-content: flex-start;
 }
 
 .doctor-edit-btn {
   padding: 6px 14px;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+:host-context(body.dark-theme) .urgent-pill,
+.dark-theme .urgent-pill {
+  background: rgba(220, 38, 38, 0.18);
+  color: #fca5a5;
+}
+
+:host-context(body.dark-theme) .important-pill,
+.dark-theme .important-pill {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+
+:host-context(body.dark-theme) .doctor-case-card:hover,
+:host-context(body.dark-theme) .doctor-case-card:focus-visible,
+.dark-theme .doctor-case-card:hover,
+.dark-theme .doctor-case-card:focus-visible {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+:host-context(body.dark-theme) .doctor-access-banner,
+.dark-theme .doctor-access-banner {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #bfdbfe;
+}
+
+:host-context(body.dark-theme) .doctor-access-banner--warn,
+.dark-theme .doctor-access-banner--warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #fde68a;
 }
 
 .detail-modal {

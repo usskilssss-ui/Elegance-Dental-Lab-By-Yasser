@@ -1,4 +1,7 @@
 .station-scan {
+  --primary: var(--accent-primary);
+  --primary-light: var(--accent-blue);
+  --muted: var(--text-muted);
   min-height: 100vh;
   background:
     radial-gradient(1200px 600px at 100% 0%, rgba(13, 148, 136, 0.12), transparent 55%),
@@ -112,9 +115,34 @@ body.dark-theme .hub-link:hover,
   cursor: pointer;
 }
 
+.scan-theme-btn.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-secondary, #eef1f6);
+  color: var(--muted, #64748b);
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.scan-theme-btn.icon-btn:hover {
+  background: var(--border-primary, #e2e8f0);
+  color: var(--primary, #2563eb);
+}
+
+.scan-theme-btn.icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
 .scan-main {
   flex: 1;
-  width: min(720px, 100%);
+  width: min(1100px, 100%);
   margin: 0 auto;
   padding: 36px 20px 48px;
   text-align: center;
@@ -149,6 +177,8 @@ body.dark-theme .hub-link:hover,
 }
 
 .scan-form {
+  width: min(720px, 100%);
+  margin-inline: auto;
   display: flex;
   gap: 10px;
   justify-content: center;
@@ -315,11 +345,19 @@ body.dark-theme .station-scan .scan-kicker,
 
 body.dark-theme .station-scan .scan-link,
 body.dark-theme .station-scan .scan-icon-btn,
+body.dark-theme .station-scan .scan-theme-btn.icon-btn,
 .dark-theme .station-scan .scan-link,
-.dark-theme .station-scan .scan-icon-btn {
+.dark-theme .station-scan .scan-icon-btn,
+.dark-theme .station-scan .scan-theme-btn.icon-btn {
   background: var(--bg-secondary, #1e293b);
   border-color: var(--border-primary, #334155);
   color: var(--text-primary, #f8fafc);
+}
+
+body.dark-theme .station-scan .scan-theme-btn.icon-btn:hover,
+.dark-theme .station-scan .scan-theme-btn.icon-btn:hover {
+  background: #334155;
+  color: #93c5fd;
 }
 
 body.dark-theme .station-scan .scan-input,
@@ -421,8 +459,9 @@ body.dark-theme .station-scan .scan-history li.err strong,
 .scan-queue {
   margin-top: 28px;
   text-align: right;
-  width: 100%;
-  max-width: 920px;
+  width: min(1100px, 100%);
+  max-width: none;
+  margin-inline: auto;
 }
 .scan-queue-head {
   display: flex;
@@ -456,110 +495,64 @@ body.dark-theme .station-scan .scan-history li.err strong,
   flex-direction: column;
   gap: 10px;
 }
-.scan-case-card {
-  display: grid;
-  grid-template-columns: 1.2fr 1.4fr auto;
-  gap: 12px;
+
+/* Match secretary case-card layout */
+.station-scan .scan-case-card.case-card {
+  display: flex;
   align-items: center;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 14px;
-  padding: 12px 14px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  justify-content: space-between;
+  background: var(--card, var(--bg-card, #fff));
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--border, var(--border-primary, #e2e8f0));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 }
-.scan-case-id-row {
+
+.station-scan .scan-case-card .case-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.station-scan .scan-case-card .case-head-left {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
-.scan-case-id {
-  font-weight: 800;
-  font-size: 13px;
-  color: #0f172a;
+
+.station-scan .scan-case-card .doctor {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
 }
-.scan-case-pill {
-  display: inline-flex;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  background: #ffedd5;
-  color: #9a3412;
-}
-.scan-case-pill.scan {
-  background: #ccfbf1;
-  color: #0f766e;
-}
-.scan-case-patient {
-  margin-top: 6px;
+
+.station-scan .scan-case-card .patient {
+  font-size: 1rem;
   font-weight: 700;
-  font-size: 14px;
+  color: var(--text-primary, #0f172a);
 }
-.scan-case-doctor {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #64748b;
-}
-.scan-case-wt {
-  font-weight: 800;
-  font-size: 15px;
-}
-.scan-case-specs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.scan-case-specs span {
-  font-size: 11px;
-  font-weight: 700;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: 2px 8px;
-  color: #475569;
-}
-.scan-case-download {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #0d9488;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  text-decoration: none;
-}
-.scan-case-missing {
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #92400e;
-  background: #fef3c7;
-  border-radius: 999px;
-  padding: 4px 10px;
-}
-.scan-case-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 110px;
-}
-.scan-case-date-lbl {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 700;
-}
-.scan-case-date {
-  font-size: 13px;
-  font-weight: 800;
-}
-@media (max-width: 720px) {
-  .scan-case-card {
-    grid-template-columns: 1fr;
+
+@media (max-width: 900px) {
+  .station-scan .scan-case-card.case-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+    padding: 0.95rem;
+  }
+
+  .station-scan .scan-case-card .case-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .station-scan .scan-case-card .case-people {
+    align-items: flex-start;
+    max-width: 100%;
+    text-align: right;
   }
 }
