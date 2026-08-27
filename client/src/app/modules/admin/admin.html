@@ -548,11 +548,6 @@
             <div class="page-label">نظرة مالية شاملة</div>
             <div class="page-title">المالية</div>
           </div>
-          <div class="financial-summary" *ngIf="financeOuterTab === 'doctors'">
-            <span class="summary-pill">إجمالي المبلغ: {{ totalFinancialAmount | number:'1.0-0' }} EGP</span>
-            <span class="summary-pill">عدد الأطباء: {{ reportDoctors.length }}</span>
-            <button class="export-btn" (click)="exportFinancialYearReport()">تصدير تقرير السنة CSV</button>
-          </div>
         </div>
 
         <div class="financial-controls" style="margin-bottom:12px;">
@@ -568,125 +563,12 @@
               <option *ngFor="let month of [1,2,3,4,5,6,7,8,9,10,11,12]" [ngValue]="month">{{ monthName(month) }}</option>
             </select>
           </div>
-          <div class="control-card" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
-            <button type="button" class="export-btn" [style.opacity]="financeOuterTab === 'lab-ledger' ? 1 : 0.55" (click)="setFinanceOuterTab('lab-ledger')">أرباح · مخزون · رواتب · مصاريف</button>
-            <button type="button" class="export-btn" [style.opacity]="financeOuterTab === 'doctors' ? 1 : 0.55" (click)="setFinanceOuterTab('doctors')">حسابات الأطباء</button>
-          </div>
         </div>
 
         <app-finance-panel
-          *ngIf="financeOuterTab === 'lab-ledger'"
           [year]="financePanelYear"
           [month]="financePanelMonth">
         </app-finance-panel>
-
-        <ng-container *ngIf="financeOuterTab === 'doctors'">
-        <div class="financial-controls">
-          <div class="control-card">
-            <label>بحث عن طبيب</label>
-            <input type="text" [(ngModel)]="financialDoctorSearch" placeholder="اكتب اسم الطبيب..." />
-          </div>
-        </div>
-
-        <div class="finance-year-list" *ngIf="groupedFinancialSummary.length; else noFinanceData">
-          <div class="finance-year-card" *ngFor="let yearGroup of groupedFinancialSummary">
-            <div class="finance-year-head">
-              <div class="finance-year-title">{{ yearGroup.year }}</div>
-              <div class="finance-year-meta">
-                <span>الحالات المدفوعة: {{ yearGroup.paidCases }}</span>
-                <span>المبلغ المدفوع: {{ yearGroup.paidAmount | number:'1.0-0' }} EGP</span>
-              </div>
-            </div>
-
-            <div class="finance-month-card" *ngFor="let monthGroup of yearGroup.months">
-              <div class="finance-month-head">
-                <strong>{{ monthGroup.monthLabel }}</strong>
-                <span>
-                  مدفوع {{ monthGroup.paidCases }}/{{ monthGroup.cases }} -
-                  {{ monthGroup.paidTotal | number:'1.0-0' }} EGP
-                </span>
-              </div>
-
-              <div class="report-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>الطبيب</th>
-                      <th>الحالات المدفوعة</th>
-                      <th>المبلغ المدفوع</th>
-                      <th>إجمالي الحالات</th>
-                      <th>إجمالي المبلغ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let doctor of monthGroup.byDoctor">
-                      <td>
-                        <button class="doctor-link-btn" (click)="openDoctorDetails(doctor.doctorName)">
-                          {{ doctor.doctorName }}
-                        </button>
-                      </td>
-                      <td>{{ doctor.paidCases }}</td>
-                      <td>{{ doctor.paidAmount | number:'1.0-0' }} EGP</td>
-                      <td>{{ doctor.cases }}</td>
-                      <td>{{ doctor.totalSalary | number:'1.0-0' }} EGP</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ng-template #noFinanceData>
-          <div class="finance-empty">لا توجد بيانات مالية مطابقة للفلاتر المحددة.</div>
-        </ng-template>
-        </ng-container>
-
-        <div class="modal-overlay" *ngIf="showDoctorDetailsModal" (click)="closeDoctorDetails()">
-          <div class="modal-content doctor-modal-content" (click)="$event.stopPropagation()">
-            <div class="modal-header">
-              <h2>{{ selectedDoctorName }} - السجل</h2>
-              <button class="modal-close-btn" (click)="closeDoctorDetails()">
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div class="modal-body doctor-modal-body">
-              <div class="doctor-stats">
-                <span class="summary-pill">الحالات: {{ selectedDoctorTotals.cases }}</span>
-                <span class="summary-pill">الحالات المدفوعة: {{ selectedDoctorTotals.paidCases }}</span>
-                <span class="summary-pill">المبلغ المدفوع: {{ selectedDoctorTotals.paidAmount | number:'1.0-0' }} EGP</span>
-                <span class="summary-pill">إجمالي المبلغ: {{ selectedDoctorTotals.totalAmount | number:'1.0-0' }} EGP</span>
-              </div>
-
-              <div class="report-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>المريض</th>
-                      <th>النوع</th>
-                      <th>تاريخ الاستلام</th>
-                      <th>تاريخ الخروج</th>
-                      <th>المرحلة</th>
-                      <th>الأجر</th>
-                      <th>الدفع</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let record of selectedDoctorRecords">
-                      <td>{{ record.patientName }}</td>
-                      <td>{{ translateCaseType(record.caseType) }}</td>
-                      <td>{{ record.receivedDate }}</td>
-                      <td>{{ record.exitedDate }}</td>
-                      <td>{{ record.stage }}</td>
-                      <td>{{ record.salary | number:'1.0-0' }} EGP</td>
-                      <td>{{ record.paid ? 'مدفوع' : 'غير مدفوع' }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
       </ng-container>
 
       <!-- REPORTS VIEW -->

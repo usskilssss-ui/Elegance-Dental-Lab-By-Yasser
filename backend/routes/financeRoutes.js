@@ -15,7 +15,9 @@ router.post('/purchases', ...adminOnly, financeController.createPurchase);
 router.get('/movements', ...adminOnly, financeController.listMovements);
 
 router.get('/payroll/employees', ...adminOnly, financeController.listPayrollEmployees);
+router.post('/payroll/employees', ...adminOnly, financeController.createPayrollEmployee);
 router.patch('/payroll/employees/:id', ...adminOnly, financeController.updateEmployeePayroll);
+router.delete('/payroll/employees/:id', ...adminOnly, financeController.deletePayrollEmployee);
 router.get('/payroll', ...adminOnly, financeController.listPayroll);
 router.post('/payroll', ...adminOnly, financeController.upsertPayroll);
 router.post('/payroll/generate', ...adminOnly, financeController.generatePayrollDrafts);

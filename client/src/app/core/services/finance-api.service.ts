@@ -56,8 +56,16 @@ export class FinanceApiService {
     return this.http.get(`${this.base}/payroll/employees`);
   }
 
+  createPayrollEmployee(body: Record<string, unknown>): Observable<any> {
+    return this.http.post(`${this.base}/payroll/employees`, body);
+  }
+
   updateEmployeePayroll(id: string, body: Record<string, unknown>): Observable<any> {
     return this.http.patch(`${this.base}/payroll/employees/${id}`, body);
+  }
+
+  deletePayrollEmployee(id: string): Observable<any> {
+    return this.http.delete(`${this.base}/payroll/employees/${id}`);
   }
 
   listPayroll(year: number | string, month: number | string): Observable<any> {

@@ -272,3 +272,119 @@
   color: #64748b;
   margin: 0 0 8px;
 }
+
+/* Dark theme */
+:host-context(body.dark-theme) .fp-root {
+  color: #e2e8f0;
+}
+
+:host-context(body.dark-theme) .fp-hint,
+:host-context(body.dark-theme) .fp-mini,
+:host-context(body.dark-theme) .fp-loading,
+:host-context(body.dark-theme) .fp-card .lbl,
+:host-context(body.dark-theme) .fp-card .sub,
+:host-context(body.dark-theme) .fp-box label,
+:host-context(body.dark-theme) .fp-table th {
+  color: #94a3b8;
+}
+
+:host-context(body.dark-theme) .fp-tabs button,
+:host-context(body.dark-theme) .fp-mode button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+:host-context(body.dark-theme) .fp-tabs button.active,
+:host-context(body.dark-theme) .fp-mode button.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+:host-context(body.dark-theme) .fp-card,
+:host-context(body.dark-theme) .fp-box,
+:host-context(body.dark-theme) .fp-breakdown {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+:host-context(body.dark-theme) .fp-card .val,
+:host-context(body.dark-theme) .fp-box h3,
+:host-context(body.dark-theme) .fp-toolbar h3,
+:host-context(body.dark-theme) .fp-breakdown td {
+  color: #f1f5f9;
+}
+
+:host-context(body.dark-theme) .fp-breakdown td {
+  border-bottom-color: #1e293b;
+}
+
+:host-context(body.dark-theme) .fp-explain {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+:host-context(body.dark-theme) .fp-box input,
+:host-context(body.dark-theme) .fp-box select,
+:host-context(body.dark-theme) .fp-table input,
+:host-context(body.dark-theme) .fp-table select {
+  background: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+:host-context(body.dark-theme) .fp-table th {
+  background: #1e293b;
+}
+
+:host-context(body.dark-theme) .fp-table th,
+:host-context(body.dark-theme) .fp-table td {
+  border-bottom-color: #334155;
+  color: #e2e8f0;
+}
+
+:host-context(body.dark-theme) .fp-table tr.low {
+  background: #422006;
+}
+
+:host-context(body.dark-theme) .fp-table .empty {
+  color: #64748b;
+}
+
+:host-context(body.dark-theme) .fp-btn {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+:host-context(body.dark-theme) .fp-btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+:host-context(body.dark-theme) .fp-btn.danger {
+  background: #450a0a;
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+:host-context(body.dark-theme) .fp-msg.ok {
+  background: #064e3b;
+  color: #6ee7b7;
+}
+
+:host-context(body.dark-theme) .fp-msg.err {
+  background: #450a0a;
+  color: #fca5a5;
+}
+
+:host-context(body.dark-theme) .fp-card.good .val {
+  color: #34d399;
+}
+
+:host-context(body.dark-theme) .fp-card.bad .val,
+:host-context(body.dark-theme) .fp-card.danger .val {
+  color: #f87171;
+}

@@ -190,13 +190,52 @@
   <!-- PAYROLL -->
   <section *ngIf="innerTab === 'payroll'" class="fp-section">
     <div class="fp-box">
-      <h3>إعدادات الموظفين</h3>
-      <p class="fp-mini">فعّل «يدخل في الرواتب» وحدد ثابت / قطعة / الاتنين. الحوافز تُدخل شهريًا في كشف الشهر.</p>
+      <h3>إضافة موظف للرواتب (مش لازم يكون له أكونت في السيستم)</h3>
+      <div class="fp-row2">
+        <div>
+          <label>الاسم</label>
+          <input type="text" [(ngModel)]="newEmployee.name" placeholder="اسم الموظف" />
+        </div>
+        <div>
+          <label>المسمى الوظيفي</label>
+          <input type="text" [(ngModel)]="newEmployee.jobTitle" placeholder="مثال: فني إنهاء" />
+        </div>
+      </div>
+      <div class="fp-row2">
+        <div>
+          <label>نوع الدفع</label>
+          <select [(ngModel)]="newEmployee.payType">
+            <option value="fixed">ثابت شهري</option>
+            <option value="piece">بالقطعة</option>
+            <option value="mixed">ثابت + قطعة</option>
+          </select>
+        </div>
+        <div>
+          <label>هاتف (اختياري)</label>
+          <input type="text" [(ngModel)]="newEmployee.phone" />
+        </div>
+      </div>
+      <div class="fp-row2">
+        <div>
+          <label>راتب ثابت</label>
+          <input type="number" min="0" [(ngModel)]="newEmployee.baseSalary" />
+        </div>
+        <div>
+          <label>سعر القطعة</label>
+          <input type="number" min="0" [(ngModel)]="newEmployee.defaultPieceRate" />
+        </div>
+      </div>
+      <button type="button" class="fp-btn primary" (click)="addEmployee()">إضافة موظف</button>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>قائمة موظفي الرواتب</h3>
+      <p class="fp-mini">دي قائمة مستقلة عن «الموظفون» في السيستم — تقدر تضيف أي حد هنا للرواتب.</p>
       <table class="fp-table">
         <thead>
           <tr>
             <th>الموظف</th>
-            <th>الدور</th>
+            <th>الوظيفة</th>
             <th>في الرواتب؟</th>
             <th>نوع الدفع</th>
             <th>راتب ثابت</th>
@@ -206,8 +245,8 @@
         </thead>
         <tbody>
           <tr *ngFor="let emp of employees">
-            <td>{{ emp.fullName }}</td>
-            <td>{{ emp.role }}</td>
+            <td><input type="text" [(ngModel)]="emp.name" /></td>
+            <td><input type="text" [(ngModel)]="emp.jobTitle" /></td>
             <td><input type="checkbox" [(ngModel)]="emp.payrollEnabled" /></td>
             <td>
               <select [(ngModel)]="emp.payType">
@@ -218,8 +257,12 @@
             </td>
             <td><input class="tiny" type="number" [(ngModel)]="emp.baseSalary" /></td>
             <td><input class="tiny" type="number" [(ngModel)]="emp.defaultPieceRate" /></td>
-            <td><button type="button" class="fp-btn sm" (click)="saveEmployeePay(emp)">حفظ</button></td>
+            <td class="actions">
+              <button type="button" class="fp-btn sm" (click)="saveEmployeePay(emp)">حفظ</button>
+              <button type="button" class="fp-btn sm danger" (click)="removeEmployee(emp)">إيقاف</button>
+            </td>
           </tr>
+          <tr *ngIf="!employees.length"><td colspan="7" class="empty">لا موظفين بعد — أضف من النموذج فوق</td></tr>
         </tbody>
       </table>
     </div>
@@ -227,7 +270,7 @@
     <div class="fp-box" style="margin-top:16px">
       <div class="fp-toolbar">
         <h3>كشف رواتب الشهر</h3>
-        <button type="button" class="fp-btn primary" (click)="generateDrafts()">توليد مسودات من الإعدادات</button>
+        <button type="button" class="fp-btn primary" (click)="generateDrafts()">توليد مسودات من القائمة</button>
       </div>
       <table class="fp-table">
         <thead>
@@ -259,7 +302,7 @@
               <button type="button" class="fp-btn sm danger" (click)="deletePayrollRow(row)">حذف</button>
             </td>
           </tr>
-          <tr *ngIf="!payrollRows.length"><td colspan="9" class="empty">لا كشف بعد — فعّل موظفين ثم اضغط توليد مسودات</td></tr>
+          <tr *ngIf="!payrollRows.length"><td colspan="9" class="empty">لا كشف بعد — أضف موظفين ثم اضغط توليد مسودات</td></tr>
         </tbody>
       </table>
     </div>
