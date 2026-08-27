@@ -835,7 +835,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openEdit(c: any): void {
-    if (c.status === 'exited') {
+    if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('edit', c);
       return;
     }
@@ -1157,7 +1157,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   confirmDelete(c: any): void {
-    if (c.status === 'exited') {
+    if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('delete', c);
       return;
     }

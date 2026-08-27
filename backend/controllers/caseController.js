@@ -1947,14 +1947,70 @@ exports.updateCase = async (req, res) => {
       dentalCase.markModified('stageTimestamps');
     }
 
-    // Exited: admin still cannot casually rewrite caseType/salary via general update
-    // (use /financials for money). Allow notes/priority only unless explicit financials.
-    if (isExitedCase(dentalCase) && req.user.role === 'admin') {
-      if (caseType !== undefined || salaryAmount !== undefined) {
-        return res.status(400).json({
-          success: false,
-          message: 'لتعديل المبلغ أو نوع الشغل بعد الخروج استخدم مسار الماليات أو أعد فتح الحالة',
-        });
+    // Exited cases: admin may fully edit; refresh frozen bill when work/price changes
+    if (
+      isExitedCase(dentalCase) &&
+      req.user.role === 'admin' &&
+      (caseType !== undefined || notes !== undefined || salaryAmount !== undefined)
+    ) {
+      try {
+        const DoctorPricing = require('../models/DoctorPricing');
+        const {
+          calculateCaseCostBreakdownAsync,
+          findPricingForDoctor,
+          parseNotesMeta,
+        } = require('../services/casePricingService');
+        const meta = parseNotesMeta(dentalCase.notes || '');
+        const doctorName = String(
+          dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
+        ).trim();
+        const workChanged = caseType !== undefined || notes !== undefined;
+        let revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
+        let breakdown = { quantity: 0, unitPrice: 0, lines: [], total: revenue };
+
+        if (workChanged && dentalCase.requesterType !== 'student') {
+          const pricings = await DoctorPricing.find().lean();
+          const pricingDoc = findPricingForDoctor(pricings, doctorName);
+          breakdown = await calculateCaseCostBreakdownAsync(
+            dentalCase.caseType,
+            dentalCase.notes,
+            pricingDoc?.prices || null
+          );
+          const liveTotal = Number(breakdown.total) || 0;
+          if (liveTotal > 0) {
+            revenue = liveTotal;
+            dentalCase.salaryAmount = revenue;
+          }
+          dentalCase.billSnapshot = {
+            doctorName,
+            pricedAt: new Date().toISOString(),
+            quantity: breakdown.quantity || 0,
+            unitPrice: breakdown.unitPrice || 0,
+            total: revenue,
+            lines: breakdown.lines || [],
+            priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+          };
+        } else {
+          dentalCase.billSnapshot = {
+            ...(dentalCase.billSnapshot && typeof dentalCase.billSnapshot === 'object'
+              ? dentalCase.billSnapshot
+              : {}),
+            doctorName:
+              (dentalCase.billSnapshot && dentalCase.billSnapshot.doctorName) || doctorName,
+            pricedAt: new Date().toISOString(),
+            total: revenue,
+          };
+        }
+        dentalCase.revenueAmount = revenue;
+        dentalCase.markModified('billSnapshot');
+        const cogs = Math.max(0, Number(dentalCase.materialCost) || 0);
+        dentalCase.caseProfit = Math.round((revenue - cogs) * 100) / 100;
+      } catch (priceErr) {
+        console.warn(
+          '[updateCase] exited bill refresh failed:',
+          dentalCase?.caseNumber,
+          priceErr?.message || priceErr
+        );
       }
     }
 
