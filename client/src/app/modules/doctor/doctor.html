@@ -551,7 +551,7 @@
                 <span class="wt-error">{{ workTypeError }}</span>
               }
 
-              @if (formDraft.caseType !== 'Empty' && !hasWorkTypesWithQuantity) {
+              @if (!hasWorkTypesWithQuantity) {
                 <p class="wt-error" style="color:#94a3b8;margin:8px 0 0;">
                   اختَر نوع العمل من الأزرار فوق (مثلاً Zircon) عشان يظهر مخطط الأسنان
                 </p>
