@@ -1000,7 +1000,7 @@
                     <input type="text" class="lab-mat-input" [(ngModel)]="m.label" />
                   </td>
                   <td>
-                    <input type="number" class="lab-mat-input lab-mat-input--price" [(ngModel)]="m.defaultPrice" min="0" />
+                    <input type="number" class="lab-mat-input lab-mat-price" [(ngModel)]="m.defaultPrice" min="0" />
                   </td>
                   <td>
                     <input type="checkbox" [(ngModel)]="m.active" title="نشط" />
@@ -1013,7 +1013,7 @@
               </tbody>
             </table>
           </div>
-          <p *ngIf="!labMaterials.length && !labMsg" class="lab-materials-hint" style="margin-top:12px;">لا توجد ماتريال بعد — أضف أول خام من فوق.</p>
+          <p *ngIf="!labMaterials.length && !labMsg" class="lab-materials-msg">لا توجد ماتريال بعد — أضف أول خام من فوق.</p>
         </div>
       </ng-container>
 

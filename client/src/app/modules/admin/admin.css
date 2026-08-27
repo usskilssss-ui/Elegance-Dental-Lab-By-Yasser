@@ -1084,3 +1084,43 @@ tbody td { padding: 12px 16px; font-size: 12px; color: var(--color-text-primary)
     grid-template-columns: 1fr;
   }
 }
+
+/* Lab materials (light-first) */
+.lab-materials-hint {
+  margin: 0 0 16px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.lab-materials-hint strong { color: #0f172a; }
+.lab-materials-msg {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 14px;
+}
+.lab-materials-msg.err { color: #dc2626; }
+.lab-mat-input {
+  width: 160px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.lab-mat-input.lab-mat-price { width: 110px; }
+.lab-mat-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+body.dark-theme .lab-materials-hint { color: #94a3b8; }
+body.dark-theme .lab-materials-hint strong { color: #e2e8f0; }
+body.dark-theme .lab-materials-msg { color: #94a3b8; }
+body.dark-theme .lab-materials-msg.err { color: #f87171; }
+body.dark-theme .lab-mat-input {
+  background: #0f172a;
+  border-color: #334155;
+  color: #fff;
+}
