@@ -1124,3 +1124,125 @@ body.dark-theme .lab-mat-input {
   border-color: #334155;
   color: #fff;
 }
+
+/* Reports doctor details — light-first */
+.report-section-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.doctor-price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.doctor-price-card {
+  padding: 8px 12px;
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-tertiary);
+}
+.doctor-price-card label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  display: block;
+  font-weight: 600;
+}
+.doctor-price-input {
+  width: 100%;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  color: var(--color-text-primary);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.doctor-price-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.payment-entry-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  background: var(--color-background-secondary);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-tertiary);
+}
+.payment-entry-field label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+  display: block;
+  font-weight: 600;
+}
+.payment-entry-field input {
+  width: 100%;
+  background: var(--color-background-primary);
+  border: 1px solid var(--color-border-secondary);
+  color: var(--color-text-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.payment-entry-field input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.payments-table-wrap {
+  background: var(--color-background-primary);
+  border-radius: 12px;
+  border: 1px solid var(--color-border-tertiary);
+  overflow: hidden;
+}
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: right;
+}
+.payments-table thead tr {
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.payments-table th,
+.payments-table td {
+  padding: 12px 16px;
+}
+.payments-table tbody tr {
+  border-bottom: 1px solid var(--color-border-tertiary);
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+.payments-table .payment-amount {
+  font-weight: 700;
+  color: #059669;
+}
+.payments-table .payment-notes {
+  color: var(--color-text-secondary);
+}
+.payments-table .payments-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+.payment-delete-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
