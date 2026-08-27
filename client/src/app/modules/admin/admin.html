@@ -558,7 +558,7 @@
         <div class="financial-controls" style="margin-bottom:12px;">
           <div class="control-card">
             <label>السنة</label>
-            <select [(ngModel)]="financePanelYear" (ngModelChange)="onFinancialYearChange(String($event))">
+            <select [(ngModel)]="financePanelYear" (ngModelChange)="onFinancePanelYearChange($event)">
               <option *ngFor="let year of (financialYears.length ? financialYears : [financePanelYear])" [ngValue]="year">{{ year }}</option>
             </select>
           </div>
