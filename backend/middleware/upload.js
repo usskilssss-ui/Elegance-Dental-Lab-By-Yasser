@@ -2,7 +2,7 @@ const path = require('path');
 const multer = require('multer');
 const { getCasesUploadDir } = require('../config/uploadPaths');
 
-const SCAN_EXTS = ['.ply', '.stl', '.obj'];
+const SCAN_EXTS = ['.ply', '.stl', '.obj', '.rar', '.zip'];
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, getCasesUploadDir()),
@@ -47,7 +47,7 @@ const plyFileFilter = (_req, file, cb) => {
   if (SCAN_EXTS.some((ext) => base.toLowerCase().endsWith(ext))) {
     return cb(null, true);
   }
-  return cb(new Error('Only 3D scan files are allowed (.ply, .stl, .obj).'));
+  return cb(new Error('Only scan files are allowed (.ply, .stl, .obj, .rar, .zip).'));
 };
 
 const uploadCasePly = multer({

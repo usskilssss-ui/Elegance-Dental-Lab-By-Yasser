@@ -2236,7 +2236,7 @@ exports.reopenCase = async (req, res) => {
 exports.uploadCasePly = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No scan file uploaded (.ply / .stl / .obj)' });
+      return res.status(400).json({ message: 'No scan file uploaded (.ply / .stl / .obj / .rar / .zip)' });
     }
 
     const dentalCase = await DentalCase.findById(req.params.id);
