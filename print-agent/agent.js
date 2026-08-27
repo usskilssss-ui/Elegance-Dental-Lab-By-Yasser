@@ -650,9 +650,10 @@ async function generatePdf(html, outputPath) {
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
     path: outputPath,
-    format: 'A5',
+    format: 'A4',
     printBackground: true,
-    margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
+    preferCSSPageSize: true,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' },
   });
   await browser.close();
   fs.unlink(tempHtmlPath, () => {});
@@ -834,57 +835,67 @@ async function buildPrintHtml(c) {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { size: A5; margin: 7mm 8mm; }
+    /* A4 so content matches lab paper (A5 PDF on A4 leaves the bottom half blank). */
+    @page { size: A4; margin: 12mm 14mm; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
       background: #fff;
       color: #000;
-      font-size: 13px;
-      line-height: 1.35;
+      font-size: 16px;
+      line-height: 1.45;
       direction: rtl;
-      padding-top: 8px;
+      min-height: 273mm;
+      display: flex;
+      flex-direction: column;
+      padding-top: 4px;
     }
     .barcode-block {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      margin: 0 auto 8px; padding: 2px 0;
+      margin: 0 auto 14px; padding: 4px 0;
     }
     .barcode-img {
-      width: 180px; height: 40px; object-fit: contain;
+      width: 260px; height: 56px; object-fit: contain;
       image-rendering: pixelated;
     }
     .barcode-code-text {
-      margin-top: 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.4px;
+      margin-top: 6px; font-size: 15px; font-weight: 800; letter-spacing: 0.5px;
       direction: ltr; unicode-bidi: isolate;
     }
-    .barcode-hint { font-size: 9px; color: #333; margin-top: 1px; }
-    .section { margin-bottom: 8px; }
+    .barcode-hint { font-size: 11px; color: #333; margin-top: 2px; }
+    .section { margin-bottom: 16px; }
     .section-title {
-      font-size: 13px; font-weight: 700; color: #000;
-      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 4px;
+      font-size: 16px; font-weight: 700; color: #000;
+      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 8px;
     }
     .row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 3px 0; border-bottom: 1px solid #000; font-size: 13px;
+      padding: 8px 0; border-bottom: 1.5px solid #000; font-size: 15px;
     }
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    .teeth-section { margin-top: 6px; margin-bottom: 4px; }
+    .teeth-section {
+      margin-top: 8px;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
     .teeth-title {
-      font-size: 13px; font-weight: 700; color: #000;
-      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 4px;
+      font-size: 16px; font-weight: 700; color: #000;
+      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 10px;
     }
     .teeth-chart { width: 100%; direction: ltr; }
     .palmer-arch {
-      display: flex; align-items: stretch; gap: 3px; width: 100%;
-      margin: 2px 0;
+      display: flex; align-items: stretch; gap: 6px; width: 100%;
+      margin: 8px 0;
     }
-    .palmer-arch.upper { border-bottom: 1.5px solid #000; padding-bottom: 4px; }
-    .palmer-arch.lower { padding-top: 2px; }
+    .palmer-arch.upper { border-bottom: 2px solid #000; padding-bottom: 12px; }
+    .palmer-arch.lower { padding-top: 8px; }
     .palmer-arch .rl {
-      flex: 0 0 12px; font-size: 12px; font-weight: 800;
+      flex: 0 0 18px; font-size: 16px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
     }
     .quad {
@@ -892,46 +903,46 @@ async function buildPrintHtml(c) {
       display: grid;
       grid-template-columns: repeat(8, minmax(0, 1fr));
       grid-template-rows: auto auto;
-      column-gap: 2px; row-gap: 1px;
+      column-gap: 4px; row-gap: 4px;
     }
     .seg-lab {
       display: flex; align-items: flex-end; justify-content: center;
-      font-size: 10px; font-weight: 800; line-height: 1; color: #000;
-      min-height: 12px; min-width: 0;
+      font-size: 13px; font-weight: 800; line-height: 1; color: #000;
+      min-height: 18px; min-width: 0;
     }
-    .seg-lab.on { letter-spacing: 0.2px; }
+    .seg-lab.on { letter-spacing: 0.3px; }
     .lower .seg-lab { align-items: flex-start; }
     .seg-box {
       display: flex; align-items: center; justify-content: space-evenly;
-      min-width: 0; min-height: 20px; padding: 1px 1px;
-      border: 1.5px solid transparent; background: #fff;
+      min-width: 0; min-height: 36px; padding: 4px 2px;
+      border: 2px solid transparent; background: #fff;
     }
     .seg-box.empty .pn { opacity: 0.55; }
     .seg-box.selected {
-      border-color: #000; border-radius: 2px;
+      border-color: #000; border-radius: 3px;
     }
     .seg-box .pn {
       flex: 1 1 0; text-align: center;
-      font-size: 12px; font-weight: 700; line-height: 1.1;
+      font-size: 18px; font-weight: 700; line-height: 1.1;
     }
     .mid-line {
-      flex: 0 0 2px; align-self: stretch; background: #000; margin: 10px 2px 0;
+      flex: 0 0 3px; align-self: stretch; background: #000; margin: 16px 4px 0;
     }
-    .lower .mid-line { margin: 0 2px 10px; }
+    .lower .mid-line { margin: 0 4px 16px; }
     .teeth-legend {
-      margin-top: 6px; font-size: 10px; font-weight: 600;
+      margin-top: 14px; font-size: 13px; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       direction: ltr; text-align: center;
     }
     .teeth-legend .leg { display: inline; }
-    .teeth-legend .leg-sep { margin: 0 5px; opacity: 0.7; }
+    .teeth-legend .leg-sep { margin: 0 8px; opacity: 0.7; }
     .footer {
-      margin-top: 10px; padding-top: 6px; border-top: 1.5px solid #000;
+      margin-top: auto; padding-top: 12px; border-top: 2px solid #000;
       display: flex; justify-content: space-between; align-items: center;
-      font-size: 10px; color: #000; direction: ltr;
+      font-size: 12px; color: #000; direction: ltr;
     }
-    .footer-lab { font-weight: 700; color: #000; font-size: 11px; }
-    .footer-date { color: #000; font-size: 10px; direction: rtl; }
+    .footer-lab { font-weight: 700; color: #000; font-size: 13px; }
+    .footer-date { color: #000; font-size: 12px; direction: rtl; }
   </style>
 </head>
 <body>
