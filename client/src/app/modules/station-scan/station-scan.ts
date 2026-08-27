@@ -50,7 +50,7 @@ const ROLE_META: Partial<
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './station-scan.html',
-  styleUrls: ['./station-scan.css'],
+  styleUrls: ['../secretary/secretary.css', './station-scan.css'],
 })
 export class StationScanComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
