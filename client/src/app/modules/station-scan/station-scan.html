@@ -113,10 +113,10 @@
                     </div>
                   </div>
                   <div class="case-people">
-                    <div class="patient">المريض: {{ c.patient }}</div>
                     @if (c.doctor) {
-                      <div class="doctor">د. {{ c.doctor }}</div>
+                      <div class="doctor">{{ c.doctor }}</div>
                     }
+                    <div class="patient">{{ c.patient | patientLabel }}</div>
                     <div class="case-badges-row">
                       @if (c.plyScanUrl) {
                         <a
