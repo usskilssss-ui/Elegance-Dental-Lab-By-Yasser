@@ -32,6 +32,17 @@ const dentalCaseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    /** Uploaded 3D scan file path (e.g. /uploads/cases/xxx.ply) — durable, not only in notes meta */
+    plyScanPath: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    plyFileName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     /** Clinic referring doctor (indexed) — mirrors notes meta.doctor for fast list filters */
     referringDoctor: {
       type: String,
