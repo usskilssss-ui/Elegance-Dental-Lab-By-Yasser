@@ -18,6 +18,8 @@ import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { environment } from '../../../environments/environment';
+import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function todayYmd(): string {
   const d = new Date();
@@ -66,7 +68,7 @@ export interface PrintJobCard {
 @Component({
   selector: 'app-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ToothChartComponent],
   templateUrl: './entry.html',
   styleUrl: './entry.css',
 })
@@ -143,6 +145,9 @@ export class EntryComponent implements OnInit, OnDestroy {
   patientWarning = '';
   intakeType: 'impression' | 'scan' | '' = '';
   selectedPlyFile: File | null = null;
+  toothAssignments: ToothAssignment[] = [];
+  toothLinkMode: 'connected' | 'separate' = 'separate';
+  activeToothMaterial = '';
 
   // Doctor autocomplete — اقتراحات من أكونتات الدكاترة فقط (الكتابة الحرة مسموحة)
   readonly accountDoctors = signal<string[]>([]);
@@ -274,6 +279,8 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.nightGuardType = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
+      this.toothAssignments = [];
+      this.activeToothMaterial = '';
     } else {
       this.updateWorkTypeString();
     }
@@ -285,6 +292,10 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
       if (type === 'Night Guard') this.nightGuardType = '';
+      this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
+      if (this.activeToothMaterial === type) {
+        this.activeToothMaterial = this.chartMaterials[0] || '';
+      }
     } else {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
@@ -292,12 +303,15 @@ export class EntryComponent implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
+        this.toothAssignments = [];
+        this.activeToothMaterial = '';
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
         this.selectedWorkTypes.add(type);
         this.workTypeQuantities[type] = 1;
         if (type === 'Night Guard') this.nightGuardType = 'Soft';
+        if (!this.activeToothMaterial) this.activeToothMaterial = type;
       }
     }
     this.updateWorkTypeString();
@@ -312,6 +326,35 @@ export class EntryComponent implements OnInit, OnDestroy {
       if (wt !== 'Remake' && wt !== 'Empty') return true;
     }
     return false;
+  }
+
+  get chartMaterials(): string[] {
+    return [...this.selectedWorkTypes].filter((wt) => wt !== 'Remake' && wt !== 'Empty');
+  }
+
+  onToothAssignmentsChange(list: ToothAssignment[]): void {
+    this.toothAssignments = list || [];
+    const counts = countByMaterial(this.toothAssignments);
+    for (const [mat, n] of Object.entries(counts)) {
+      if (this.selectedWorkTypes.has(mat) && n > 0) {
+        this.workTypeQuantities[mat] = n;
+      }
+    }
+    for (const wt of this.selectedWorkTypes) {
+      if (wt === 'Remake' || wt === 'Empty') continue;
+      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
+        this.workTypeQuantities[wt] = 1;
+      }
+    }
+    this.updateWorkTypeString();
+  }
+
+  onActiveToothMaterialChange(mat: string): void {
+    this.activeToothMaterial = mat || '';
+  }
+
+  onToothLinkModeChange(mode: 'connected' | 'separate'): void {
+    this.toothLinkMode = mode;
   }
 
   setNightGuardType(type: 'Soft' | 'Hard'): void {
@@ -483,6 +526,9 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.patientWarning = '';
     this.intakeType = '';
+    this.toothAssignments = [];
+    this.activeToothMaterial = '';
+    this.toothLinkMode = 'separate';
     this.clearPlySelection();
     this.dialogOpen.set(true);
   }
@@ -513,6 +559,10 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.flash('يرجى اختيار نوع العمل');
       return;
     }
+    if (d.caseType !== 'Empty' && this.hasWorkTypesWithQuantity && this.toothAssignments.length === 0) {
+      this.flash('يرجى تعبئة مخطط الأسنان');
+      return;
+    }
 
     this.updateWorkTypeString();
     const draft = {
@@ -528,6 +578,7 @@ export class EntryComponent implements OnInit, OnDestroy {
       intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
         ? this.intakeType
         : undefined) as 'impression' | 'scan' | undefined,
+      teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
     const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
 
