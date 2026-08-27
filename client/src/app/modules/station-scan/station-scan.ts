@@ -6,6 +6,9 @@ import { AppRole } from '../../core/auth/auth.types';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
+import { DentalCase } from '../../core/services/shared-cases.service';
+import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 export type ScanStation = 'reception' | 'design' | 'finishing';
 
@@ -46,7 +49,7 @@ const ROLE_META: Partial<
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, CaseBarcodeComponent],
   templateUrl: './station-scan.html',
   styleUrls: ['./station-scan.css'],
 })
@@ -67,6 +70,9 @@ export class StationScanComponent implements OnInit, OnDestroy {
   readonly lastScans = signal<ScanFeedback[]>([]);
   readonly unauthorized = signal(false);
   readonly showReceptionHub = signal(false);
+  /** Cases currently at this station — shown as cards under the scanner */
+  readonly queueCases = signal<DentalCase[]>([]);
+  readonly queueLoading = signal(false);
 
   scanBuffer = '';
   private focusTimer: ReturnType<typeof setInterval> | null = null;
@@ -82,12 +88,11 @@ export class StationScanComponent implements OnInit, OnDestroy {
 
     const meta = role ? ROLE_META[role] : undefined;
     if (!meta) {
-      // Admin/lab staff can open /scan for testing
       if (role === 'admin' || role === 'designer' || role === 'finisher') {
         this.unauthorized.set(false);
         this.title.set('مسح تجريبي');
         this.subtitle.set('سجّل دخول بحساب سكرتير أو سكان 2 / 3 للاستخدام اليومي');
-        this.station.set('design');
+        this.station.set(role === 'finisher' ? 'finishing' : 'design');
       } else {
         this.unauthorized.set(true);
       }
@@ -96,6 +101,10 @@ export class StationScanComponent implements OnInit, OnDestroy {
       this.station.set(meta.station);
       this.title.set(meta.title);
       this.subtitle.set(meta.subtitle);
+    }
+
+    if (!this.unauthorized()) {
+      this.reloadQueue();
     }
 
     this.focusTimer = setInterval(() => this.focusScanner(), 800);
@@ -110,7 +119,6 @@ export class StationScanComponent implements OnInit, OnDestroy {
 
   focusScanner(): void {
     if (this.busy() || this.unauthorized()) return;
-    // Don't steal focus mid-barcode (keyboard wedge is still typing)
     if (Date.now() - this.lastKeyAt < 200) return;
     const el = this.scanInput?.nativeElement;
     if (!el) return;
@@ -130,8 +138,6 @@ export class StationScanComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Wedge scanners fire Enter before Angular ngModel catches the last chars.
-    // Read the DOM value after a short delay, then submit once.
     if (this.submitTimer) clearTimeout(this.submitTimer);
     this.submitTimer = setTimeout(() => {
       this.submitTimer = null;
@@ -149,6 +155,40 @@ export class StationScanComponent implements OnInit, OnDestroy {
     }, 80);
   }
 
+  queueTitle(): string {
+    const s = this.station();
+    if (s === 'design') return 'حالات تحت الديزاين (بعد المسح)';
+    if (s === 'finishing') return 'حالات تحت الفينيش (بعد المسح)';
+    return 'حالات منتهية (بعد المسح)';
+  }
+
+  intakeLabel(c: DentalCase): string {
+    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
+    if (c.intakeType === 'impression') return 'امبرشن';
+    return '';
+  }
+
+  private stationApiStage(): string {
+    const s = this.station();
+    if (s === 'reception') return 'completed';
+    return s;
+  }
+
+  reloadQueue(): void {
+    this.queueLoading.set(true);
+    this.caseApi.getAllCases(1, 200, { stage: this.stationApiStage() }).subscribe({
+      next: (res) => {
+        const rows = (res?.data ?? []) as Record<string, unknown>[];
+        const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];
+        this.queueCases.set(mapped);
+        this.queueLoading.set(false);
+      },
+      error: () => {
+        this.queueLoading.set(false);
+      },
+    });
+  }
+
   private submitCode(code: string): void {
     this.busy.set(true);
     const role = this.auth.getSession()?.role;
@@ -157,7 +197,6 @@ export class StationScanComponent implements OnInit, OnDestroy {
       role === 'scanner2' ||
       role === 'scanner3' ||
       role === 'secretary';
-    // Locked roles: station comes from JWT on server. Others may pass station for testing.
     const station = stationLocked ? undefined : this.station();
     this.caseApi.scanAtStation(code, station).subscribe({
       next: (res) => {
@@ -175,6 +214,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
         };
         this.pushFeedback(fb);
         this.playTone(true);
+        this.reloadQueue();
         this.focusScanner();
       },
       error: (err) => {
@@ -217,7 +257,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
       setTimeout(() => {
         osc.stop();
         ctx.close();
-      }, ok ? 140 : 320);
+      }, ok ? 120 : 280);
     } catch {
       /* ignore */
     }
