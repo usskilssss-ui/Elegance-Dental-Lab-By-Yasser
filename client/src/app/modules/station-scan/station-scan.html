@@ -150,6 +150,12 @@
                       }
                       <span class="spec-item">Qty: {{ c.quantity }}</span>
                     </div>
+                    @if (cardNotes(c); as notes) {
+                      <div class="scan-case-notes" dir="rtl">
+                        <span class="scan-case-notes-lbl">ملاحظات</span>
+                        <span class="scan-case-notes-txt">{{ notes }}</span>
+                      </div>
+                    }
                   </div>
                   <div class="case-meta">
                     <div class="date-block">

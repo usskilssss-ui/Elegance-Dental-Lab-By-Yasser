@@ -536,6 +536,44 @@ body.dark-theme .station-scan .scan-history li.err strong,
   color: var(--text-secondary, #64748b);
 }
 
+.scan-case-notes {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-secondary, #f1f5f9);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scan-case-notes-lbl {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted, #64748b);
+}
+
+.scan-case-notes-txt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+body.dark-theme .station-scan .scan-case-notes,
+.dark-theme .station-scan .scan-case-notes {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.dark-theme .station-scan .scan-case-notes-txt,
+.dark-theme .station-scan .scan-case-notes-txt {
+  color: #e2e8f0;
+}
+
 @media (max-width: 900px) {
   .station-scan .scan-case-card.case-card {
     flex-direction: column;
