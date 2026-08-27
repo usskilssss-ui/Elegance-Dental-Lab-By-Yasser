@@ -124,7 +124,7 @@ function resolvePartUnitPrice(lowerPart, prices, materials) {
     }
   }
   if (!best) return null;
-  const unitPrice = prices[best.key] ?? Number(best.defaultPrice) || 0;
+  const unitPrice = prices[best.key] ?? (Number(best.defaultPrice) || 0);
   return { label: best.label, key: best.key, unitPrice };
 }
 

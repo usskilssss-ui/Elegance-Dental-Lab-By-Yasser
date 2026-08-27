@@ -222,6 +222,8 @@ export class Admin implements OnInit, OnDestroy {
   labDefaultPrices: Record<string, number> = {};
   labMsg = '';
   labSaving = false;
+  matSaving = false;
+  matMsgError = false;
   matDraft: Partial<LabMaterial> = {
     label: '',
     key: '',
@@ -2765,19 +2767,38 @@ export class Admin implements OnInit, OnDestroy {
 
   loadLabConfig(): void {
     this.labMsg = '';
-    this.labConfig.getLabSettings().subscribe({
-      next: (res) => {
-        this.labBranding = { ...res.branding };
-        this.labWorkflow = { ...res.workflow };
-        this.labMaterials = res.materials || [];
-        this.labDefaultPrices = res.defaultPrices || {};
+    this.matMsg = '';
+    this.matMsgError = false;
+    // Materials first — this is what the admin page needs
+    this.labConfig.listMaterials(false).subscribe({
+      next: (materials) => {
+        this.labMaterials = materials || [];
+        this.labDefaultPrices = {};
+        for (const m of this.labMaterials) {
+          this.labDefaultPrices[m.key] = Number(m.defaultPrice) || 0;
+        }
         if (this.reportDoctorFilter) {
           this.loadCustomPricesForDoctor(this.reportDoctorFilter);
         }
       },
       error: (err) => {
-        this.labMsg = 'تعذر تحميل إعدادات المعمل';
+        const status = err?.status;
+        this.labMsg =
+          status === 404
+            ? 'الباكند لسه مش محدّث على Railway — مسار الماتريال غير موجود. لازم نشر الباكند.'
+            : 'تعذر تحميل قائمة الماتريال';
         console.error(err);
+      },
+    });
+    // Optional branding/workflow (ignore failures)
+    this.labConfig.getLabSettings().subscribe({
+      next: (res) => {
+        this.labBranding = { ...res.branding };
+        this.labWorkflow = { ...res.workflow };
+        if (res.defaultPrices) this.labDefaultPrices = { ...res.defaultPrices };
+      },
+      error: () => {
+        /* branding optional */
       },
     });
   }
@@ -2823,11 +2844,14 @@ export class Admin implements OnInit, OnDestroy {
 
   addMaterial(): void {
     this.matMsg = '';
+    this.matMsgError = false;
     const label = String(this.matDraft.label || '').trim();
     if (!label) {
       this.matMsg = 'اكتب اسم الماتريال';
+      this.matMsgError = true;
       return;
     }
+    this.matSaving = true;
     const keywords = this.matKeywordsText
       .split(/[,|\n]/)
       .map((k) => k.trim())
@@ -2846,25 +2870,33 @@ export class Admin implements OnInit, OnDestroy {
       })
       .subscribe({
         next: () => {
+          this.matSaving = false;
           this.matDraft = { label: '', key: '', defaultPrice: 0, matchKeywords: [], sortOrder: 100 };
           this.matKeywordsText = '';
           this.matMsg = 'تمت إضافة الماتريال';
           this.loadLabConfig();
         },
         error: (err) => {
-          this.matMsg = err?.error?.message || 'تعذر الإضافة';
+          this.matSaving = false;
+          this.matMsgError = true;
+          this.matMsg =
+            err?.status === 404
+              ? 'الباكند مش محدّث — انشر Railway الأول'
+              : err?.error?.message || 'تعذر الإضافة';
         },
       });
   }
 
   saveMaterialRow(m: LabMaterial): void {
     if (!m._id) return;
+    this.matSaving = true;
+    this.matMsgError = false;
     this.labConfig
       .updateMaterial(m._id, {
         label: m.label,
         labelAr: m.labelAr,
         defaultPrice: Number(m.defaultPrice) || 0,
-        matchKeywords: m.matchKeywords,
+        matchKeywords: m.matchKeywords?.length ? m.matchKeywords : [String(m.label || '').toLowerCase()],
         active: m.active,
         sortOrder: Number(m.sortOrder) || 100,
         showInWorkTypes: m.showInWorkTypes,
@@ -2872,10 +2904,13 @@ export class Admin implements OnInit, OnDestroy {
       })
       .subscribe({
         next: () => {
+          this.matSaving = false;
           this.matMsg = `تم حفظ «${m.label}»`;
           this.loadLabConfig();
         },
         error: (err) => {
+          this.matSaving = false;
+          this.matMsgError = true;
           this.matMsg = err?.error?.message || 'تعذر الحفظ';
         },
       });
@@ -2884,12 +2919,17 @@ export class Admin implements OnInit, OnDestroy {
   removeMaterial(m: LabMaterial): void {
     if (!m._id) return;
     if (!confirm(`حذف الماتريال «${m.label}»؟`)) return;
+    this.matSaving = true;
+    this.matMsgError = false;
     this.labConfig.deleteMaterial(m._id).subscribe({
       next: () => {
+        this.matSaving = false;
         this.matMsg = 'تم الحذف';
         this.loadLabConfig();
       },
       error: (err) => {
+        this.matSaving = false;
+        this.matMsgError = true;
         this.matMsg = err?.error?.message || 'تعذر الحذف';
       },
     });
