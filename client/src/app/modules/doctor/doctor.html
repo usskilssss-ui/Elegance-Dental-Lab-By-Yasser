@@ -299,6 +299,7 @@
                 @if (c.priority === 'emergency') {
                   <span class="urgent-pill">مستعجل</span>
                 }
+                <span class="meta-pill" [class]="intakeBadgeClass(c)">{{ intakeLabel(c) }}</span>
                 @if (c.plyScanUrl) {
                   <a
                     class="scan-badge"
@@ -315,7 +316,7 @@
                       <polyline points="7 10 12 15 17 10"/>
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
-                    سكان
+                    تنزيل السكان
                   </a>
                 }
               </div>
@@ -403,6 +404,12 @@
             <strong>{{ dc.priority === 'emergency' ? 'مستعجل' : 'عادي' }}</strong>
           </div>
           <div class="detail-row"><span>نوع العمل</span><strong>{{ formatWorkTypeForDisplay(dc.workType) }}</strong></div>
+          <div class="detail-row">
+            <span>نوع الاستلام</span>
+            <strong>
+              <span class="meta-pill" [class]="intakeBadgeClass(dc)">{{ intakeLabel(dc) }}</span>
+            </strong>
+          </div>
           @if (dc.color) {
             <div class="detail-row"><span>اللون</span><strong>{{ dc.color }}</strong></div>
           }
