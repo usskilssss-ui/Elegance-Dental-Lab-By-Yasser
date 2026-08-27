@@ -77,6 +77,8 @@ export class ToothChartComponent {
 
     let groupId = newGroupId();
     if (this.linkMode === 'connected') {
+      // Join ONLY an immediate neighbor's existing group — never flood-fill
+      // all adjacent same-material teeth (that would turn earlier «منفصل» into one bridge).
       const neighbor = next.find(
         (a) => a.material === this.activeMaterial && areAdjacent(a.fdi, fdi)
       );
@@ -84,53 +86,7 @@ export class ToothChartComponent {
     }
 
     next.push({ fdi, material: this.activeMaterial, groupId });
-    // If connected, merge all adjacent same-material into that group
-    if (this.linkMode === 'connected') {
-      next = this.mergeConnectedGroups(next, this.activeMaterial, groupId);
-    }
     this.assignmentsChange.emit(next);
-  }
-
-  /** Union adjacent same-material teeth into one groupId (bridges). */
-  private mergeConnectedGroups(
-    list: ToothAssignment[],
-    material: string,
-    seedGroup: string
-  ): ToothAssignment[] {
-    const ofMat = list.filter((a) => a.material === material);
-    const others = list.filter((a) => a.material !== material);
-    const byFdi = new Map(ofMat.map((a) => [a.fdi, a]));
-    const visited = new Set<string>();
-    const groups: string[][] = [];
-
-    for (const a of ofMat) {
-      if (visited.has(a.fdi)) continue;
-      const stack = [a.fdi];
-      const component: string[] = [];
-      visited.add(a.fdi);
-      while (stack.length) {
-        const cur = stack.pop()!;
-        component.push(cur);
-        for (const other of ofMat) {
-          if (visited.has(other.fdi)) continue;
-          if (areAdjacent(cur, other.fdi)) {
-            visited.add(other.fdi);
-            stack.push(other.fdi);
-          }
-        }
-      }
-      groups.push(component);
-    }
-
-    const rebuilt: ToothAssignment[] = [];
-    for (const component of groups) {
-      const preferSeed = component.some((f) => byFdi.get(f)?.groupId === seedGroup);
-      const gid = preferSeed ? seedGroup : newGroupId();
-      for (const fdi of component) {
-        rebuilt.push({ fdi, material, groupId: gid });
-      }
-    }
-    return [...others, ...rebuilt];
   }
 
   clearAll(): void {
