@@ -1597,6 +1597,13 @@ exports.exitCase = async (req, res) => {
     dentalCase.stageTimestamps.exited = new Date();
     await dentalCase.save();
 
+    try {
+      const { consumeCaseMaterials } = require('../services/inventoryService');
+      await consumeCaseMaterials(dentalCase, req.user);
+    } catch (invErr) {
+      console.warn('[inventory] consume on exit failed:', dentalCase?.caseNumber, invErr?.message || invErr);
+    }
+
     await AuditLog.create({
       caseId: dentalCase._id,
       caseNumber: dentalCase.caseNumber,

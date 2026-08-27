@@ -21,6 +21,7 @@ import {
   LabBranding,
   LabWorkflow,
 } from '../../core/services/lab-config.service';
+import { FinancePanel } from './finance-panel/finance-panel';
 
 export interface StaffMember {
   id: string;
@@ -141,7 +142,7 @@ export interface AiChatMessage {
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, FinancePanel],
   templateUrl: './admin.html',
   styleUrl: './admin.css',
   standalone: true
@@ -250,6 +251,10 @@ export class Admin implements OnInit, OnDestroy {
   isPricingSaving = false;
   financialYearFilter = '';
   financialMonthFilter = '';
+  /** lab-ledger = new profit/inventory/payroll; doctors = existing AR */
+  financeOuterTab: 'lab-ledger' | 'doctors' = 'lab-ledger';
+  financePanelYear = new Date().getFullYear();
+  financePanelMonth = new Date().getMonth() + 1;
   financialDoctorSearch = '';
   reportYearFilter = '';
   reportMonthFilter = '';
@@ -1823,6 +1828,9 @@ export class Admin implements OnInit, OnDestroy {
       this.loadStaffFromApi();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
+      if (nav === 'financials') {
+        this.syncFinancePanelPeriod();
+      }
     } else if (nav === 'archive') {
       this.loadArchiveList();
     } else if (nav === 'whatsapp') {
@@ -1830,6 +1838,17 @@ export class Admin implements OnInit, OnDestroy {
     } else if (nav === 'lab') {
       this.loadLabConfig();
     }
+  }
+
+  syncFinancePanelPeriod(): void {
+    const now = new Date();
+    this.financePanelYear = Number(this.financialYearFilter) || now.getFullYear();
+    this.financePanelMonth = Number(this.financialMonthFilter) || now.getMonth() + 1;
+  }
+
+  setFinanceOuterTab(tab: 'lab-ledger' | 'doctors'): void {
+    this.financeOuterTab = tab;
+    if (tab === 'lab-ledger') this.syncFinancePanelPeriod();
   }
 
   waEnabled = false;

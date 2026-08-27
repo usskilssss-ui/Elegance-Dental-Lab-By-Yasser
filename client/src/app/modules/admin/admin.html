@@ -545,31 +545,43 @@
       <ng-container *ngIf="activeNav === 'financials'">
         <div class="page-header">
           <div>
-            <div class="page-label">نظرة مالية</div>
+            <div class="page-label">نظرة مالية شاملة</div>
             <div class="page-title">المالية</div>
           </div>
-          <div class="financial-summary">
+          <div class="financial-summary" *ngIf="financeOuterTab === 'doctors'">
             <span class="summary-pill">إجمالي المبلغ: {{ totalFinancialAmount | number:'1.0-0' }} EGP</span>
             <span class="summary-pill">عدد الأطباء: {{ reportDoctors.length }}</span>
             <button class="export-btn" (click)="exportFinancialYearReport()">تصدير تقرير السنة CSV</button>
           </div>
         </div>
 
-        <div class="financial-controls">
+        <div class="financial-controls" style="margin-bottom:12px;">
           <div class="control-card">
             <label>السنة</label>
-            <select [ngModel]="financialYearFilter" (ngModelChange)="onFinancialYearChange($event)">
-              <option value="">كل السنوات</option>
-              <option *ngFor="let year of financialYears" [value]="year">{{ year }}</option>
+            <select [(ngModel)]="financePanelYear" (ngModelChange)="onFinancialYearChange(String($event))">
+              <option *ngFor="let year of (financialYears.length ? financialYears : [financePanelYear])" [ngValue]="year">{{ year }}</option>
             </select>
           </div>
           <div class="control-card">
             <label>الشهر</label>
-            <select [(ngModel)]="financialMonthFilter" [disabled]="!financialYearFilter">
-              <option value="">كل الشهور</option>
-              <option *ngFor="let month of financialMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
+            <select [(ngModel)]="financePanelMonth">
+              <option *ngFor="let month of [1,2,3,4,5,6,7,8,9,10,11,12]" [ngValue]="month">{{ monthName(month) }}</option>
             </select>
           </div>
+          <div class="control-card" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="export-btn" [style.opacity]="financeOuterTab === 'lab-ledger' ? 1 : 0.55" (click)="setFinanceOuterTab('lab-ledger')">أرباح · مخزون · رواتب · مصاريف</button>
+            <button type="button" class="export-btn" [style.opacity]="financeOuterTab === 'doctors' ? 1 : 0.55" (click)="setFinanceOuterTab('doctors')">حسابات الأطباء</button>
+          </div>
+        </div>
+
+        <app-finance-panel
+          *ngIf="financeOuterTab === 'lab-ledger'"
+          [year]="financePanelYear"
+          [month]="financePanelMonth">
+        </app-finance-panel>
+
+        <ng-container *ngIf="financeOuterTab === 'doctors'">
+        <div class="financial-controls">
           <div class="control-card">
             <label>بحث عن طبيب</label>
             <input type="text" [(ngModel)]="financialDoctorSearch" placeholder="اكتب اسم الطبيب..." />
@@ -628,6 +640,7 @@
         <ng-template #noFinanceData>
           <div class="finance-empty">لا توجد بيانات مالية مطابقة للفلاتر المحددة.</div>
         </ng-template>
+        </ng-container>
 
         <div class="modal-overlay" *ngIf="showDoctorDetailsModal" (click)="closeDoctorDetails()">
           <div class="modal-content doctor-modal-content" (click)="$event.stopPropagation()">
