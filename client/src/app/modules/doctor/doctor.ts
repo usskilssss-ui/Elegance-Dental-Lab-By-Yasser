@@ -20,6 +20,8 @@ import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { LabConfigService } from '../../core/services/lab-config.service';
+import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function todayYmd(): string {
   const d = new Date();
@@ -62,7 +64,7 @@ export type DoctorNotif = {
 @Component({
   selector: 'app-doctor',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent],
   templateUrl: './doctor.html',
   styleUrls: ['../secretary/secretary.css', './doctor.css'],
 })
@@ -143,6 +145,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
+  toothAssignments: ToothAssignment[] = [];
+  toothLinkMode: 'connected' | 'separate' = 'separate';
+  activeToothMaterial = '';
   nightGuardType: 'Soft' | 'Hard' | '' = '';
   workTypeError = '';
 
@@ -568,6 +573,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
     this.workTypeQuantities = {};
+    this.toothAssignments = [];
+    this.activeToothMaterial = '';
+    this.toothLinkMode = 'separate';
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
@@ -697,6 +705,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
       c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
     this.clearPlySelection();
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
+    this.toothAssignments = Array.isArray(c.teeth) ? [...c.teeth] : [];
+    this.activeToothMaterial = this.chartMaterials[0] || '';
+    this.toothLinkMode = 'separate';
     this.dialogOpen.set(true);
   }
 
@@ -759,6 +770,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.workTypeError = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
+      this.toothAssignments = [];
+      this.activeToothMaterial = '';
       return;
     }
     this.updateWorkTypeString();
@@ -769,10 +782,15 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
       if (type === 'Night Guard') this.nightGuardType = '';
+      this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
+      if (this.activeToothMaterial === type) {
+        this.activeToothMaterial = this.chartMaterials[0] || '';
+      }
     } else {
       this.selectedWorkTypes.add(type);
       this.workTypeQuantities[type] = this.workTypeQuantities[type] || 1;
       if (type === 'Night Guard') this.nightGuardType = 'Soft';
+      if (!this.activeToothMaterial) this.activeToothMaterial = type;
     }
     this.workTypeError = '';
     this.updateWorkTypeString();
@@ -780,6 +798,35 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   isWorkTypeSelected(type: string): boolean {
     return this.selectedWorkTypes.has(type);
+  }
+
+  get chartMaterials(): string[] {
+    return [...this.selectedWorkTypes].filter((wt) => wt !== 'Remake' && wt !== 'Empty');
+  }
+
+  onToothAssignmentsChange(list: ToothAssignment[]): void {
+    this.toothAssignments = list || [];
+    const counts = countByMaterial(this.toothAssignments);
+    for (const [mat, n] of Object.entries(counts)) {
+      if (this.selectedWorkTypes.has(mat)) {
+        this.workTypeQuantities[mat] = n;
+      }
+    }
+    // Keep materials with no teeth at least qty 1 if still selected (e.g. Night Guard)
+    for (const wt of this.selectedWorkTypes) {
+      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
+        this.workTypeQuantities[wt] = 1;
+      }
+    }
+    this.updateWorkTypeString();
+  }
+
+  onActiveToothMaterialChange(mat: string): void {
+    this.activeToothMaterial = mat;
+  }
+
+  onToothLinkModeChange(mode: 'connected' | 'separate'): void {
+    this.toothLinkMode = mode;
   }
 
   get hasWorkTypesWithQuantity(): boolean {
@@ -895,6 +942,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
         ? this.intakeType
         : undefined) as 'impression' | 'scan' | undefined,
+      teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
 
     const casePayload = buildCasePayloadFromPrintForm(draft, {

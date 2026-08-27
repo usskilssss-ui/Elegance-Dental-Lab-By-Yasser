@@ -12,6 +12,7 @@ export interface PrintFormDraft {
   date?: string;
   urgent?: boolean;
   intakeType?: 'impression' | 'scan';
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
 }
 
 export function formatPrintDate(now = new Date()): string {
@@ -49,6 +50,7 @@ export function buildPrintData(draft: PrintFormDraft, caseNumber: string) {
     ...(draft.intakeType === 'scan' || draft.intakeType === 'impression'
       ? { intakeType: draft.intakeType }
       : {}),
+    ...(Array.isArray(draft.teeth) && draft.teeth.length ? { teeth: draft.teeth } : {}),
   };
 }
 
@@ -74,6 +76,7 @@ export function buildCasePayloadFromPrintForm(
     date: opts?.date || draft.date || new Date().toISOString().slice(0, 10),
     entrySource: opts?.entrySource,
     intakeType: draft.intakeType,
+    teeth: draft.teeth,
   });
   if (opts?.priority) {
     payload['priority'] = opts.priority;

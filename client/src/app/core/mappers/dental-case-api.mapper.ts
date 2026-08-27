@@ -66,6 +66,11 @@ export type CaseMeta = {
   intakeType?: 'impression' | 'scan';
   /** مصدر تسجيل الحالة */
   entrySource?: 'secretary' | 'print' | 'doctor';
+  /**
+   * مخطط الأسنان (FDI): خامة لكل سن + groupId للجسور المتصلة.
+   * مثال: [{ fdi:'16', material:'Zircon', groupId:'g1' }, ...]
+   */
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
 };
 
 export type SecretaryCaseFormPayload = {
@@ -87,6 +92,7 @@ export type SecretaryCaseFormPayload = {
   exitedAt?: string;
   intakeType?: 'impression' | 'scan';
   entrySource?: 'secretary' | 'print' | 'doctor';
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
 };
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
@@ -126,6 +132,15 @@ export function buildSecretaryNotes(
   }
   if (form.entrySource === 'secretary' || form.entrySource === 'print' || form.entrySource === 'doctor') {
     meta.entrySource = form.entrySource;
+  }
+  if (Array.isArray(form.teeth) && form.teeth.length) {
+    meta.teeth = form.teeth
+      .filter((t) => t && t.fdi && t.material && t.groupId)
+      .map((t) => ({
+        fdi: String(t.fdi),
+        material: String(t.material),
+        groupId: String(t.groupId),
+      }));
   }
   const path = plyPreserve?.plyScanPath?.trim();
   if (path) {
@@ -274,6 +289,20 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
   const requesterType: 'doctor' | 'student' =
     requesterTypeRaw === 'student' ? 'student' : 'doctor';
+  const teethRaw = meta['teeth'];
+  const teeth = Array.isArray(teethRaw)
+    ? teethRaw
+        .map((t) => {
+          if (!t || typeof t !== 'object') return null;
+          const row = t as Record<string, unknown>;
+          const fdi = String(row['fdi'] ?? '').trim();
+          const material = String(row['material'] ?? '').trim();
+          const groupId = String(row['groupId'] ?? '').trim();
+          if (!fdi || !material || !groupId) return null;
+          return { fdi, material, groupId };
+        })
+        .filter((t): t is { fdi: string; material: string; groupId: string } => !!t)
+    : undefined;
   const salaryAmountRaw = doc['salaryAmount'];
   const salaryAmount =
     typeof salaryAmountRaw === 'number' && !Number.isNaN(salaryAmountRaw)
@@ -327,6 +356,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     plyFileName: plyFileName || undefined,
     intakeType,
     entrySource,
+    teeth,
     exitedAt: exitedDisplay || undefined,
     exitedAtRaw: exitedAtRaw ? String(exitedAtRaw) : undefined,
   };
