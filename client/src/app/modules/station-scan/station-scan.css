@@ -525,15 +525,15 @@ body.dark-theme .station-scan .scan-history li.err strong,
 }
 
 .station-scan .scan-case-card .doctor {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-secondary, #64748b);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
 }
 
 .station-scan .scan-case-card .patient {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary, #0f172a);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
 }
 
 @media (max-width: 900px) {

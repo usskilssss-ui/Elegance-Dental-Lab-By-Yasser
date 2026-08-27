@@ -8,6 +8,7 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { DentalCase } from '../../core/services/shared-cases.service';
+import { PatientLabelPipe } from '../secretary/patient-label.pipe';
 
 export type ScanStation = 'reception' | 'design' | 'finishing';
 
@@ -48,7 +49,7 @@ const ROLE_META: Partial<
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe],
   templateUrl: './station-scan.html',
   styleUrls: ['../secretary/secretary.css', './station-scan.css'],
 })
