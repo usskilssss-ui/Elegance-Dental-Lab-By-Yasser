@@ -1595,14 +1595,26 @@ exports.exitCase = async (req, res) => {
     dentalCase.status = 'exited';
     dentalCase.currentStage = 'exited';
     dentalCase.stageTimestamps.exited = new Date();
-    await dentalCase.save();
+
+    const revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
+    dentalCase.revenueAmount = revenue;
 
     try {
-      const { consumeCaseMaterials } = require('../services/inventoryService');
-      await consumeCaseMaterials(dentalCase, req.user);
+      const { consumeCaseMaterials, round2 } = require('../services/inventoryService');
+      const consumeResult = await consumeCaseMaterials(dentalCase, req.user);
+      const cogs =
+        consumeResult && !consumeResult.skipped
+          ? Number(consumeResult.totalCogs) || 0
+          : 0;
+      dentalCase.materialCost = round2(cogs);
+      dentalCase.caseProfit = round2(revenue - cogs);
     } catch (invErr) {
       console.warn('[inventory] consume on exit failed:', dentalCase?.caseNumber, invErr?.message || invErr);
+      dentalCase.materialCost = 0;
+      dentalCase.caseProfit = revenue;
     }
+
+    await dentalCase.save();
 
     await AuditLog.create({
       caseId: dentalCase._id,

@@ -23,6 +23,8 @@ const materialSchema = new mongoose.Schema(
     /** Weighted-average purchase cost per unit (EGP). */
     avgUnitCost: { type: Number, default: 0, min: 0 },
     lowStockAlert: { type: Number, default: 0, min: 0 },
+    /** Last time a low-stock alert was fired (debounce). */
+    lastLowStockAlertAt: { type: Date, default: null },
     active: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 100 },
     showInWorkTypes: { type: Boolean, default: true },

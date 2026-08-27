@@ -91,6 +91,23 @@ const dentalCaseSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    /** Snapshot of sell amount used for profit (usually = salaryAmount at exit). */
+    revenueAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** Material COGS snapshot at exit (from inventory avg cost × qty). */
+    materialCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** revenueAmount − materialCost at exit. */
+    caseProfit: {
+      type: Number,
+      default: 0,
+    },
     paymentStatus: {
       type: String,
       enum: ['unpaid', 'paid'],

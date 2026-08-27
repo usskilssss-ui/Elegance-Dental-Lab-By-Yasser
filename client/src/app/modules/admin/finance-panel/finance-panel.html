@@ -1,6 +1,8 @@
 <div class="fp-root">
   <div class="fp-tabs">
     <button type="button" [class.active]="innerTab === 'overview'" (click)="setInnerTab('overview')">نظرة عامة / الأرباح</button>
+    <button type="button" [class.active]="innerTab === 'debts'" (click)="setInnerTab('debts')">ديون الأطباء</button>
+    <button type="button" [class.active]="innerTab === 'profits'" (click)="setInnerTab('profits')">ربحية الحالات</button>
     <button type="button" [class.active]="innerTab === 'inventory'" (click)="setInnerTab('inventory')">المخزون والمشتريات</button>
     <button type="button" [class.active]="innerTab === 'payroll'" (click)="setInnerTab('payroll')">رواتب الموظفين</button>
     <button type="button" [class.active]="innerTab === 'expenses'" (click)="setInnerTab('expenses')">مصاريف التشغيل</button>
@@ -52,6 +54,113 @@
         <tr><td>مصاريف تشغيل</td><td>{{ summary.costs?.operatingTotal | number:'1.0-0' }} EGP</td></tr>
       </table>
       <p class="fp-explain">{{ summary.explain }}</p>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px" *ngIf="lowStock.length">
+      <h3>تنبيه مخزون ناقص ({{ lowStock.length }})</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>المادة</th>
+            <th>المتبقي</th>
+            <th>حد التنبيه</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let m of lowStock" class="low">
+            <td>{{ m.label }}</td>
+            <td><strong>{{ m.stockQty | number:'1.0-2' }}</strong></td>
+            <td>{{ m.lowStockAlert }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="fp-mini">عند النقص بيحصل إشعار للأدمن + واتساب (لو مفعّل وفيه أرقام تنبيه).</p>
+    </div>
+  </section>
+
+  <!-- DOCTOR DEBTS -->
+  <section *ngIf="innerTab === 'debts'" class="fp-section">
+    <div class="fp-cards">
+      <div class="fp-card danger">
+        <div class="lbl">إجمالي المستحق على الأطباء</div>
+        <div class="val">{{ debtsTotal | number:'1.0-0' }} EGP</div>
+        <div class="sub">{{ debts.length }} طبيب</div>
+      </div>
+    </div>
+    <div class="fp-box">
+      <h3>ديون الأطباء (حالات خارجة غير مدفوعة)</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الطبيب</th>
+            <th>المبلغ</th>
+            <th>حالات</th>
+            <th>أقدم تأخير (يوم)</th>
+            <th>واتساب</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let d of debts">
+            <td>{{ d.doctorName }}</td>
+            <td><strong>{{ d.unpaidAmount | number:'1.0-0' }}</strong></td>
+            <td>{{ d.unpaidCases }}</td>
+            <td>{{ d.maxDaysOverdue }}</td>
+            <td>{{ d.phone || '—' }}</td>
+            <td>
+              <button type="button" class="fp-btn sm primary" (click)="remindDebt(d)">إرسال تذكير</button>
+            </td>
+          </tr>
+          <tr *ngIf="!debts.length"><td colspan="6" class="empty">مفيش ديون حالياً</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CASE PROFITS -->
+  <section *ngIf="innerTab === 'profits'" class="fp-section">
+    <div class="fp-cards" *ngIf="profitTotals">
+      <div class="fp-card">
+        <div class="lbl">إيراد الحالات</div>
+        <div class="val">{{ profitTotals.revenue | number:'1.0-0' }} EGP</div>
+      </div>
+      <div class="fp-card danger">
+        <div class="lbl">تكلفة مواد</div>
+        <div class="val">{{ profitTotals.materialCost | number:'1.0-0' }} EGP</div>
+      </div>
+      <div class="fp-card" [class.good]="profitTotals.caseProfit >= 0" [class.bad]="profitTotals.caseProfit < 0">
+        <div class="lbl">صافي ربح المواد</div>
+        <div class="val">{{ profitTotals.caseProfit | number:'1.0-0' }} EGP</div>
+      </div>
+    </div>
+    <div class="fp-box">
+      <h3>ربحية كل حالة (بعد الخروج)</h3>
+      <p class="fp-mini">الربح = فاتورة الحالة − تكلفة المواد المستهلكة من المخزون. الحالات القديمة قبل التحديث ممكن تبقى تكلفة موادها 0.</p>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الحالة</th>
+            <th>الطبيب</th>
+            <th>المريض</th>
+            <th>إيراد</th>
+            <th>تكلفة مواد</th>
+            <th>ربح</th>
+            <th>الدفع</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of profitRows">
+            <td>{{ r.caseNumber }}</td>
+            <td>{{ r.doctorName }}</td>
+            <td>{{ r.patientName }}</td>
+            <td>{{ r.revenue | number:'1.0-0' }}</td>
+            <td>{{ r.materialCost | number:'1.0-0' }}</td>
+            <td [style.color]="r.caseProfit >= 0 ? '#047857' : '#b91c1c'"><strong>{{ r.caseProfit | number:'1.0-0' }}</strong></td>
+            <td>{{ r.paymentStatus === 'paid' ? 'مدفوع' : 'مستحق' }}</td>
+          </tr>
+          <tr *ngIf="!profitRows.length"><td colspan="7" class="empty">لا حالات خارجة في هذه الفترة</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 

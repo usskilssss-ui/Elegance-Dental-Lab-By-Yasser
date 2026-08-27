@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FinanceApiService, ProfitMode } from '../../../core/services/finance-api.service';
 
-type FinanceInnerTab = 'overview' | 'inventory' | 'payroll' | 'expenses';
+type FinanceInnerTab = 'overview' | 'inventory' | 'payroll' | 'expenses' | 'debts' | 'profits';
 
 @Component({
   selector: 'app-finance-panel',
@@ -32,6 +32,11 @@ export class FinancePanel implements OnInit, OnChanges {
   payrollRows: any[] = [];
   expenses: any[] = [];
   categoryLabels: Record<string, string> = {};
+  lowStock: any[] = [];
+  debts: any[] = [];
+  debtsTotal = 0;
+  profitRows: any[] = [];
+  profitTotals: any = null;
 
   purchaseForm = {
     materialId: '',
@@ -93,10 +98,65 @@ export class FinancePanel implements OnInit, OnChanges {
   }
 
   reload() {
-    if (this.innerTab === 'overview') this.loadSummary();
+    if (this.innerTab === 'overview') {
+      this.loadSummary();
+      this.loadStockAlerts();
+    }
     if (this.innerTab === 'inventory') this.loadInventory();
     if (this.innerTab === 'payroll') this.loadPayroll();
     if (this.innerTab === 'expenses') this.loadExpenses();
+    if (this.innerTab === 'debts') this.loadDebts();
+    if (this.innerTab === 'profits') this.loadProfits();
+  }
+
+  loadStockAlerts() {
+    this.api.getStockAlerts().subscribe({
+      next: (res) => (this.lowStock = res.lowStock || []),
+      error: () => (this.lowStock = []),
+    });
+  }
+
+  loadDebts() {
+    this.loading = true;
+    this.error = '';
+    this.api.getDoctorDebts().subscribe({
+      next: (res) => {
+        this.debts = res.debts || [];
+        this.debtsTotal = res.totalUnpaid || 0;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.message || 'فشل تحميل الديون';
+        this.loading = false;
+      },
+    });
+  }
+
+  remindDebt(d: any) {
+    this.error = '';
+    this.okMsg = '';
+    this.api.remindDoctorDebt({ doctorName: d.doctorName, phone: d.phone }).subscribe({
+      next: (res) => {
+        this.okMsg = res.message || 'تم إرسال التذكير';
+      },
+      error: (err) => (this.error = err?.error?.message || 'فشل إرسال التذكير'),
+    });
+  }
+
+  loadProfits() {
+    this.loading = true;
+    this.error = '';
+    this.api.getCaseProfits(this.y(), this.m()).subscribe({
+      next: (res) => {
+        this.profitRows = res.rows || [];
+        this.profitTotals = res.totals || null;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.message || 'فشل تحميل ربحية الحالات';
+        this.loading = false;
+      },
+    });
   }
 
   private y() {

@@ -59,6 +59,8 @@ const appSettingsSchema = new mongoose.Schema(
         type: String,
         default: '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
       },
+      /** Comma-separated phones for lab admin alerts (low stock, etc.) */
+      alertPhones: { type: String, default: '' },
     },
   },
   { timestamps: true }

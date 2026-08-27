@@ -542,4 +542,264 @@ exports.deleteExpense = async (req, res) => {
   }
 };
 
+// ─── Alerts / debts / case profit ─────────────────────────────────
+
+exports.getStockAlerts = async (req, res) => {
+  try {
+    const materials = await Material.find({ active: true })
+      .select('key label stockQty lowStockAlert avgUnitCost lastLowStockAlertAt')
+      .sort({ sortOrder: 1 })
+      .lean();
+    const low = materials.filter(
+      (m) => Number(m.lowStockAlert) > 0 && Number(m.stockQty) <= Number(m.lowStockAlert)
+    );
+    return res.json({ success: true, lowStock: low, count: low.length });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getDoctorDebts = async (req, res) => {
+  try {
+    const {
+      doctorKeysMatch,
+      isNonBillableCase,
+      parseNotesMeta,
+      calculateCaseCostBreakdown,
+      loadActiveMaterials,
+      materialsToDefaultPrices,
+      findPricingForDoctor,
+    } = require('../services/casePricingService');
+    const DoctorPricing = require('../models/DoctorPricing');
+    const User = require('../models/User');
+
+    const [cases, pricings, materials, doctors] = await Promise.all([
+      DentalCase.find({ currentStage: 'exited', paymentStatus: { $ne: 'paid' } })
+        .select(
+          'caseNumber patientName caseType notes referringDoctor salaryAmount paymentStatus stageTimestamps createdAt updatedAt'
+        )
+        .lean(),
+      DoctorPricing.find().lean(),
+      loadActiveMaterials(),
+      User.find({ role: 'doctor', isActive: true }).select('fullName phone').lean(),
+    ]);
+    const labDefaults = materialsToDefaultPrices(materials);
+    const now = Date.now();
+    const byDoctor = new Map();
+
+    for (const doc of cases) {
+      if (isNonBillableCase(doc.caseType, doc.notes)) continue;
+      const meta = parseNotesMeta(doc.notes || '');
+      const doctorName = String(
+        doc.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      if (!doctorName) continue;
+
+      const pricingDoc = findPricingForDoctor(pricings, doctorName);
+      const breakdown = calculateCaseCostBreakdown(
+        doc.caseType,
+        meta,
+        pricingDoc?.prices || null,
+        materials,
+        labDefaults
+      );
+      const amount =
+        breakdown.total > 0
+          ? breakdown.total
+          : Math.max(0, Number(doc.salaryAmount) || 0);
+
+      const exitedAt = doc.stageTimestamps?.exited
+        ? new Date(doc.stageTimestamps.exited)
+        : doc.updatedAt
+          ? new Date(doc.updatedAt)
+          : new Date(doc.createdAt);
+      const daysOverdue = Math.max(
+        0,
+        Math.floor((now - exitedAt.getTime()) / (24 * 60 * 60 * 1000))
+      );
+
+      let key = null;
+      for (const k of byDoctor.keys()) {
+        if (doctorKeysMatch(k, doctorName)) {
+          key = k;
+          break;
+        }
+      }
+      if (!key) key = doctorName;
+
+      const row = byDoctor.get(key) || {
+        doctorName: key,
+        unpaidAmount: 0,
+        unpaidCases: 0,
+        maxDaysOverdue: 0,
+        cases: [],
+        phone: '',
+      };
+      row.unpaidAmount += amount;
+      row.unpaidCases += 1;
+      row.maxDaysOverdue = Math.max(row.maxDaysOverdue, daysOverdue);
+      row.cases.push({
+        id: String(doc._id),
+        caseNumber: doc.caseNumber,
+        patientName: doc.patientName,
+        amount: round2(amount),
+        daysOverdue,
+        exitedAt: exitedAt.toISOString(),
+      });
+      byDoctor.set(key, row);
+    }
+
+    for (const row of byDoctor.values()) {
+      const match = doctors.find((d) => doctorKeysMatch(d.fullName, row.doctorName));
+      row.phone = match?.phone || '';
+      row.unpaidAmount = round2(row.unpaidAmount);
+      row.cases.sort((a, b) => b.daysOverdue - a.daysOverdue);
+    }
+
+    const debts = [...byDoctor.values()].sort((a, b) => b.unpaidAmount - a.unpaidAmount);
+    const totalUnpaid = round2(debts.reduce((s, d) => s + d.unpaidAmount, 0));
+
+    return res.json({
+      success: true,
+      totalUnpaid,
+      doctorCount: debts.length,
+      debts,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.remindDoctorDebt = async (req, res) => {
+  try {
+    const doctorName = String(req.body?.doctorName || '').trim();
+    if (!doctorName) {
+      return res.status(400).json({ success: false, message: 'اسم الطبيب مطلوب' });
+    }
+    // Reuse debts list for accurate amount
+    const fakeReq = { query: {} };
+    const fakeRes = {
+      statusCode: 200,
+      payload: null,
+      status(c) {
+        this.statusCode = c;
+        return this;
+      },
+      json(p) {
+        this.payload = p;
+        return this;
+      },
+    };
+    await exports.getDoctorDebts(fakeReq, fakeRes);
+    const debts = fakeRes.payload?.debts || [];
+    const {
+      doctorKeysMatch,
+    } = require('../services/casePricingService');
+    const row = debts.find((d) => doctorKeysMatch(d.doctorName, doctorName));
+    if (!row || !(row.unpaidAmount > 0)) {
+      return res.status(404).json({ success: false, message: 'لا يوجد دين مسجّل لهذا الطبيب' });
+    }
+
+    const wa = require('../services/whatsappService');
+    const result = await wa.sendDoctorDebtReminder({
+      doctorName: row.doctorName,
+      phone: req.body?.phone || row.phone,
+      unpaidAmount: row.unpaidAmount,
+      unpaidCases: row.unpaidCases,
+    });
+
+    if (!result.ok) {
+      return res.status(400).json({ success: false, message: result.error || 'فشل إرسال التذكير' });
+    }
+
+    const Notification = require('../models/Notification');
+    await Notification.create({
+      type: 'finance_alert',
+      title: 'تذكير دين طبيب',
+      message: `تم إرسال تذكير لـ ${row.doctorName} بمبلغ ${row.unpaidAmount} EGP`,
+      targetAudience: ['admin'],
+    });
+
+    return res.json({ success: true, message: 'تم إرسال التذكير', debt: row });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getCaseProfitability = async (req, res) => {
+  try {
+    const range = resolveRange(req.query);
+    const cases = await DentalCase.find({
+      currentStage: 'exited',
+      'stageTimestamps.exited': { $gte: range.start, $lte: range.end },
+    })
+      .select(
+        'caseNumber patientName referringDoctor caseType salaryAmount revenueAmount materialCost caseProfit paymentStatus stageTimestamps'
+      )
+      .sort({ 'stageTimestamps.exited': -1 })
+      .lean();
+
+    // Fallback for older exits without exit timestamp filter match
+    let rows = cases;
+    if (!rows.length) {
+      const all = await DentalCase.find({ currentStage: 'exited' })
+        .select(
+          'caseNumber patientName referringDoctor caseType salaryAmount revenueAmount materialCost caseProfit paymentStatus stageTimestamps updatedAt'
+        )
+        .sort({ updatedAt: -1 })
+        .limit(500)
+        .lean();
+      rows = all.filter((doc) => {
+        const d = doc.stageTimestamps?.exited
+          ? new Date(doc.stageTimestamps.exited)
+          : doc.updatedAt
+            ? new Date(doc.updatedAt)
+            : null;
+        return d && d >= range.start && d <= range.end;
+      });
+    }
+
+    const mapped = rows.map((doc) => {
+      const revenue =
+        Number(doc.revenueAmount) > 0
+          ? Number(doc.revenueAmount)
+          : Number(doc.salaryAmount) || 0;
+      const materialCost = Number(doc.materialCost) || 0;
+      const caseProfit =
+        doc.caseProfit !== undefined && doc.caseProfit !== null
+          ? Number(doc.caseProfit)
+          : round2(revenue - materialCost);
+      return {
+        id: String(doc._id),
+        caseNumber: doc.caseNumber,
+        patientName: doc.patientName,
+        doctorName: doc.referringDoctor || '—',
+        caseType: doc.caseType,
+        revenue: round2(revenue),
+        materialCost: round2(materialCost),
+        caseProfit: round2(caseProfit),
+        paymentStatus: doc.paymentStatus || 'unpaid',
+        exitedAt: doc.stageTimestamps?.exited || null,
+      };
+    });
+
+    const totals = mapped.reduce(
+      (acc, r) => {
+        acc.revenue += r.revenue;
+        acc.materialCost += r.materialCost;
+        acc.caseProfit += r.caseProfit;
+        return acc;
+      },
+      { revenue: 0, materialCost: 0, caseProfit: 0 }
+    );
+    totals.revenue = round2(totals.revenue);
+    totals.materialCost = round2(totals.materialCost);
+    totals.caseProfit = round2(totals.caseProfit);
+
+    return res.json({ success: true, rows: mapped, totals, count: mapped.length });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.categoryLabels = CATEGORY_LABELS;

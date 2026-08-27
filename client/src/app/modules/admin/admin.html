@@ -1068,6 +1068,12 @@
           </div>
 
           <div class="control-card" style="margin-bottom:12px;">
+            <label>أرقام تنبيه الأدمن (مخزون / مالية)</label>
+            <input type="text" [(ngModel)]="waAlertPhones" placeholder="0100..., 0111... مفصولة بفاصلة" />
+            <small style="color:#94a3b8;">هتوصل عليها تنبيهات نقص المخزون. كمان أي أدمن في السيستم عليه رقم هيتبعتله.</small>
+          </div>
+
+          <div class="control-card" style="margin-bottom:12px;">
             <label>رسالة الحالة المنتهية</label>
             <textarea rows="3" [(ngModel)]="waMsgCompleted" style="width:100%;resize:vertical;"></textarea>
             <small style="color:#94a3b8;">

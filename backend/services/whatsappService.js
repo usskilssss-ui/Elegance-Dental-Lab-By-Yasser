@@ -66,6 +66,7 @@ function configFromEnv() {
     msgCompleted: DEFAULT_MSG_COMPLETED,
     msgExited: DEFAULT_MSG_EXITED,
     msgDaily: DEFAULT_MSG_DAILY,
+    alertPhones: String(process.env.WHATSAPP_ALERT_PHONES || ''),
   };
 }
 
@@ -106,6 +107,7 @@ async function reloadWhatsAppConfig() {
           DEFAULT_MSG_EXITED
         ),
         msgDaily: String(doc.whatsapp.msgDaily || DEFAULT_MSG_DAILY),
+        alertPhones: String(doc.whatsapp.alertPhones || ''),
       };
       return cachedConfig;
     }
@@ -325,6 +327,60 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
   }
 }
 
+/** Send alert to lab admin phones (AppSettings.whatsapp.alertPhones + admin users). */
+async function notifyLabAlert(text) {
+  await reloadWhatsAppConfig();
+  const c = getConfig();
+  if (!c.enabled) return { skipped: true, reason: 'disabled' };
+
+  const phones = new Set();
+  const raw = String(c.alertPhones || '');
+  for (const part of raw.split(/[,;\s]+/)) {
+    const p = String(part || '').trim();
+    if (p) phones.add(p);
+  }
+  const admins = await User.find({ role: 'admin', isActive: true }).select('phone').lean();
+  for (const a of admins) {
+    if (a?.phone) phones.add(String(a.phone).trim());
+  }
+  if (!phones.size) return { skipped: true, reason: 'no-phones' };
+
+  const body = `${labLabel()}\n${text}`;
+  const results = [];
+  for (const phone of phones) {
+    results.push(await sendWhatsAppText(phone, body));
+  }
+  return { ok: true, results };
+}
+
+/** Reminder to a doctor about unpaid balance. */
+async function sendDoctorDebtReminder({ doctorName, phone, unpaidAmount, unpaidCases, labName }) {
+  await reloadWhatsAppConfig();
+  const c = getConfig();
+  if (!c.enabled) return { ok: false, error: 'واتساب غير مفعّل' };
+
+  let to = phone;
+  if (!to) {
+    const fakeCase = { referringDoctor: doctorName };
+    const doctor = await findDoctorUserByCase(fakeCase);
+    to = doctor?.phone;
+  }
+  if (!to) return { ok: false, error: 'لا يوجد رقم واتساب للطبيب' };
+
+  const msg =
+    `${labName || labLabel()}\n` +
+    `تذكير ودي بالحساب\n` +
+    `دكتور: ${doctorName}\n` +
+    `المبلغ المستحق: ${Number(unpaidAmount || 0).toLocaleString('en-EG')} EGP\n` +
+    `عدد الحالات غير المدفوعة: ${Number(unpaidCases || 0)}\n` +
+    `برجاء التواصل مع المعمل للتسوية.`;
+
+  const result = await sendWhatsAppText(to, msg);
+  return result?.ok
+    ? { ok: true, result }
+    : { ok: false, error: result?.error || result?.skipped || 'فشل الإرسال' };
+}
+
 async function sendDailyReadySummaries() {
   if (!cachedConfig) await reloadWhatsAppConfig();
   if (getConfig().provider === 'waweb') {
@@ -403,9 +459,12 @@ function scheduleDailyWhatsAppSummary() {
 module.exports = {
   sendWhatsAppText,
   notifyDoctorCaseStatus,
+  notifyLabAlert,
+  sendDoctorDebtReminder,
   sendDailyReadySummaries,
   scheduleDailyWhatsAppSummary,
   providerConfigured,
   reloadWhatsAppConfig,
   normalizePhone,
+  findDoctorUserByCase,
 };
