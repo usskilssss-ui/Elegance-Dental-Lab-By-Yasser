@@ -23,6 +23,8 @@ import { PatientLabelPipe } from './patient-label.pipe';
 import { ThemeService } from '../../core/services/theme.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { LabConfigService } from '../../core/services/lab-config.service';
+import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function emptyDraft(): CaseDraft {
   const today = new Date();
@@ -51,7 +53,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })
@@ -465,6 +467,35 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   selectedWorkTypes = new Set<string>();
+  toothAssignments: ToothAssignment[] = [];
+  toothLinkMode: 'connected' | 'separate' = 'separate';
+  activeToothMaterial = '';
+
+  get chartMaterials(): string[] {
+    return [...this.selectedWorkTypes].filter((wt) => wt !== 'Remake' && wt !== 'Empty');
+  }
+
+  onToothAssignmentsChange(list: ToothAssignment[]): void {
+    this.toothAssignments = list || [];
+    const counts = countByMaterial(this.toothAssignments);
+    for (const [mat, n] of Object.entries(counts)) {
+      if (this.selectedWorkTypes.has(mat)) this.workTypeQuantities[mat] = n;
+    }
+    for (const wt of this.selectedWorkTypes) {
+      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
+        this.workTypeQuantities[wt] = 1;
+      }
+    }
+    this.updateWorkTypeString();
+  }
+
+  onActiveToothMaterialChange(mat: string): void {
+    this.activeToothMaterial = mat;
+  }
+
+  onToothLinkModeChange(mode: 'connected' | 'separate'): void {
+    this.toothLinkMode = mode;
+  }
   workTypeQuantities: Record<string, number> = {};
   workTypeError = '';
   nightGuardType: 'Soft' | 'Hard' | '' = '';
@@ -561,6 +592,10 @@ export class Secretary implements OnInit, OnDestroy {
       if (type === 'Night Guard') {
         this.nightGuardType = '';
       }
+      this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
+      if (this.activeToothMaterial === type) {
+        this.activeToothMaterial = this.chartMaterials[0] || '';
+      }
     } else {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
@@ -568,6 +603,8 @@ export class Secretary implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
+        this.toothAssignments = [];
+        this.activeToothMaterial = '';
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
@@ -576,6 +613,7 @@ export class Secretary implements OnInit, OnDestroy {
         if (type === 'Night Guard') {
           this.nightGuardType = 'Soft';
         }
+        if (!this.activeToothMaterial) this.activeToothMaterial = type;
       }
     }
     this.updateWorkTypeString();
@@ -783,6 +821,9 @@ export class Secretary implements OnInit, OnDestroy {
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
     this.workTypeQuantities = {};
+    this.toothAssignments = [];
+    this.activeToothMaterial = '';
+    this.toothLinkMode = 'separate';
     this.workTypeError = '';
     this.nightGuardType = '';
     this.patientWarning = '';
@@ -881,7 +922,10 @@ export class Secretary implements OnInit, OnDestroy {
     
     // Trigger warnings immediately on edit open
     this.onPatientInputChange();
-    
+    this.toothAssignments = Array.isArray(c.teeth) ? ([...c.teeth] as ToothAssignment[]) : [];
+    this.activeToothMaterial = this.chartMaterials[0] || '';
+    this.toothLinkMode = 'separate';
+
     this.dialogOpen.set(true);
     this.menuOpenId.set(null);
   }
@@ -989,6 +1033,7 @@ export class Secretary implements OnInit, OnDestroy {
       exitedAt: d.exitedAt || undefined,
       intakeType: this.intakeType === 'scan' || this.intakeType === 'impression' ? this.intakeType : undefined,
       entrySource: 'secretary' as const,
+      teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
 
     const plyPreserveMeta =
@@ -1024,6 +1069,7 @@ export class Secretary implements OnInit, OnDestroy {
               ? Number(d.quantity)
               : 1,
         date: d.date,
+        teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
       };
 
       this.caseApi
@@ -1356,6 +1402,7 @@ export class Secretary implements OnInit, OnDestroy {
     priority?: string;
     intakeType?: 'impression' | 'scan';
     receivedDate?: string;
+    teeth?: Array<{ fdi: string; material: string; groupId: string }>;
   }): void {
     const caseNumber = String(c.caseNumber || '').trim();
     if (!caseNumber) {
@@ -1376,6 +1423,7 @@ export class Secretary implements OnInit, OnDestroy {
       date: c.receivedDate,
       urgent: c.priority === 'emergency',
       intakeType: c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : undefined,
+      teeth: Array.isArray(c.teeth) && c.teeth.length ? c.teeth : undefined,
     };
 
     this.http

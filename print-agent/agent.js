@@ -690,6 +690,70 @@ async function buildPrintHtml(c) {
   const workTypeDisplay = c.workType || '—';
   const quantity = c.caseType === 'Empty' ? 0 : (c.quantity || 0);
   const caseNumber = String(c.caseNumber || '').trim();
+  const teeth = Array.isArray(c.teeth) ? c.teeth : [];
+
+  const MATERIAL_COLORS = {
+    Zircon: '#f97316',
+    'German Zircon': '#f59e0b',
+    Emax: '#0ea5e9',
+    Peek: '#a855f7',
+    Titanium: '#64748b',
+    'Pmma Cad': '#14b8a6',
+    'Try in': '#06b6d4',
+    Mokup: '#ec4899',
+    Mockup: '#ec4899',
+    'Night Guard': '#8b5cf6',
+    Wax: '#94a3b8',
+    Ring: '#78716c',
+  };
+  const colorFor = (mat) => {
+    if (MATERIAL_COLORS[mat]) return MATERIAL_COLORS[mat];
+    let h = 0;
+    const s = String(mat || '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return `hsl(${Math.abs(h) % 360} 65% 45%)`;
+  };
+  const byFdi = {};
+  for (const t of teeth) {
+    if (t && t.fdi) byFdi[String(t.fdi)] = t;
+  }
+  const UPPER_R = ['18', '17', '16', '15', '14', '13', '12', '11'];
+  const UPPER_L = ['21', '22', '23', '24', '25', '26', '27', '28'];
+  const LOWER_R = ['48', '47', '46', '45', '44', '43', '42', '41'];
+  const LOWER_L = ['31', '32', '33', '34', '35', '36', '37', '38'];
+
+  const renderTooth = (fdi, nextFdi) => {
+    const a = byFdi[fdi];
+    const b = nextFdi ? byFdi[nextFdi] : null;
+    const bridged =
+      a && b && a.groupId && a.groupId === b.groupId && a.material === b.material;
+    const bg = a ? colorFor(a.material) : '#fff';
+    const fg = a ? '#fff' : '#000';
+    const title = a ? `${fdi} — ${a.material}` : fdi;
+    return `<span class="tooth${bridged ? ' bridged' : ''}${a ? ' selected' : ''}" style="background:${bg};color:${fg}" title="${escapeHtml(title)}">${escapeHtml(fdi)}</span>`;
+  };
+  const renderRow = (right, left) => {
+    let html = '<div class="teeth-row">';
+    for (let i = 0; i < right.length; i++) {
+      html += renderTooth(right[i], right[i + 1]);
+    }
+    html += '<span class="tooth-mid"></span>';
+    for (let i = 0; i < left.length; i++) {
+      html += renderTooth(left[i], left[i + 1]);
+    }
+    html += '</div>';
+    return html;
+  };
+
+  const legendMats = [...new Set(teeth.map((t) => t.material).filter(Boolean))];
+  const legendHtml = legendMats.length
+    ? `<div class="teeth-legend">${legendMats
+        .map(
+          (m) =>
+            `<span class="leg"><i style="background:${colorFor(m)}"></i>${escapeHtml(m)}</span>`
+        )
+        .join('')}</div>`
+    : '';
 
   let barcodeBlock = '';
   if (caseNumber) {
@@ -760,10 +824,21 @@ async function buildPrintHtml(c) {
       display: flex; justify-content: space-between; padding: 0 4%;
       margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #000;
     }
-    .teeth-row { display: flex; width: 100%; border-bottom: 1.5px solid #000; padding: 6px 0; }
+    .teeth-row { display: flex; width: 100%; align-items: center; gap: 2px; border-bottom: 1.5px solid #000; padding: 6px 0; }
     .teeth-row:last-child { border-bottom: none; }
-    .teeth-row .tooth { flex: 1; text-align: center; font-size: 14px; font-weight: 700; color: #000; }
-    .teeth-row .tooth.center-r { border-right: 2px solid #000; padding-right: 2px; }
+    .teeth-row .tooth {
+      flex: 1; text-align: center; font-size: 10px; font-weight: 800;
+      border: 1px solid #000; border-radius: 3px; padding: 4px 0; position: relative;
+      min-height: 22px;
+    }
+    .teeth-row .tooth.bridged::after {
+      content: ''; position: absolute; top: 45%; right: -3px; width: 4px; height: 3px;
+      background: #000; z-index: 2;
+    }
+    .tooth-mid { width: 3px; align-self: stretch; background: #000; margin: 0 2px; flex: 0 0 3px; }
+    .teeth-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; direction: rtl; font-size: 11px; }
+    .teeth-legend .leg { display: inline-flex; align-items: center; gap: 4px; }
+    .teeth-legend i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid #000; display: inline-block; }
     .footer {
       margin-top: 24px; padding-top: 10px; border-top: 2px solid #000;
       display: flex; justify-content: space-between; align-items: center;
@@ -792,18 +867,9 @@ async function buildPrintHtml(c) {
     <div class="teeth-title">مخطط الأسنان</div>
     <div class="teeth-chart">
       <div class="side-labels"><span>R</span><span>L</span></div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
-      </div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
-      </div>
+      ${renderRow(UPPER_R, UPPER_L)}
+      ${renderRow(LOWER_R, LOWER_L)}
+      ${legendHtml}
     </div>
   </div>
   <div class="footer">
