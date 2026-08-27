@@ -97,6 +97,11 @@ const dentalCaseSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    /** Frozen bill lines + prices at exit (immutable history). */
+    billSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     /** Material COGS snapshot at exit (from inventory avg cost × qty). */
     materialCost: {
       type: Number,

@@ -570,18 +570,20 @@ exports.getDoctorDebts = async (req, res) => {
       materialsToDefaultPrices,
       findPricingForDoctor,
     } = require('../services/casePricingService');
+    const { caseBillAmount, resolveDoctorPaid } = require('../services/doctorBalanceService');
     const DoctorPricing = require('../models/DoctorPricing');
     const User = require('../models/User');
 
-    const [cases, pricings, materials, doctors] = await Promise.all([
-      DentalCase.find({ currentStage: 'exited', paymentStatus: { $ne: 'paid' } })
+    const [cases, pricings, materials, doctors, payments] = await Promise.all([
+      DentalCase.find({ currentStage: 'exited' })
         .select(
-          'caseNumber patientName caseType notes referringDoctor salaryAmount paymentStatus stageTimestamps createdAt updatedAt'
+          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount paymentStatus stageTimestamps createdAt updatedAt'
         )
         .lean(),
       DoctorPricing.find().lean(),
       loadActiveMaterials(),
       User.find({ role: 'doctor', isActive: true }).select('fullName phone').lean(),
+      DoctorPayment.find().lean(),
     ]);
     const labDefaults = materialsToDefaultPrices(materials);
     const now = Date.now();
@@ -603,10 +605,7 @@ exports.getDoctorDebts = async (req, res) => {
         materials,
         labDefaults
       );
-      const amount =
-        breakdown.total > 0
-          ? breakdown.total
-          : Math.max(0, Number(doc.salaryAmount) || 0);
+      const amount = caseBillAmount(doc, breakdown.total);
 
       const exitedAt = doc.stageTimestamps?.exited
         ? new Date(doc.stageTimestamps.exited)
@@ -629,34 +628,52 @@ exports.getDoctorDebts = async (req, res) => {
 
       const row = byDoctor.get(key) || {
         doctorName: key,
+        totalDue: 0,
+        paidFromCases: 0,
         unpaidAmount: 0,
         unpaidCases: 0,
         maxDaysOverdue: 0,
         cases: [],
         phone: '',
       };
-      row.unpaidAmount += amount;
-      row.unpaidCases += 1;
-      row.maxDaysOverdue = Math.max(row.maxDaysOverdue, daysOverdue);
-      row.cases.push({
-        id: String(doc._id),
-        caseNumber: doc.caseNumber,
-        patientName: doc.patientName,
-        amount: round2(amount),
-        daysOverdue,
-        exitedAt: exitedAt.toISOString(),
-      });
+      row.totalDue += amount;
+      if (String(doc.paymentStatus) === 'paid') {
+        row.paidFromCases += amount;
+      } else {
+        row.unpaidCases += 1;
+        row.maxDaysOverdue = Math.max(row.maxDaysOverdue, daysOverdue);
+        row.cases.push({
+          id: String(doc._id),
+          caseNumber: doc.caseNumber,
+          patientName: doc.patientName,
+          amount: round2(amount),
+          daysOverdue,
+          exitedAt: exitedAt.toISOString(),
+        });
+      }
       byDoctor.set(key, row);
     }
 
     for (const row of byDoctor.values()) {
       const match = doctors.find((d) => doctorKeysMatch(d.fullName, row.doctorName));
       row.phone = match?.phone || '';
-      row.unpaidAmount = round2(row.unpaidAmount);
+      const paidFromPayments = payments
+        .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const balance = resolveDoctorPaid({
+        totalDue: row.totalDue,
+        paidFromCases: row.paidFromCases,
+        paidFromPayments,
+      });
+      row.unpaidAmount = balance.remaining;
+      row.totalPaid = balance.totalPaid;
+      row.paidSource = balance.paidSource;
       row.cases.sort((a, b) => b.daysOverdue - a.daysOverdue);
     }
 
-    const debts = [...byDoctor.values()].sort((a, b) => b.unpaidAmount - a.unpaidAmount);
+    const debts = [...byDoctor.values()]
+      .filter((d) => d.unpaidAmount > 0)
+      .sort((a, b) => b.unpaidAmount - a.unpaidAmount);
     const totalUnpaid = round2(debts.reduce((s, d) => s + d.unpaidAmount, 0));
 
     return res.json({
