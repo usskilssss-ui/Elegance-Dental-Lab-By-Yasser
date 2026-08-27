@@ -650,9 +650,11 @@ async function generatePdf(html, outputPath) {
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
     path: outputPath,
-    format: 'A5',
+    width: '150mm',
+    height: '200mm',
     printBackground: true,
-    margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
+    preferCSSPageSize: true,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' },
   });
   await browser.close();
   fs.unlink(tempHtmlPath, () => {});
@@ -834,57 +836,68 @@ async function buildPrintHtml(c) {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { size: A5; margin: 7mm 8mm; }
+    /* Lab request paper: 15cm × 20cm (width × height) */
+    @page { size: 150mm 200mm; margin: 7mm 8mm; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
       background: #fff;
       color: #000;
-      font-size: 13px;
-      line-height: 1.35;
+      font-size: 14px;
+      line-height: 1.4;
       direction: rtl;
-      padding-top: 8px;
+      min-height: 186mm;
+      display: flex;
+      flex-direction: column;
+      /* نزل المحتوى شوية من فوق الورقة */
+      padding-top: 10mm;
     }
     .barcode-block {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      margin: 0 auto 8px; padding: 2px 0;
+      margin: 0 auto 10px; padding: 0;
     }
     .barcode-img {
-      width: 180px; height: 40px; object-fit: contain;
+      width: 210px; height: 48px; object-fit: contain;
       image-rendering: pixelated;
     }
     .barcode-code-text {
-      margin-top: 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.4px;
+      margin-top: 4px; font-size: 13px; font-weight: 800; letter-spacing: 0.4px;
       direction: ltr; unicode-bidi: isolate;
     }
     .barcode-hint { font-size: 9px; color: #333; margin-top: 1px; }
-    .section { margin-bottom: 8px; }
+    .section { margin-bottom: 10px; }
+    /* نزل قسم تفاصيل العمل شوية تحت بيانات الطبيب */
+    .section-work { margin-top: 8mm; }
     .section-title {
-      font-size: 13px; font-weight: 700; color: #000;
-      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 4px;
+      font-size: 14px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 5px;
     }
     .row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 3px 0; border-bottom: 1px solid #000; font-size: 13px;
+      padding: 5px 0; border-bottom: 1.5px solid #000; font-size: 14px;
     }
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    .teeth-section { margin-top: 6px; margin-bottom: 4px; }
+    /* نزل مخطط الأسنان شوية كمان تحت تفاصيل العمل */
+    .teeth-section {
+      margin-top: 16mm;
+      margin-bottom: 0;
+    }
     .teeth-title {
-      font-size: 13px; font-weight: 700; color: #000;
-      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 4px;
+      font-size: 14px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 6px;
     }
     .teeth-chart { width: 100%; direction: ltr; }
     .palmer-arch {
       display: flex; align-items: stretch; gap: 3px; width: 100%;
-      margin: 2px 0;
+      margin: 4px 0;
     }
-    .palmer-arch.upper { border-bottom: 1.5px solid #000; padding-bottom: 4px; }
-    .palmer-arch.lower { padding-top: 2px; }
+    .palmer-arch.upper { border-bottom: 1.5px solid #000; padding-bottom: 6px; }
+    .palmer-arch.lower { padding-top: 4px; }
     .palmer-arch .rl {
-      flex: 0 0 12px; font-size: 12px; font-weight: 800;
+      flex: 0 0 14px; font-size: 13px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
     }
     .quad {
@@ -892,18 +905,18 @@ async function buildPrintHtml(c) {
       display: grid;
       grid-template-columns: repeat(8, minmax(0, 1fr));
       grid-template-rows: auto auto;
-      column-gap: 2px; row-gap: 1px;
+      column-gap: 2px; row-gap: 2px;
     }
     .seg-lab {
       display: flex; align-items: flex-end; justify-content: center;
-      font-size: 10px; font-weight: 800; line-height: 1; color: #000;
-      min-height: 12px; min-width: 0;
+      font-size: 11px; font-weight: 800; line-height: 1; color: #000;
+      min-height: 13px; min-width: 0;
     }
     .seg-lab.on { letter-spacing: 0.2px; }
     .lower .seg-lab { align-items: flex-start; }
     .seg-box {
       display: flex; align-items: center; justify-content: space-evenly;
-      min-width: 0; min-height: 20px; padding: 1px 1px;
+      min-width: 0; min-height: 26px; padding: 2px 1px;
       border: 1.5px solid transparent; background: #fff;
     }
     .seg-box.empty .pn { opacity: 0.55; }
@@ -912,21 +925,21 @@ async function buildPrintHtml(c) {
     }
     .seg-box .pn {
       flex: 1 1 0; text-align: center;
-      font-size: 12px; font-weight: 700; line-height: 1.1;
+      font-size: 14px; font-weight: 700; line-height: 1.1;
     }
     .mid-line {
-      flex: 0 0 2px; align-self: stretch; background: #000; margin: 10px 2px 0;
+      flex: 0 0 2px; align-self: stretch; background: #000; margin: 12px 2px 0;
     }
-    .lower .mid-line { margin: 0 2px 10px; }
+    .lower .mid-line { margin: 0 2px 12px; }
     .teeth-legend {
-      margin-top: 6px; font-size: 10px; font-weight: 600;
+      margin-top: 6px; font-size: 11px; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       direction: ltr; text-align: center;
     }
     .teeth-legend .leg { display: inline; }
     .teeth-legend .leg-sep { margin: 0 5px; opacity: 0.7; }
     .footer {
-      margin-top: 10px; padding-top: 6px; border-top: 1.5px solid #000;
+      margin-top: auto; padding-top: 8px; border-top: 1.5px solid #000;
       display: flex; justify-content: space-between; align-items: center;
       font-size: 10px; color: #000; direction: ltr;
     }
@@ -942,7 +955,7 @@ async function buildPrintHtml(c) {
     <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
     <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
   </div>
-  <div class="section">
+  <div class="section section-work">
     <div class="section-title">تفاصيل العمل</div>
     <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
     ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}

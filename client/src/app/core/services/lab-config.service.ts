@@ -17,6 +17,9 @@ export interface LabMaterial {
   labelAr?: string;
   matchKeywords: string[];
   defaultPrice: number;
+  stockQty?: number;
+  avgUnitCost?: number;
+  lowStockAlert?: number;
   active: boolean;
   sortOrder: number;
   showInWorkTypes?: boolean;

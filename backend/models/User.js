@@ -73,6 +73,29 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    /** Payroll: include in salary sheet */
+    payrollEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    /** Fixed monthly salary (EGP) */
+    baseSalary: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** Default piece rate (EGP per unit) when using piece / mixed pay */
+    defaultPieceRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** fixed | piece | mixed */
+    payType: {
+      type: String,
+      enum: ['fixed', 'piece', 'mixed'],
+      default: 'fixed',
+    },
   },
   { timestamps: true }
 );

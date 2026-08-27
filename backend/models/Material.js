@@ -18,6 +18,11 @@ const materialSchema = new mongoose.Schema(
     /** Substrings matched against caseType parts (lowercase) */
     matchKeywords: { type: [String], default: [] },
     defaultPrice: { type: Number, default: 0, min: 0 },
+    /** Sell price to doctors (billing). Inventory cost is avgUnitCost. */
+    stockQty: { type: Number, default: 0, min: 0 },
+    /** Weighted-average purchase cost per unit (EGP). */
+    avgUnitCost: { type: Number, default: 0, min: 0 },
+    lowStockAlert: { type: Number, default: 0, min: 0 },
     active: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 100 },
     showInWorkTypes: { type: Boolean, default: true },
