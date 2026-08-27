@@ -72,20 +72,6 @@
         </div>
       }
 
-      @if (lastScans().length > 0) {
-        <section class="scan-history" aria-label="آخر عمليات المسح">
-          <h2>آخر المسحات</h2>
-          <ul>
-            @for (item of lastScans(); track $index) {
-              <li [class.ok]="item.ok" [class.err]="!item.ok">
-                <strong>{{ item.caseNumber || item.detail }}</strong>
-                <span>{{ item.title }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
-
       <section class="scan-queue" aria-label="قائمة حالات المحطة" (click)="$event.stopPropagation()">
         <div class="scan-queue-head">
           <h2>{{ queueTitle() }}</h2>
@@ -104,7 +90,6 @@
                 <div class="scan-case-top">
                   <div class="scan-case-id-row">
                     <span class="scan-case-id">{{ c.caseNumber }}</span>
-                    <app-case-barcode [value]="c.caseNumber" [compact]="true"></app-case-barcode>
                     @if (intakeLabel(c)) {
                       <span class="scan-case-pill" [class.scan]="c.intakeType === 'scan' || !!c.plyScanUrl">{{ intakeLabel(c) }}</span>
                     }
@@ -135,9 +120,6 @@
                       (click)="$event.stopPropagation()"
                     >
                       تحميل السكان
-                      @if (c.plyFileName) {
-                        <span>({{ c.plyFileName }})</span>
-                      }
                     </a>
                   } @else if (c.intakeType === 'scan') {
                     <span class="scan-case-missing">لا يوجد ملف للتحميل</span>
@@ -152,6 +134,20 @@
           </div>
         }
       </section>
+
+      @if (lastScans().length > 0) {
+        <section class="scan-history" aria-label="آخر عمليات المسح">
+          <h2>آخر المسحات</h2>
+          <ul>
+            @for (item of lastScans(); track $index) {
+              <li [class.ok]="item.ok" [class.err]="!item.ok">
+                <strong>{{ item.caseNumber || item.detail }}</strong>
+                <span>{{ item.title }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
     }
   </main>
 </div>

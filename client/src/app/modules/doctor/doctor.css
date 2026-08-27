@@ -50,9 +50,39 @@
 
 .case-head-left {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.doctor-portal .case-head {
+  max-width: none;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.doctor-portal .case-id {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.doctor-portal .scan-badge--download {
+  flex-shrink: 0;
+}
+
+.doctor-portal .case-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+
+.doctor-portal .case-people,
+.doctor-portal .case-work,
+.doctor-portal .case-meta {
+  max-width: none;
 }
 
 .important-star {

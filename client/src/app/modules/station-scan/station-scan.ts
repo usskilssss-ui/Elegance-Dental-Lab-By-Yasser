@@ -8,7 +8,6 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { DentalCase } from '../../core/services/shared-cases.service';
-import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 
 export type ScanStation = 'reception' | 'design' | 'finishing';
 
@@ -49,7 +48,7 @@ const ROLE_META: Partial<
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './station-scan.html',
   styleUrls: ['./station-scan.css'],
 })
@@ -214,6 +213,21 @@ export class StationScanComponent implements OnInit, OnDestroy {
         };
         this.pushFeedback(fb);
         this.playTone(true);
+        // Show card immediately from scan payload, then refresh list from API
+        try {
+          if (c && (c._id || c.id || c.caseNumber)) {
+            const mapped = mapApiCaseToDentalCase(c as Record<string, unknown>);
+            if (mapped?.id || mapped?.caseNumber) {
+              this.queueCases.update((list) => {
+                const id = mapped.id || String(c._id || c.id || '');
+                const without = list.filter((x) => x.id !== id && x.caseNumber !== mapped.caseNumber);
+                return [mapped, ...without];
+              });
+            }
+          }
+        } catch {
+          /* ignore map errors — reloadQueue still runs */
+        }
         this.reloadQueue();
         this.focusScanner();
       },
