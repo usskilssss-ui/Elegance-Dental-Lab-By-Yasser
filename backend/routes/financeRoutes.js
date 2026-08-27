@@ -27,4 +27,9 @@ router.get('/expenses', ...adminOnly, financeController.listExpenses);
 router.post('/expenses', ...adminOnly, financeController.createExpense);
 router.delete('/expenses/:id', ...adminOnly, financeController.deleteExpense);
 
+router.get('/alerts/stock', ...adminOnly, financeController.getStockAlerts);
+router.get('/doctor-debts', ...adminOnly, financeController.getDoctorDebts);
+router.post('/doctor-debts/remind', ...adminOnly, financeController.remindDoctorDebt);
+router.get('/case-profits', ...adminOnly, financeController.getCaseProfitability);
+
 module.exports = router;

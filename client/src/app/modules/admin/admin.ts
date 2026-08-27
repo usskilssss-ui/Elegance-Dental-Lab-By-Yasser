@@ -1861,6 +1861,7 @@ export class Admin implements OnInit, OnDestroy {
   waMsgExited =
     '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
   waMsgDaily = '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+  waAlertPhones = '';
   waHasToken = false;
   waLiveConfigured = false;
   waTestPhone = '';
@@ -1955,6 +1956,7 @@ export class Admin implements OnInit, OnDestroy {
           '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
         this.waMsgDaily =
           s.msgDaily || '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+        this.waAlertPhones = s.alertPhones || '';
         this.waHasToken = !!s.hasToken;
         this.waLiveConfigured = !!s.liveConfigured;
         this.waToken = '';
@@ -2060,6 +2062,7 @@ export class Admin implements OnInit, OnDestroy {
       msgCompleted: this.waMsgCompleted,
       msgExited: this.waMsgExited,
       msgDaily: this.waMsgDaily,
+      alertPhones: this.waAlertPhones,
     };
     if (this.waProvider !== 'waweb' && this.waToken.trim()) body['token'] = this.waToken.trim();
     this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean; web?: any }>(

@@ -80,7 +80,44 @@ async function applyStockDelta({
     createdByName: user?.fullName || '',
   });
 
-  return { material: mat, movement };
+  // Fire low-stock alert after consume/adjust that drops below threshold
+  if (type === 'consume' || type === 'adjust') {
+    maybeAlertLowStock(mat).catch((e) =>
+      console.warn('[inventory] low-stock alert failed:', e?.message || e)
+    );
+  }
+
+  return { material: mat, movement, costImpact };
+}
+
+async function maybeAlertLowStock(mat) {
+  const alertAt = Number(mat.lowStockAlert) || 0;
+  const qty = Number(mat.stockQty) || 0;
+  if (!(alertAt > 0) || qty > alertAt) return;
+
+  const last = mat.lastLowStockAlertAt ? new Date(mat.lastLowStockAlertAt).getTime() : 0;
+  const twelveH = 12 * 60 * 60 * 1000;
+  if (last && Date.now() - last < twelveH) return;
+
+  mat.lastLowStockAlertAt = new Date();
+  await mat.save();
+
+  const Notification = require('../models/Notification');
+  const title = 'تنبيه نقص مخزون';
+  const message = `${mat.label}: المتبقي ${qty} (حد التنبيه ${alertAt})`;
+  await Notification.create({
+    type: 'low_stock',
+    title,
+    message,
+    targetAudience: ['admin'],
+  });
+
+  try {
+    const { notifyLabAlert } = require('./whatsappService');
+    await notifyLabAlert(`${title}\n${message}`);
+  } catch (e) {
+    console.warn('[inventory] wa low-stock:', e?.message || e);
+  }
 }
 
 async function recordPurchase(payload, user) {
@@ -195,6 +232,7 @@ async function consumeCaseMaterials(dentalCase, user) {
   }
 
   const results = [];
+  let totalCogs = 0;
   const exitDate =
     dentalCase.stageTimestamps?.exited || dentalCase.updatedAt || new Date();
 
@@ -212,10 +250,11 @@ async function consumeCaseMaterials(dentalCase, user) {
       movementDate: exitDate,
       user,
     });
+    totalCogs += Number(r.costImpact) || 0;
     results.push(r);
   }
 
-  return { skipped: false, results };
+  return { skipped: false, results, totalCogs: round2(totalCogs) };
 }
 
 module.exports = {
@@ -224,4 +263,5 @@ module.exports = {
   recordPurchase,
   adjustStock,
   consumeCaseMaterials,
+  maybeAlertLowStock,
 };

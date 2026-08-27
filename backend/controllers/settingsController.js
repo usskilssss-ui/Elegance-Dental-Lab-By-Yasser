@@ -162,6 +162,7 @@ exports.getWhatsAppSettings = async (req, res) => {
         msgDaily:
           wa.msgDaily ||
           '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
+        alertPhones: wa.alertPhones || '',
         hasToken: !!(wa.token && String(wa.token).trim()),
         liveConfigured,
         web: provider === 'waweb' ? getPublicStatus() : undefined,
@@ -195,6 +196,9 @@ exports.updateWhatsAppSettings = async (req, res) => {
     }
     if (body.msgDaily !== undefined) {
       wa.msgDaily = String(body.msgDaily || '').trim() || wa.msgDaily;
+    }
+    if (body.alertPhones !== undefined) {
+      wa.alertPhones = String(body.alertPhones || '').trim();
     }
     if (typeof body.token === 'string' && body.token.trim()) {
       wa.token = body.token.trim();

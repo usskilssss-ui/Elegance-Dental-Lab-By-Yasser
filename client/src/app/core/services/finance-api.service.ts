@@ -95,4 +95,20 @@ export class FinanceApiService {
   deleteExpense(id: string): Observable<any> {
     return this.http.delete(`${this.base}/expenses/${id}`);
   }
+
+  getStockAlerts(): Observable<any> {
+    return this.http.get(`${this.base}/alerts/stock`);
+  }
+
+  getDoctorDebts(): Observable<any> {
+    return this.http.get(`${this.base}/doctor-debts`);
+  }
+
+  remindDoctorDebt(body: { doctorName: string; phone?: string }): Observable<any> {
+    return this.http.post(`${this.base}/doctor-debts/remind`, body);
+  }
+
+  getCaseProfits(year: number | string, month: number | string): Observable<any> {
+    return this.http.get(`${this.base}/case-profits`, { params: this.params(year, month) });
+  }
 }
