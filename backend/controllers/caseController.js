@@ -654,7 +654,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const [cases, pricings, payments] = await Promise.all([
       DentalCase.find({ currentStage: 'exited' })
         .select(
-          'caseNumber patientName caseType notes referringDoctor salaryAmount paymentStatus paidAt createdAt updatedAt stageTimestamps'
+          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps'
         )
         .sort({ createdAt: -1 })
         .lean(),
@@ -666,6 +666,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const prices = pricingDoc?.prices || null;
     const materials = await loadActiveMaterials();
     const labDefaults = materialsToDefaultPrices(materials);
+    const { caseBillAmount, resolveDoctorPaid } = require('../services/doctorBalanceService');
 
     const billableCases = [];
     let totalDue = 0;
@@ -681,9 +682,15 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (meta.isRedoCase || meta.isModificationCase) continue;
       if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
 
-      const receivedAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
-      if (year && Number.isFinite(year) && receivedAt.getFullYear() !== year) continue;
-      if (month && Number.isFinite(month) && receivedAt.getMonth() + 1 !== month) continue;
+      const exitedAt = doc.stageTimestamps?.exited
+        ? new Date(doc.stageTimestamps.exited)
+        : doc.updatedAt
+          ? new Date(doc.updatedAt)
+          : doc.createdAt
+            ? new Date(doc.createdAt)
+            : new Date();
+      if (year && Number.isFinite(year) && exitedAt.getFullYear() !== year) continue;
+      if (month && Number.isFinite(month) && exitedAt.getMonth() + 1 !== month) continue;
 
       const breakdown = calculateCaseCostBreakdown(
         doc.caseType,
@@ -692,10 +699,9 @@ exports.getDoctorAccountSummary = async (req, res) => {
         materials,
         labDefaults
       );
-      const amount = breakdown.total;
+      const amount = caseBillAmount(doc, breakdown.total);
       const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
       const salaryAmount = Number(doc.salaryAmount || 0);
-      // Paid amount must follow DoctorPricing (same as due), not a stale salaryAmount
       if (paymentStatus === 'paid') {
         paidFromCases += amount;
       }
@@ -709,31 +715,39 @@ exports.getDoctorAccountSummary = async (req, res) => {
         amount,
         quantity: breakdown.quantity,
         unitPrice: breakdown.unitPrice,
-        lines: breakdown.lines,
+        lines: (doc.billSnapshot && doc.billSnapshot.lines) || breakdown.lines,
         paymentStatus,
         salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
-        receivedAt: receivedAt.toISOString(),
-        exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+        receivedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
+        exitedAt: exitedAt.toISOString(),
       });
     }
 
     const paidFromPayments = payments
       .filter((p) => doctorKeysMatch(p.doctorName, doctorName))
+      .filter((p) => {
+        if (!year && !month) return true;
+        const d = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!d) return false;
+        if (year && Number.isFinite(year) && d.getFullYear() !== year) return false;
+        if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
+        return true;
+      })
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    const totalPaid = paidFromCases + paidFromPayments;
-    const remaining = totalDue - totalPaid;
+    const balance = resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments });
 
     res.status(200).json({
       success: true,
       data: {
         doctorName,
         doctorKey: normalizeDoctorKeyStrict(doctorName),
-        totalDue,
-        totalPaid,
-        remaining,
-        paidFromCases,
-        paidFromPayments,
+        totalDue: balance.totalDue,
+        totalPaid: balance.totalPaid,
+        remaining: balance.remaining,
+        paidFromCases: balance.paidFromCases,
+        paidFromPayments: balance.paidFromPayments,
+        paidSource: balance.paidSource,
         caseCount: billableCases.length,
         cases: billableCases,
         filters: {
@@ -1596,8 +1610,46 @@ exports.exitCase = async (req, res) => {
     dentalCase.currentStage = 'exited';
     dentalCase.stageTimestamps.exited = new Date();
 
-    const revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
-    dentalCase.revenueAmount = revenue;
+    // Freeze doctor bill at exit (stop live reprice rewriting history)
+    try {
+      const DoctorPricing = require('../models/DoctorPricing');
+      const {
+        calculateCaseCostBreakdownAsync,
+        findPricingForDoctor,
+        parseNotesMeta,
+      } = require('../services/casePricingService');
+      const meta = parseNotesMeta(dentalCase.notes || '');
+      const doctorName = String(
+        dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      const pricings = await DoctorPricing.find().lean();
+      const pricingDoc = findPricingForDoctor(pricings, doctorName);
+      const breakdown = await calculateCaseCostBreakdownAsync(
+        dentalCase.caseType,
+        dentalCase.notes,
+        pricingDoc?.prices || null
+      );
+      const liveTotal = Number(breakdown.total) || 0;
+      const stored = Number(dentalCase.salaryAmount) || 0;
+      const revenue = liveTotal > 0 ? liveTotal : stored;
+      dentalCase.salaryAmount = revenue;
+      dentalCase.revenueAmount = revenue;
+      dentalCase.billSnapshot = {
+        doctorName,
+        pricedAt: new Date().toISOString(),
+        quantity: breakdown.quantity || 0,
+        unitPrice: breakdown.unitPrice || 0,
+        total: revenue,
+        lines: breakdown.lines || [],
+        priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+      };
+    } catch (priceErr) {
+      console.warn('[exit] bill snapshot failed:', dentalCase?.caseNumber, priceErr?.message || priceErr);
+      const revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
+      dentalCase.revenueAmount = revenue;
+    }
+
+    const revenue = Math.max(0, Number(dentalCase.revenueAmount || dentalCase.salaryAmount) || 0);
 
     try {
       const { consumeCaseMaterials, round2 } = require('../services/inventoryService');

@@ -596,6 +596,7 @@ export class Admin implements OnInit, OnDestroy {
       totalDue: number;
       totalPaid: number;
       remaining: number;
+      paidFromCases: number;
     }>();
 
     this.reportCases.forEach(c => {
@@ -606,7 +607,10 @@ export class Admin implements OnInit, OnDestroy {
       const key = this.doctorGroupKey(name);
 
       const cost = this.calculateCaseCost(c);
-      const paidAmount = c.paid ? (c.salary || 0) : 0;
+      // Prefer stored bill snapshot when present
+      const stored = Number((c as any).revenueAmount ?? c.salary ?? 0) || 0;
+      const dueAmount = stored > 0 ? stored : cost;
+      const paidFromCase = c.paid ? dueAmount : 0;
 
       if (!doctorMap.has(key)) {
         doctorMap.set(key, {
@@ -614,23 +618,24 @@ export class Admin implements OnInit, OnDestroy {
           totalCases: 0,
           totalDue: 0,
           totalPaid: 0,
-          remaining: 0
+          remaining: 0,
+          paidFromCases: 0,
         });
       }
 
       const docObj = doctorMap.get(key)!;
       docObj.totalCases += 1;
-      docObj.totalDue += cost;
-      docObj.totalPaid += paidAmount;
+      docObj.totalDue += dueAmount;
+      docObj.paidFromCases += paidFromCase;
     });
 
     doctorMap.forEach((docObj, key) => {
-      const generalPaymentsSum = this.doctorPayments
+      const paidFromPayments = this.doctorPayments
         .filter(p => this.doctorGroupKey(p.doctorName) === key)
         .reduce((sum, p) => sum + (p.amount || 0), 0);
-      
-      docObj.totalPaid += generalPaymentsSum;
-      docObj.remaining = docObj.totalDue - docObj.totalPaid;
+      // Unified rule: ledger wins if any payments exist; else case-paid flags
+      docObj.totalPaid = paidFromPayments > 0 ? paidFromPayments : docObj.paidFromCases;
+      docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
     });
 
     return Array.from(doctorMap.values()).sort((a, b) => a.doctorName.localeCompare(b.doctorName));

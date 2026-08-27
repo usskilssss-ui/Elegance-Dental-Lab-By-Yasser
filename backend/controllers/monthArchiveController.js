@@ -572,7 +572,7 @@ exports.closeMonth = async (req, res) => {
       });
     }
 
-    // Snapshot ALL current data for summary before wipe of exited
+    // Snapshot month data, then delete ONLY this month's exited cases + this month's payments.
     const allCases = await DentalCase.find({})
       .populate('assignedTo', 'fullName')
       .lean();
@@ -583,25 +583,38 @@ exports.closeMonth = async (req, res) => {
     const summary = buildSummary(monthCases);
 
     const exitedIds = allCases
-      .filter((doc) => doc.currentStage === 'exited')
+      .filter(
+        (doc) =>
+          doc.currentStage === 'exited' && inMonth(caseExitedDate(doc), year, month)
+      )
       .map((doc) => doc._id);
 
-    const activeKept = allCases.filter((doc) => doc.currentStage !== 'exited').length;
+    const activeKept = allCases.filter((doc) => {
+      if (doc.currentStage !== 'exited') return true;
+      // Exited cases from other months stay in DB until their month is closed
+      return !inMonth(caseExitedDate(doc), year, month);
+    }).length;
 
     const deleteCasesResult = await DentalCase.deleteMany({
       _id: { $in: exitedIds },
     });
 
-    // Wipe all doctor payments (full ledger reset with month close)
-    const deletePaymentsResult = await DoctorPayment.deleteMany({});
+    // Delete only payments dated in this closed month (never wipe full ledger)
+    const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+    const deletePaymentsResult = await DoctorPayment.deleteMany({
+      paymentDate: { $gte: monthStart, $lte: monthEnd },
+    });
 
     if (exitedIds.length) {
       await AuditLog.deleteMany({ caseId: { $in: exitedIds } });
       await Notification.deleteMany({ caseId: { $in: exitedIds } });
     }
 
-    // Clear print queue noise
-    await PrintJob.deleteMany({});
+    // Clear only print jobs created in this month (do not wipe the whole queue forever)
+    const deletePrintResult = await PrintJob.deleteMany({
+      createdAt: { $gte: monthStart, $lte: monthEnd },
+    });
 
     const archive = await MonthArchive.findOneAndUpdate(
       { year, month },
@@ -615,6 +628,7 @@ exports.closeMonth = async (req, res) => {
             activeCasesKept: activeKept,
             deletedExitedCases: deleteCasesResult.deletedCount || 0,
             deletedPayments: deletePaymentsResult.deletedCount || 0,
+            deletedPrintJobs: deletePrintResult.deletedCount || 0,
           },
         },
       },
@@ -623,12 +637,13 @@ exports.closeMonth = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'تم إغلاق الشهر وتصفير الحالات الخارجة',
+      message: 'تم إغلاق الشهر وحذف حالات/دفعات هذا الشهر فقط',
       data: {
         year,
         month,
         deletedExitedCases: deleteCasesResult.deletedCount || 0,
         deletedPayments: deletePaymentsResult.deletedCount || 0,
+        deletedPrintJobs: deletePrintResult.deletedCount || 0,
         activeCasesKept: activeKept,
         archive,
       },
