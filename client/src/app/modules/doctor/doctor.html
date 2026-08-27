@@ -307,8 +307,8 @@
                     [attr.download]="c.plyFileName || 'scan'"
                     target="_blank"
                     rel="noopener noreferrer"
-                    title="تحميل ملف السكان"
-                    aria-label="تحميل ملف السكان"
+                    title="تحميل السكان"
+                    aria-label="تحميل السكان"
                     (click)="$event.stopPropagation()"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -317,12 +317,9 @@
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                     تحميل السكان
-                    @if (c.plyFileName) {
-                      <span class="case-ply-name">({{ c.plyFileName }})</span>
-                    }
                   </a>
                 } @else if (c.intakeType === 'scan') {
-                  <span class="scan-badge scan-badge--missing" title="لم يتم رفع ملف السكان">لا يوجد ملف للتحميل</span>
+                  <span class="scan-badge scan-badge--missing">لا يوجد ملف للتحميل</span>
                 }
               </div>
               <span class="case-phase-badge" [ngClass]="getCasePhase(c).color">
@@ -346,21 +343,6 @@
                 }
                 <span class="spec-item">Qty: {{ c.quantity }}</span>
               </div>
-              @if (c.plyScanUrl) {
-                <a
-                  class="case-ply-link"
-                  [href]="c.plyScanUrl"
-                  [attr.download]="c.plyFileName || 'scan'"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  (click)="$event.stopPropagation()"
-                >
-                  تحميل ملف السكان
-                  @if (c.plyFileName) {
-                    <span class="case-ply-name">({{ c.plyFileName }})</span>
-                  }
-                </a>
-              }
             </div>
             <div class="case-meta">
               @if (c.status === 'exited') {
@@ -441,10 +423,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  تحميل ملف السكان
-                  @if (dc.plyFileName) {
-                    <span class="case-ply-name">({{ dc.plyFileName }})</span>
-                  }
+                  تحميل السكان
                 </a>
               </strong>
             </div>

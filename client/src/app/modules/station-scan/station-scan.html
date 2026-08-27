@@ -72,6 +72,69 @@
         </div>
       }
 
+      <section class="scan-queue" aria-label="قائمة حالات المحطة" (click)="$event.stopPropagation()">
+        <div class="scan-queue-head">
+          <h2>{{ queueTitle() }}</h2>
+          <button type="button" class="scan-queue-refresh" (click)="reloadQueue()" [disabled]="queueLoading()">
+            {{ queueLoading() ? 'جاري…' : 'تحديث' }}
+          </button>
+        </div>
+        @if (queueLoading() && queueCases().length === 0) {
+          <p class="scan-queue-empty">جاري تحميل الحالات…</p>
+        } @else if (queueCases().length === 0) {
+          <p class="scan-queue-empty">لا توجد حالات في هذه المرحلة بعد — امسح باركود عشان تظهر هنا.</p>
+        } @else {
+          <div class="scan-queue-list">
+            @for (c of queueCases(); track c.id) {
+              <article class="scan-case-card">
+                <div class="scan-case-top">
+                  <div class="scan-case-id-row">
+                    <span class="scan-case-id">{{ c.caseNumber }}</span>
+                    @if (intakeLabel(c)) {
+                      <span class="scan-case-pill" [class.scan]="c.intakeType === 'scan' || !!c.plyScanUrl">{{ intakeLabel(c) }}</span>
+                    }
+                  </div>
+                  <div class="scan-case-patient">المريض: {{ c.patient }}</div>
+                  @if (c.doctor) {
+                    <div class="scan-case-doctor">د: {{ c.doctor }}</div>
+                  }
+                </div>
+                <div class="scan-case-work">
+                  <div class="scan-case-wt">{{ c.workType }}</div>
+                  <div class="scan-case-specs">
+                    @if (c.color) {
+                      <span>Color: {{ c.color }}</span>
+                    }
+                    @if (c.branch || c.clinic) {
+                      <span>فرع: {{ c.branch || c.clinic }}</span>
+                    }
+                    <span>Qty: {{ c.quantity }}</span>
+                  </div>
+                  @if (c.plyScanUrl) {
+                    <a
+                      class="scan-case-download"
+                      [href]="c.plyScanUrl"
+                      [attr.download]="c.plyFileName || 'scan'"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      (click)="$event.stopPropagation()"
+                    >
+                      تحميل السكان
+                    </a>
+                  } @else if (c.intakeType === 'scan') {
+                    <span class="scan-case-missing">لا يوجد ملف للتحميل</span>
+                  }
+                </div>
+                <div class="scan-case-meta">
+                  <span class="scan-case-date-lbl">تاريخ الاستلام</span>
+                  <span class="scan-case-date">{{ c.receivedDate }}</span>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
       @if (lastScans().length > 0) {
         <section class="scan-history" aria-label="آخر عمليات المسح">
           <h2>آخر المسحات</h2>

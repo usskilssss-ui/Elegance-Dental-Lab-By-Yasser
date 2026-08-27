@@ -1403,11 +1403,19 @@ exports.scanAtStation = async (req, res) => {
       message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
       case: {
         id: dentalCase._id,
+        _id: dentalCase._id,
         caseNumber: dentalCase.caseNumber,
         patientName: dentalCase.patientName,
         currentStage: targetStage,
         previousStage: oldStage,
+        status: dentalCase.status,
         caseType: dentalCase.caseType,
+        notes: dentalCase.notes,
+        referringDoctor: dentalCase.referringDoctor,
+        plyScanPath: dentalCase.plyScanPath,
+        plyFileName: dentalCase.plyFileName,
+        createdAt: dentalCase.createdAt,
+        stageTimestamps: dentalCase.stageTimestamps,
       },
     });
   } catch (error) {
