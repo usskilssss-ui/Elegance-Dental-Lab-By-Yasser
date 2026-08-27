@@ -692,27 +692,45 @@ async function buildPrintHtml(c) {
   const caseNumber = String(c.caseNumber || '').trim();
   const teeth = Array.isArray(c.teeth) ? c.teeth : [];
 
-  const MATERIAL_COLORS = {
-    Zircon: '#f97316',
-    'German Zircon': '#f59e0b',
-    Emax: '#0ea5e9',
-    Peek: '#a855f7',
-    Titanium: '#64748b',
-    'Pmma Cad': '#14b8a6',
-    'Try in': '#06b6d4',
-    Mokup: '#ec4899',
-    Mockup: '#ec4899',
-    'Night Guard': '#8b5cf6',
-    Wax: '#94a3b8',
-    Ring: '#78716c',
+  /** Short codes readable on B&W printers (no color reliance). */
+  const MATERIAL_CODE = {
+    Zircon: 'Zr',
+    'German Zircon': 'GZ',
+    Emax: 'Em',
+    Peek: 'Pk',
+    Titanium: 'Ti',
+    'Pmma Cad': 'Pm',
+    'Try in': 'Tr',
+    Mokup: 'Mk',
+    Mockup: 'Mk',
+    'Night Guard': 'NG',
+    Wax: 'Wx',
+    Ring: 'Rg',
   };
-  const colorFor = (mat) => {
-    if (MATERIAL_COLORS[mat]) return MATERIAL_COLORS[mat];
-    let h = 0;
-    const s = String(mat || '');
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    return `hsl(${Math.abs(h) % 360} 65% 45%)`;
+  /** Distinct B&W hatch patterns per material */
+  const MATERIAL_PATTERN = {
+    Zircon: 'repeating-linear-gradient(45deg,#000 0 1px,#fff 1px 5px)',
+    'German Zircon': 'repeating-linear-gradient(-45deg,#000 0 1px,#fff 1px 5px)',
+    Emax: 'repeating-linear-gradient(0deg,#000 0 1px,#fff 1px 4px)',
+    Peek: 'repeating-linear-gradient(90deg,#000 0 1px,#fff 1px 4px)',
+    Titanium: 'repeating-linear-gradient(45deg,#000 0 2px,#fff 2px 6px)',
+    'Pmma Cad': 'repeating-linear-gradient(135deg,#000 0 1px,#fff 1px 5px)',
+    'Try in': 'radial-gradient(circle,#000 0.8px,#fff 1.2px)',
+    Mokup: 'repeating-linear-gradient(0deg,#000 0 2px,#fff 2px 5px)',
+    Mockup: 'repeating-linear-gradient(0deg,#000 0 2px,#fff 2px 5px)',
+    'Night Guard': 'repeating-linear-gradient(90deg,#000 0 2px,#fff 2px 5px)',
+    Wax: 'repeating-linear-gradient(45deg,#000 0 1px,#fff 1px 7px)',
+    Ring: 'repeating-linear-gradient(-45deg,#000 0 2px,#fff 2px 6px)',
   };
+  const codeFor = (mat) => {
+    if (MATERIAL_CODE[mat]) return MATERIAL_CODE[mat];
+    const s = String(mat || '').trim();
+    if (!s) return '?';
+    return s.slice(0, 2);
+  };
+  const patternFor = (mat) =>
+    MATERIAL_PATTERN[mat] || 'repeating-linear-gradient(45deg,#000 0 1px,#fff 1px 6px)';
+
   const byFdi = {};
   for (const t of teeth) {
     if (t && t.fdi) byFdi[String(t.fdi)] = t;
@@ -722,35 +740,83 @@ async function buildPrintHtml(c) {
   const LOWER_R = ['48', '47', '46', '45', '44', '43', '42', '41'];
   const LOWER_L = ['31', '32', '33', '34', '35', '36', '37', '38'];
 
-  const renderTooth = (fdi, nextFdi) => {
+  const isBridgePair = (a, b) =>
+    !!(a && b && a.groupId && a.groupId === b.groupId && a.material === b.material);
+
+  const renderTooth = (fdi) => {
     const a = byFdi[fdi];
-    const b = nextFdi ? byFdi[nextFdi] : null;
-    const bridged =
-      a && b && a.groupId && a.groupId === b.groupId && a.material === b.material;
-    const bg = a ? colorFor(a.material) : '#fff';
-    const fg = a ? '#fff' : '#000';
-    const title = a ? `${fdi} — ${a.material}` : fdi;
-    return `<span class="tooth${bridged ? ' bridged' : ''}${a ? ' selected' : ''}" style="background:${bg};color:${fg}" title="${escapeHtml(title)}">${escapeHtml(fdi)}</span>`;
+    if (!a) {
+      return `<span class="tooth empty"><span class="tn">${escapeHtml(fdi)}</span></span>`;
+    }
+    const code = codeFor(a.material);
+    return `<span class="tooth selected" style="background-image:${patternFor(a.material)}" title="${escapeHtml(fdi + ' — ' + a.material)}">
+      <span class="tn">${escapeHtml(fdi)}</span>
+      <span class="tc">${escapeHtml(code)}</span>
+    </span>`;
   };
-  const renderRow = (right, left) => {
-    let html = '<div class="teeth-row">';
-    for (let i = 0; i < right.length; i++) {
-      html += renderTooth(right[i], right[i + 1]);
+
+  const renderBridgeGap = (leftFdi, rightFdi) => {
+    const a = byFdi[leftFdi];
+    const b = byFdi[rightFdi];
+    if (isBridgePair(a, b)) {
+      return `<span class="bridge-link" title="جسر متصل">══</span>`;
     }
-    html += '<span class="tooth-mid"></span>';
-    for (let i = 0; i < left.length; i++) {
-      html += renderTooth(left[i], left[i + 1]);
+    return `<span class="bridge-gap"></span>`;
+  };
+
+  const renderQuad = (list) => {
+    let html = '';
+    for (let i = 0; i < list.length; i++) {
+      html += renderTooth(list[i]);
+      if (i < list.length - 1) html += renderBridgeGap(list[i], list[i + 1]);
     }
-    html += '</div>';
     return html;
   };
 
+  const renderRow = (right, left) => {
+    // Midline bridge rare (11-21) — still check
+    const midBridge = isBridgePair(byFdi[right[right.length - 1]], byFdi[left[0]]);
+    const mid = midBridge
+      ? `<span class="tooth-mid bridge-mid" title="جسر عبر المنتصف">║</span>`
+      : `<span class="tooth-mid"></span>`;
+    return `<div class="teeth-row">${renderQuad(right)}${mid}${renderQuad(left)}</div>`;
+  };
+
+  // Explicit bridge list for technician (no ambiguity)
+  const byGroup = new Map();
+  for (const t of teeth) {
+    if (!t?.groupId) continue;
+    const list = byGroup.get(t.groupId) || [];
+    list.push(t);
+    byGroup.set(t.groupId, list);
+  }
+  const bridgeLines = [];
+  const unitLines = [];
+  for (const [, list] of byGroup) {
+    const mat = list[0].material;
+    const nums = list
+      .map((t) => String(t.fdi))
+      .sort((a, b) => Number(a) - Number(b));
+    if (list.length > 1) {
+      bridgeLines.push(`جسر ${codeFor(mat)} (${escapeHtml(mat)}): ${nums.join('—')}`);
+    } else {
+      unitLines.push(`${nums[0]}=${codeFor(mat)}`);
+    }
+  }
+  const bridgeSummaryHtml =
+    bridgeLines.length || unitLines.length
+      ? `<div class="teeth-summary" dir="rtl">
+          ${bridgeLines.map((l) => `<div class="bridge-line">▣ ${l}</div>`).join('')}
+          ${unitLines.length ? `<div class="units-line">منفصل: ${unitLines.join(' · ')}</div>` : ''}
+        </div>`
+      : '';
+
   const legendMats = [...new Set(teeth.map((t) => t.material).filter(Boolean))];
   const legendHtml = legendMats.length
-    ? `<div class="teeth-legend">${legendMats
+    ? `<div class="teeth-legend" dir="rtl">${legendMats
         .map(
           (m) =>
-            `<span class="leg"><i style="background:${colorFor(m)}"></i>${escapeHtml(m)}</span>`
+            `<span class="leg"><i style="background-image:${patternFor(m)}"></i><b>${escapeHtml(codeFor(m))}</b> = ${escapeHtml(m)}</span>`
         )
         .join('')}</div>`
     : '';
@@ -814,33 +880,61 @@ async function buildPrintHtml(c) {
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    .teeth-section { margin-top: 20px; margin-bottom: 16px; }
+    .teeth-section { margin-top: 16px; margin-bottom: 12px; }
     .teeth-title {
       font-size: 15px; font-weight: 700; color: #000;
-      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 10px;
+      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 8px;
     }
     .teeth-chart { width: 100%; direction: ltr; }
     .teeth-chart .side-labels {
       display: flex; justify-content: space-between; padding: 0 4%;
-      margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #000;
+      margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #000;
     }
-    .teeth-row { display: flex; width: 100%; align-items: center; gap: 2px; border-bottom: 1.5px solid #000; padding: 6px 0; }
-    .teeth-row:last-child { border-bottom: none; }
-    .teeth-row .tooth {
-      flex: 1; text-align: center; font-size: 10px; font-weight: 800;
-      border: 1px solid #000; border-radius: 3px; padding: 4px 0; position: relative;
-      min-height: 22px;
+    .teeth-row {
+      display: flex; width: 100%; align-items: stretch; gap: 0;
+      border-bottom: 1.5px solid #000; padding: 5px 0;
     }
-    .teeth-row .tooth.bridged::after {
-      content: ''; position: absolute; top: 45%; right: -3px; width: 4px; height: 3px;
-      background: #000; z-index: 2;
+    .teeth-row:last-of-type { border-bottom: none; }
+    .tooth {
+      flex: 1 1 0; min-width: 0; text-align: center;
+      border: 1.5px solid #000; border-radius: 2px; padding: 2px 0;
+      min-height: 28px; background: #fff;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      line-height: 1.1;
     }
-    .tooth-mid { width: 3px; align-self: stretch; background: #000; margin: 0 2px; flex: 0 0 3px; }
-    .teeth-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; direction: rtl; font-size: 11px; }
-    .teeth-legend .leg { display: inline-flex; align-items: center; gap: 4px; }
-    .teeth-legend i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid #000; display: inline-block; }
+    .tooth.empty { opacity: 0.55; }
+    .tooth.selected { border-width: 2px; }
+    .tooth .tn { font-size: 9px; font-weight: 700; }
+    .tooth .tc { font-size: 10px; font-weight: 900; letter-spacing: 0.2px; }
+    .bridge-link {
+      flex: 0 0 14px; align-self: center; text-align: center;
+      font-size: 11px; font-weight: 900; line-height: 1; color: #000;
+      letter-spacing: -1px;
+    }
+    .bridge-gap { flex: 0 0 3px; }
+    .tooth-mid {
+      width: 4px; flex: 0 0 4px; align-self: stretch; background: #000; margin: 0 3px;
+    }
+    .tooth-mid.bridge-mid {
+      width: 12px; flex: 0 0 12px; background: #fff; color: #000;
+      font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #000;
+    }
+    .teeth-legend {
+      display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px;
+      font-size: 11px; font-weight: 600;
+    }
+    .teeth-legend .leg { display: inline-flex; align-items: center; gap: 5px; }
+    .teeth-legend i {
+      width: 14px; height: 14px; border: 1.5px solid #000; display: inline-block; background-color: #fff;
+    }
+    .teeth-summary {
+      margin-top: 8px; padding: 6px 8px; border: 2px solid #000; font-size: 12px; line-height: 1.45;
+    }
+    .teeth-summary .bridge-line { font-weight: 800; margin-bottom: 2px; }
+    .teeth-summary .units-line { font-weight: 600; margin-top: 4px; }
     .footer {
-      margin-top: 24px; padding-top: 10px; border-top: 2px solid #000;
+      margin-top: 20px; padding-top: 10px; border-top: 2px solid #000;
       display: flex; justify-content: space-between; align-items: center;
       font-size: 11px; color: #000; direction: ltr;
     }
@@ -864,12 +958,13 @@ async function buildPrintHtml(c) {
     <div class="row"><span class="label">إجمالي العدد</span><span class="value">${quantity}</span></div>
   </div>
   <div class="teeth-section">
-    <div class="teeth-title">مخطط الأسنان</div>
+    <div class="teeth-title">مخطط الأسنان (أبيض/أسود)</div>
     <div class="teeth-chart">
       <div class="side-labels"><span>R</span><span>L</span></div>
       ${renderRow(UPPER_R, UPPER_L)}
       ${renderRow(LOWER_R, LOWER_L)}
       ${legendHtml}
+      ${bridgeSummaryHtml}
     </div>
   </div>
   <div class="footer">
