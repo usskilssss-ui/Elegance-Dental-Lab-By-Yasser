@@ -77,12 +77,20 @@ export class ToothChartComponent {
 
     let groupId = newGroupId();
     if (this.linkMode === 'connected') {
-      // Join ONLY an immediate neighbor's existing group — never flood-fill
-      // all adjacent same-material teeth (that would turn earlier «منفصل» into one bridge).
-      const neighbor = next.find(
+      // Neighbors of same material (may belong to different groups, e.g. 14 then 16 then 15)
+      const neighbors = next.filter(
         (a) => a.material === this.activeMaterial && areAdjacent(a.fdi, fdi)
       );
-      if (neighbor) groupId = neighbor.groupId;
+      if (neighbors.length) {
+        groupId = neighbors[0].groupId;
+        const mergeIds = new Set(neighbors.map((n) => n.groupId));
+        // Unify only the groups this new tooth touches — not every crown on the arch
+        next = next.map((a) =>
+          a.material === this.activeMaterial && mergeIds.has(a.groupId)
+            ? { ...a, groupId }
+            : a
+        );
+      }
     }
 
     next.push({ fdi, material: this.activeMaterial, groupId });
