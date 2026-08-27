@@ -114,6 +114,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   patientNameError = '';
   intakeType: 'impression' | 'scan' | '' = '';
   selectedPlyFile: File | null = null;
+  existingPlyFileName: string | null = null;
 
   /** Prompt doctor to create a PIN after first password login */
   readonly pinSetupOpen = signal(false);
@@ -580,6 +581,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.patientNameError = '';
     this.nightGuardType = '';
     this.intakeType = '';
+    this.existingPlyFileName = null;
     this.clearPlySelection();
     this.dialogOpen.set(true);
   }
@@ -591,7 +593,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
     this.intakeType = type;
-    if (type === 'impression') this.clearPlySelection();
+    if (type === 'impression') {
+      this.clearPlySelection();
+      this.existingPlyFileName = null;
+    }
   }
 
   onPlyFileSelected(event: Event): void {
@@ -703,6 +708,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.intakeType =
       c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
+    this.existingPlyFileName = c.plyFileName || (c.plyScanUrl ? 'scan' : null);
     this.clearPlySelection();
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
     this.toothAssignments = Array.isArray(c.teeth) ? [...c.teeth] : [];
@@ -911,9 +917,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.flash('اختَر امبرشن أو سكان');
       return;
     }
+    if (this.intakeType === 'scan' && !this.selectedPlyFile && !this.existingPlyFileName) {
+      this.flash('رفع ملف السكان إجباري عند اختيار سكان');
+      return;
+    }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
       this.flash('يرجى اختيار نوع العمل');
+      return;
+    }
+    if (d.caseType !== 'Empty' && this.hasWorkTypesWithQuantity && this.toothAssignments.length === 0) {
+      this.flash('يرجى تعبئة مخطط الأسنان');
       return;
     }
     if (this.isColorRequired && !d.color?.trim()) {

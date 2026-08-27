@@ -415,6 +415,27 @@
                 </div>
               }
 
+              @if (!hasWorkTypesWithQuantity) {
+                <p class="wt-error" style="color:#64748b;margin:8px 0 0;">
+                  اختَر نوع العمل من الأزرار فوق عشان يظهر مخطط الأسنان
+                </p>
+              }
+
+              @if (hasWorkTypesWithQuantity) {
+                <div class="form-field" style="margin-top:12px;">
+                  <span>مخطط الأسنان <abbr title="مطلوب">*</abbr></span>
+                  <app-tooth-chart
+                    [assignments]="toothAssignments"
+                    [materials]="chartMaterials"
+                    [activeMaterial]="activeToothMaterial"
+                    [linkMode]="toothLinkMode"
+                    (assignmentsChange)="onToothAssignmentsChange($event)"
+                    (activeMaterialChange)="onActiveToothMaterialChange($event)"
+                    (linkModeChange)="onToothLinkModeChange($event)"
+                  />
+                </div>
+              }
+
               @if (hasWorkTypesWithQuantity) {
                 <div class="wt-quantities-container">
                   <div class="wt-quantities-title">العدد لكل نوع:</div>
