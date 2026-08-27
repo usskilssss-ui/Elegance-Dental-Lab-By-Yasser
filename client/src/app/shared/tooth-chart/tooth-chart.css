@@ -115,6 +115,7 @@
   flex: 1;
   display: flex;
   gap: 4px;
+  overflow: visible;
 }
 
 .tc-midline {
@@ -153,18 +154,27 @@
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
+/* Bridge bar between adjacent connected teeth — use tooth fill so it shows in dark mode */
+.tc-tooth.bridged-next {
+  overflow: visible;
+  z-index: 1;
+}
+
 .tc-tooth.bridged-next::after {
   content: '';
   position: absolute;
-  top: 42%;
+  top: 18%;
+  bottom: 18%;
   right: -5px;
-  width: 6px;
-  height: 4px;
-  background: currentColor;
-  opacity: 0.85;
-  z-index: 2;
-  border-radius: 1px;
+  width: 10px;
+  background: inherit;
+  border-top: 1.5px solid rgba(0, 0, 0, 0.2);
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.2);
+  opacity: 1;
+  z-index: 3;
+  border-radius: 0;
   pointer-events: none;
+  box-shadow: none;
 }
 
 .tc-legend {
@@ -256,6 +266,17 @@
   border-color: #475569;
   background: #e2e8f0;
   color: #0f172a;
+}
+
+:host-context(body.dark-theme) .tc-tooth.selected {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+:host-context(body.dark-theme) .tc-tooth.bridged-next::after {
+  border-top-color: rgba(255, 255, 255, 0.35);
+  border-bottom-color: rgba(255, 255, 255, 0.35);
+  filter: brightness(1.08);
 }
 
 :host-context(body.dark-theme) .tc-tooth:hover {

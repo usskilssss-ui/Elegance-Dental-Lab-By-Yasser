@@ -618,8 +618,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.selectedPlyFile = null;
       return;
     }
-    if (!/\.(ply|stl|obj)$/i.test(file.name)) {
-      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj');
+    if (!/\.(ply|stl|obj|rar|zip)$/i.test(file.name)) {
+      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj أو .rar أو .zip');
       input.value = '';
       this.selectedPlyFile = null;
       return;

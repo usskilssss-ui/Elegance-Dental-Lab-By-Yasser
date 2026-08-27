@@ -114,7 +114,7 @@ router.put(
 // Upload case image (designer / finisher / admin)
 router.post('/:id/upload-image', authorize('admin', 'designer', 'finisher'), uploadCaseImage.single('image'), caseController.uploadCaseImage);
 
-// Upload 3D scan (.ply / .stl / .obj) — saved into case notes meta
+// Upload 3D/scan archive (.ply / .stl / .obj / .rar / .zip) — saved into case notes meta
 const plyUploadMiddleware = (req, res, next) => {
   uploadCasePly.single('ply')(req, res, (err) => {
     if (!err) return next();
