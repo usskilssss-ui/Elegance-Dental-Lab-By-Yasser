@@ -188,6 +188,18 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return this.bucket(c) === 'pending';
   }
 
+  intakeLabel(c: { intakeType?: string; plyScanUrl?: string }): string {
+    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
+    if (c.intakeType === 'impression') return 'امبرشن';
+    return 'غير محدد';
+  }
+
+  intakeBadgeClass(c: { intakeType?: string; plyScanUrl?: string }): string {
+    if (c.intakeType === 'scan' || c.plyScanUrl) return 'meta-pill--scan';
+    if (c.intakeType === 'impression') return 'meta-pill--impression';
+    return 'meta-pill--unknown';
+  }
+
   isImportant(c: DentalCase | string): boolean {
     if (typeof c === 'string') {
       const found = this.allCases().find((x) => x.id === c);
