@@ -145,6 +145,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   patientWarning = '';
   intakeType: 'impression' | 'scan' | '' = '';
   selectedPlyFile: File | null = null;
+  plyScanLink = '';
   toothAssignments: ToothAssignment[] = [];
   toothLinkMode: 'connected' | 'separate' = 'separate';
   activeToothMaterial = '';
@@ -189,10 +190,14 @@ export class EntryComponent implements OnInit, OnDestroy {
     if (this.intakeType === type) {
       this.intakeType = '';
       this.clearPlySelection();
+      this.plyScanLink = '';
       return;
     }
     this.intakeType = type;
-    if (type === 'impression') this.clearPlySelection();
+    if (type === 'impression') {
+      this.clearPlySelection();
+      this.plyScanLink = '';
+    }
   }
 
   onPatientInputChange(): void {
@@ -220,12 +225,34 @@ export class EntryComponent implements OnInit, OnDestroy {
       return;
     }
     this.selectedPlyFile = file;
+    this.plyScanLink = '';
+  }
+
+  onPlyLinkChange(): void {
+    if (this.plyScanLink.trim()) this.clearPlySelection();
   }
 
   clearPlySelection(): void {
     this.selectedPlyFile = null;
     const el = document.getElementById('entryPlyInput') as HTMLInputElement | null;
     if (el) el.value = '';
+  }
+
+  private isValidScanLink(raw: string): boolean {
+    const url = String(raw || '').trim();
+    if (!url || url.length > 2000) return false;
+    try {
+      const u = new URL(url);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  private attachScanAfterSave(caseId: string, ply: File | null, link: string) {
+    if (ply) return this.caseApi.uploadCasePly(caseId, ply);
+    if (link) return this.caseApi.setCasePlyLink(caseId, link);
+    return null;
   }
 
   onDoctorInputChange(): void {
@@ -529,12 +556,14 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.toothAssignments = [];
     this.activeToothMaterial = '';
     this.toothLinkMode = 'separate';
+    this.plyScanLink = '';
     this.clearPlySelection();
     this.dialogOpen.set(true);
   }
 
   closeDialog(): void {
     this.dialogOpen.set(false);
+    this.plyScanLink = '';
     this.clearPlySelection();
   }
 
@@ -552,6 +581,10 @@ export class EntryComponent implements OnInit, OnDestroy {
     if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
     if (!this.intakeType) {
       this.flash('اختَر امبرشن أو سكان');
+      return;
+    }
+    if (this.intakeType === 'scan' && this.plyScanLink.trim() && !this.isValidScanLink(this.plyScanLink)) {
+      this.flash('لينك السكان غير صالح — لازم يبدأ بـ http أو https');
       return;
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
@@ -581,6 +614,7 @@ export class EntryComponent implements OnInit, OnDestroy {
       teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
     const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+    const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
 
     this.closeDialog();
     this.saveInProgress.set(true);
@@ -594,8 +628,9 @@ export class EntryComponent implements OnInit, OnDestroy {
           const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
-          if (ply && caseId) {
-            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+          const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+          if (attach$) {
+            return attach$.pipe(
               switchMap(() => print$),
               catchError(() => print$)
             );

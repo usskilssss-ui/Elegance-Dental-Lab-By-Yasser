@@ -128,6 +128,14 @@ export class CaseApiService {
     return this.http.post(`${this.apiUrl}/${id}/upload-ply`, form);
   }
 
+  /** حفظ لينك سكان خارجي بدل رفع ملف */
+  setCasePlyLink(id: string, url: string, fileName?: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}/ply-link`, {
+      url: String(url || '').trim(),
+      fileName: fileName || undefined,
+    });
+  }
+
   // Complete case
   completeCase(id: string): Observable<any> {
     return this.http.put(`${this.apiUrl}/${id}/complete`, {});

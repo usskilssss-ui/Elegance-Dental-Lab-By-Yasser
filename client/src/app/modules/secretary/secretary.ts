@@ -312,11 +312,13 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.intakeType === type) {
       this.intakeType = '';
       this.clearPlySelection();
+      this.plyScanLink = '';
       return;
     }
     this.intakeType = type;
     if (type === 'impression') {
       this.clearPlySelection();
+      this.plyScanLink = '';
     }
   }
 
@@ -412,6 +414,8 @@ export class Secretary implements OnInit, OnDestroy {
   }
   /** ملف مسح .ply اختياري عند الإنشاء/التعديل */
   selectedPlyFile: File | null = null;
+  /** External scan URL alternative to file upload */
+  plyScanLink = '';
   /** اسم ملف PLY المحفوظ مسبقاً (وضع التعديل) */
   existingPlyFileName: string | null = null;
 
@@ -829,6 +833,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.patientWarning = '';
     this.intakeType = '';
     this.existingPlyFileName = null;
+    this.plyScanLink = '';
     this.clearPlySelection();
     this.dialogOpen.set(true);
     this.menuOpenId.set(null);
@@ -846,6 +851,9 @@ export class Secretary implements OnInit, OnDestroy {
     this.dialogMode.set('edit');
     this.editingId = c.id;
     this.existingPlyFileName = c.plyFileName || null;
+    this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))
+      ? String(c.plyScanUrl)
+      : '';
     this.clearPlySelection();
     this.intakeType = c.intakeType === 'scan' || c.plyScanUrl ? 'scan' : c.intakeType === 'impression' ? 'impression' : '';
     const delivery = String(c.deliveryDate || '');
@@ -933,6 +941,7 @@ export class Secretary implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
     this.existingPlyFileName = null;
+    this.plyScanLink = '';
     this.clearPlySelection();
   }
 
@@ -951,12 +960,34 @@ export class Secretary implements OnInit, OnDestroy {
       return;
     }
     this.selectedPlyFile = file;
+    this.plyScanLink = '';
+  }
+
+  onPlyLinkChange(): void {
+    if (this.plyScanLink.trim()) this.clearPlySelection();
   }
 
   clearPlySelection(): void {
     this.selectedPlyFile = null;
     const el = document.getElementById('secretaryPlyInput') as HTMLInputElement | null;
     if (el) el.value = '';
+  }
+
+  private isValidScanLink(raw: string): boolean {
+    const url = String(raw || '').trim();
+    if (!url || url.length > 2000) return false;
+    try {
+      const u = new URL(url);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  private attachScanAfterSave(caseId: string, ply: File | null, link: string) {
+    if (ply) return this.caseApi.uploadCasePly(caseId, ply);
+    if (link) return this.caseApi.setCasePlyLink(caseId, link);
+    return null;
   }
 
   save(): void {
@@ -983,6 +1014,10 @@ export class Secretary implements OnInit, OnDestroy {
     }
     if (!this.intakeType) {
       this.flash('اختَر امبرشن أو سكان');
+      return;
+    }
+    if (this.intakeType === 'scan' && this.plyScanLink.trim() && !this.isValidScanLink(this.plyScanLink)) {
+      this.flash('لينك السكان غير صالح — لازم يبدأ بـ http أو https');
       return;
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
@@ -1052,6 +1087,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+      const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
       const printDraft = {
         doctor: docName,
         patient: patientName,
@@ -1081,8 +1117,9 @@ export class Secretary implements OnInit, OnDestroy {
             const print$ = this.http.post(`${this.apiBase}/print/job`, {
               printData: buildPrintData(printDraft, caseNumber),
             });
-            if (ply && caseId) {
-              return this.caseApi.uploadCasePly(caseId, ply).pipe(
+            const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+            if (attach$) {
+              return attach$.pipe(
                 switchMap(() => print$),
                 catchError(() => print$)
               );
@@ -1108,6 +1145,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.editingId) {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+      const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
       this.caseApi
         .updateCase(this.editingId, buildCreateCasePayload(formPayload, plyPreserveMeta))
         .subscribe({
@@ -1118,16 +1156,17 @@ export class Secretary implements OnInit, OnDestroy {
             this.closeDialog();
             this.reloadCasesFromBackend();
           };
-          if (ply) {
-            this.caseApi.uploadCasePly(this.editingId!, ply).subscribe({
+          const attach$ = this.attachScanAfterSave(this.editingId!, ply, plyLink);
+          if (attach$) {
+            attach$.subscribe({
               next: () => done(),
               error: (err: unknown) => {
                 this.saveInProgress.set(false);
                 const detail = this.formatCaseApiError(err);
                 this.flash(
                   detail
-                    ? `تم حفظ بيانات الحالة، لكن فشل رفع PLY: ${detail}`
-                    : 'تم حفظ التعديلات لكن تعذر رفع/استبدال ملف PLY'
+                    ? `تم حفظ بيانات الحالة، لكن فشل حفظ السكان: ${detail}`
+                    : 'تم حفظ التعديلات لكن تعذر رفع/حفظ ملف أو لينك السكان'
                 );
                 this.closeDialog();
                 this.reloadCasesFromBackend();

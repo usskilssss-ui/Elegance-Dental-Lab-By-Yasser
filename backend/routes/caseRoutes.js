@@ -141,6 +141,12 @@ router.post(
   caseController.uploadCasePly
 );
 
+router.put(
+  '/:id/ply-link',
+  authorize('admin', 'secretary', 'doctor'),
+  caseController.setCasePlyLink
+);
+
 // Complete case — finishing staff / admin / secretary
 router.put(
   '/:id/complete',

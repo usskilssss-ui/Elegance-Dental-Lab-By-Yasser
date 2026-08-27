@@ -114,6 +114,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
   patientNameError = '';
   intakeType: 'impression' | 'scan' | '' = '';
   selectedPlyFile: File | null = null;
+  /** External scan URL (Drive / WeTransfer / …) as alternative to file upload */
+  plyScanLink = '';
   existingPlyFileName: string | null = null;
 
   /** Prompt doctor to create a PIN after first password login */
@@ -594,6 +596,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.intakeType = '';
     this.existingPlyFileName = null;
+    this.plyScanLink = '';
     this.clearPlySelection();
     this.dialogOpen.set(true);
   }
@@ -602,11 +605,13 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (this.intakeType === type) {
       this.intakeType = '';
       this.clearPlySelection();
+      this.plyScanLink = '';
       return;
     }
     this.intakeType = type;
     if (type === 'impression') {
       this.clearPlySelection();
+      this.plyScanLink = '';
       this.existingPlyFileName = null;
     }
   }
@@ -625,12 +630,36 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
     this.selectedPlyFile = file;
+    this.plyScanLink = '';
+  }
+
+  onPlyLinkChange(): void {
+    if (this.plyScanLink.trim()) {
+      this.clearPlySelection();
+    }
   }
 
   clearPlySelection(): void {
     this.selectedPlyFile = null;
     const el = document.getElementById('doctorPlyInput') as HTMLInputElement | null;
     if (el) el.value = '';
+  }
+
+  private isValidScanLink(raw: string): boolean {
+    const url = String(raw || '').trim();
+    if (!url || url.length > 2000) return false;
+    try {
+      const u = new URL(url);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  private attachScanAfterSave(caseId: string, ply: File | null, link: string) {
+    if (ply) return this.caseApi.uploadCasePly(caseId, ply);
+    if (link) return this.caseApi.setCasePlyLink(caseId, link);
+    return null;
   }
 
   private maybeOfferPinSetup(): void {
@@ -721,6 +750,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.intakeType =
       c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
     this.existingPlyFileName = c.plyFileName || (c.plyScanUrl ? 'scan' : null);
+    this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))
+      ? String(c.plyScanUrl)
+      : '';
     this.clearPlySelection();
     this.restoreWorkTypes(c.workType, caseType, c.quantity);
     this.toothAssignments = Array.isArray(c.teeth) ? [...c.teeth] : [];
@@ -777,6 +809,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
     this.editingId = null;
+    this.plyScanLink = '';
+    this.existingPlyFileName = null;
     this.clearPlySelection();
   }
 
@@ -929,9 +963,18 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.flash('اختَر امبرشن أو سكان');
       return;
     }
-    if (this.intakeType === 'scan' && !this.selectedPlyFile && !this.existingPlyFileName) {
-      this.flash('رفع ملف السكان إجباري عند اختيار سكان');
-      return;
+    if (this.intakeType === 'scan') {
+      const link = this.plyScanLink.trim();
+      const hasFile = !!this.selectedPlyFile;
+      const hasExisting = !!this.existingPlyFileName;
+      if (!hasFile && !link && !hasExisting) {
+        this.flash('ارفع ملف السكان أو الصق لينك السكان');
+        return;
+      }
+      if (link && !this.isValidScanLink(link)) {
+        this.flash('لينك السكان غير صالح — لازم يبدأ بـ http أو https');
+        return;
+      }
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
       this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
@@ -951,6 +994,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const isEdit = this.dialogMode() === 'edit' && !!this.editingId;
     const editId = this.editingId;
     const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+    const plyLink =
+      this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
     this.closeDialog();
     this.saveInProgress.set(true);
 
@@ -985,12 +1030,13 @@ export class DoctorComponent implements OnInit, OnDestroy {
             this.flash('✅ تم تحديث الريكويست');
             this.loadCases();
           };
-          if (ply) {
-            this.caseApi.uploadCasePly(editId, ply).subscribe({
+          const attach$ = this.attachScanAfterSave(editId, ply, plyLink);
+          if (attach$) {
+            attach$.subscribe({
               next: () => done(),
               error: () => {
                 this.saveInProgress.set(false);
-                this.flash('تم التحديث لكن تعذر رفع ملف السكان');
+                this.flash('تم التحديث لكن تعذر حفظ ملف/لينك السكان');
                 this.loadCases({ silent: true });
               },
             });
@@ -1016,11 +1062,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
           const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
-          if (ply && caseId) {
-            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+          const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+          if (attach$) {
+            return attach$.pipe(
               switchMap(() => print$),
               catchError(() => {
-                this.flash('تم حفظ الحالة لكن تعذر رفع ملف السكان — أعد الرفع من التعديل');
+                this.flash('تم حفظ الحالة لكن تعذر حفظ ملف/لينك السكان — أعد المحاولة من التعديل');
                 return print$;
               })
             );
