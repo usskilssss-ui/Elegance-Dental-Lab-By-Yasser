@@ -494,9 +494,25 @@
   width: 8px; height: 8px; border-radius: 50%;
 }
 .ply-download-btn {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-light); padding: 4px 10px; border-radius: 8px; text-decoration: none; transition: .2s; border: 1px solid var(--accent-green);
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-light); padding: 4px 10px; border-radius: 8px; text-decoration: none; transition: .2s; border: 1px solid var(--accent-green); max-width: 100%;
+}
+.ply-download-btn .ply-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
 }
 .ply-download-btn:hover { background: var(--badge-green-bg); }
+.spec-pill.intake-pill {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #99f6e4;
+}
+.spec-pill.intake-pill.impression {
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fdba74;
+}
 
 /* 4. Dates Column */
 .col-dates {

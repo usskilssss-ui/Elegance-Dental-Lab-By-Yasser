@@ -63,7 +63,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   showFinishConfirm = false;
   toastMsg          = '';
   toastVisible      = false;
-  activeFilter: CaseStatus | 'all' = 'pending';
+  activeFilter: CaseStatus | 'all' = 'in-progress';
   searchTerm        = '';
 
   /* ── Notifications ── */
@@ -247,9 +247,15 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   /* ════════ COMPUTED ════════ */
 
-  /** الحالات المرئية للديزاينر - تستثني الخارجة (exited) */
+  /** الحالات المرئية للديزاينر — تستثني الفينيش/المنتهية/الخارجة */
   get designerVisibleCases(): DentalCase[] {
-    return this.cases.filter(c => c.status !== 'exited');
+    return this.cases.filter((c) => {
+      const stage = String(c.currentStage || '').toLowerCase();
+      if (c.status === 'exited' || stage === 'exited') return false;
+      if (c.status === 'finished' || stage === 'completed') return false;
+      if (c.status === 'ready-for-finishing' || stage === 'finishing') return false;
+      return true;
+    });
   }
 
   get filteredCases(): DentalCase[] {

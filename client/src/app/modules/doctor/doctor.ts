@@ -1019,7 +1019,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
           if (ply && caseId) {
             return this.caseApi.uploadCasePly(caseId, ply).pipe(
               switchMap(() => print$),
-              catchError(() => print$)
+              catchError(() => {
+                this.flash('تم حفظ الحالة لكن تعذر رفع ملف السكان — أعد الرفع من التعديل');
+                return print$;
+              })
             );
           }
           return print$;
