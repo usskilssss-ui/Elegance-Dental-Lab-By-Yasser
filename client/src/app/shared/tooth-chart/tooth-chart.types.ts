@@ -8,7 +8,7 @@ export type ToothFdi =
 
 /** One selected tooth: material + bridge group (same groupId = connected). */
 export interface ToothAssignment {
-  fdi: ToothFdi;
+  fdi: string;
   /** Display label e.g. Zircon / Emax */
   material: string;
   /** Teeth sharing groupId are a bridge / connected unit */
