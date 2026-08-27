@@ -878,9 +878,9 @@ async function buildPrintHtml(c) {
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    /* بدون flex-grow عشان مفيش فراغ بين العدد والمخطط */
+    /* نزل مخطط الأسنان فقط شوية تحت تفاصيل العمل */
     .teeth-section {
-      margin-top: 6px;
+      margin-top: 10mm;
       margin-bottom: 0;
     }
     .teeth-title {
