@@ -1851,6 +1851,11 @@ export class Admin implements OnInit, OnDestroy {
     if (tab === 'lab-ledger') this.syncFinancePanelPeriod();
   }
 
+  onFinancePanelYearChange(year: number | string): void {
+    this.financePanelYear = Number(year) || new Date().getFullYear();
+    this.onFinancialYearChange(String(this.financePanelYear));
+  }
+
   waEnabled = false;
   waProvider: 'ultramsg' | 'meta' | 'waweb' = 'waweb';
   waInstanceId = '';
