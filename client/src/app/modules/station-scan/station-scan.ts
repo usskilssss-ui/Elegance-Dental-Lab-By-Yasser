@@ -7,6 +7,8 @@ import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
+import type { TranslationKey } from '../../core/i18n/translations';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { DentalCase } from '../../core/services/shared-cases.service';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
@@ -24,34 +26,34 @@ type ScanFeedback = {
 };
 
 const ROLE_META: Partial<
-  Record<AppRole, { station: ScanStation; title: string; subtitle: string }>
+  Record<AppRole, { station: ScanStation; titleKey: TranslationKey; subtitleKey: TranslationKey }>
 > = {
   secretary: {
     station: 'reception',
-    title: 'مسح الريسبشن',
-    subtitle: 'من أي مرحلة → منتهية',
+    titleKey: 'scan.title.reception',
+    subtitleKey: 'scan.subtitle.toDone',
   },
   scanner1: {
     station: 'reception',
-    title: 'سكان 1 — الريسبشن',
-    subtitle: 'من أي مرحلة → منتهية',
+    titleKey: 'scan.title.scanner1',
+    subtitleKey: 'scan.subtitle.toDone',
   },
   scanner2: {
     station: 'design',
-    title: 'سكان 2 — الديزاين',
-    subtitle: 'من أي مرحلة → تحت الديزاين',
+    titleKey: 'scan.title.scanner2',
+    subtitleKey: 'scan.subtitle.toDesign',
   },
   scanner3: {
     station: 'finishing',
-    title: 'سكان 3 — الفينيش',
-    subtitle: 'من أي مرحلة → تحت الفينيش',
+    titleKey: 'scan.title.scanner3',
+    subtitleKey: 'scan.subtitle.toFinishing',
   },
 };
 
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, AppOverflowMenuComponent],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, AppOverflowMenuComponent, TPipe],
   templateUrl: './station-scan.html',
   styleUrls: ['../secretary/secretary.css', './station-scan.css'],
 })
@@ -65,8 +67,8 @@ export class StationScanComponent implements OnInit, OnDestroy {
   @ViewChild('scanInput') scanInput?: ElementRef<HTMLInputElement>;
 
   readonly station = signal<ScanStation>('design');
-  readonly title = signal('مسح الحالات');
-  readonly subtitle = signal('');
+  private readonly titleKey = signal<TranslationKey>('scan.title.default');
+  private readonly subtitleKey = signal<TranslationKey | ''>('');
   readonly accountName = signal('');
   readonly busy = signal(false);
   readonly feedback = signal<ScanFeedback | null>(null);
@@ -77,6 +79,12 @@ export class StationScanComponent implements OnInit, OnDestroy {
   readonly queueCases = signal<DentalCase[]>([]);
   readonly queueLoading = signal(false);
   readonly queueSearch = signal('');
+
+  readonly title = computed(() => this.lang.t(this.titleKey()));
+  readonly subtitle = computed(() => {
+    const key = this.subtitleKey();
+    return key ? this.lang.t(key) : '';
+  });
 
   readonly filteredQueueCases = computed(() => {
     const q = this.normalizeSearch(this.queueSearch());
@@ -106,8 +114,8 @@ export class StationScanComponent implements OnInit, OnDestroy {
     if (!meta) {
       if (role === 'admin' || role === 'designer' || role === 'finisher') {
         this.unauthorized.set(false);
-        this.title.set('مسح تجريبي');
-        this.subtitle.set('سجّل دخول بحساب سكرتير أو سكان 2 / 3 للاستخدام اليومي');
+        this.titleKey.set('scan.title.demo');
+        this.subtitleKey.set('scan.subtitle.demo');
         this.station.set(role === 'finisher' ? 'finishing' : 'design');
       } else {
         this.unauthorized.set(true);
@@ -115,8 +123,8 @@ export class StationScanComponent implements OnInit, OnDestroy {
     } else {
       this.unauthorized.set(false);
       this.station.set(meta.station);
-      this.title.set(meta.title);
-      this.subtitle.set(meta.subtitle);
+      this.titleKey.set(meta.titleKey);
+      this.subtitleKey.set(meta.subtitleKey);
     }
 
     if (!this.unauthorized()) {
@@ -173,14 +181,14 @@ export class StationScanComponent implements OnInit, OnDestroy {
 
   queueTitle(): string {
     const s = this.station();
-    if (s === 'design') return 'حالات تحت الديزاين (بعد المسح)';
-    if (s === 'finishing') return 'حالات تحت الفينيش (بعد المسح)';
-    return 'حالات منتهية (بعد المسح)';
+    if (s === 'design') return this.lang.t('scan.queue.design');
+    if (s === 'finishing') return this.lang.t('scan.queue.finishing');
+    return this.lang.t('scan.queue.done');
   }
 
   intakeLabel(c: DentalCase): string {
-    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
-    if (c.intakeType === 'impression') return 'امبرشن';
+    if (c.intakeType === 'scan' || c.plyScanUrl) return this.lang.t('intake.scan');
+    if (c.intakeType === 'impression') return this.lang.t('intake.impression');
     return '';
   }
 
@@ -271,7 +279,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
         const c = res?.case || {};
         const fb: ScanFeedback = {
           ok: !!res?.success,
-          title: res?.message || 'تم',
+          title: res?.message || this.lang.t('scan.ok'),
           detail: c.patientName
             ? `${c.caseNumber || code} — ${c.patientName}`
             : String(c.caseNumber || code),
@@ -303,7 +311,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
         this.busy.set(false);
         const fb: ScanFeedback = {
           ok: false,
-          title: err?.error?.message || 'فشل المسح',
+          title: err?.error?.message || this.lang.t('scan.fail'),
           detail: code,
           caseNumber: err?.error?.case?.caseNumber,
           patientName: err?.error?.case?.patientName,

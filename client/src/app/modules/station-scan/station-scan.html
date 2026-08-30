@@ -4,14 +4,14 @@
       <app-overflow-menu (click)="$event.stopPropagation()"></app-overflow-menu>
       <div class="scan-brand-text">
         <strong>Elegance</strong>
-        <span>Precision Labs</span>
+        <span>{{ 'brand.sub' | t }}</span>
         @if (accountName()) {
           <span class="scan-account">{{ accountName() }}</span>
         }
       </div>
     </div>
     <div class="scan-top-actions">
-      <button type="button" class="icon-btn scan-theme-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme(); $event.stopPropagation()" title="تغيير المظهر">
+      <button type="button" class="icon-btn scan-theme-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme(); $event.stopPropagation()" [attr.title]="'common.theme' | t">
         @if (!themeService.isDarkMode()) {
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -30,27 +30,27 @@
           </svg>
         }
       </button>
-      <button type="button" class="scan-link" (click)="logout(); $event.stopPropagation()">خروج</button>
+      <button type="button" class="scan-link" (click)="logout(); $event.stopPropagation()">{{ 'scan.exit' | t }}</button>
     </div>
   </header>
 
   @if (showReceptionHub()) {
-    <nav class="reception-hub" aria-label="أقسام الريسبشن" (click)="$event.stopPropagation()">
-      <a class="hub-link" routerLink="/secretary/dashboard">الحالات</a>
-      <a class="hub-link" routerLink="/entry/dashboard">الطباعة</a>
-      <a class="hub-link active" routerLink="/scan">المسح</a>
+    <nav class="reception-hub" [attr.aria-label]="'hub.aria' | t" (click)="$event.stopPropagation()">
+      <a class="hub-link" routerLink="/secretary/dashboard">{{ 'hub.cases' | t }}</a>
+      <a class="hub-link" routerLink="/entry/dashboard">{{ 'hub.print' | t }}</a>
+      <a class="hub-link active" routerLink="/scan">{{ 'hub.scan' | t }}</a>
     </nav>
   }
 
   <main class="scan-main">
     @if (unauthorized()) {
-      <h1>غير مصرح</h1>
-      <p class="scan-sub">ادخل بحساب سكان 1 أو سكان 2 أو سكان 3</p>
+      <h1>{{ 'scan.unauthorized' | t }}</h1>
+      <p class="scan-sub">{{ 'scan.unauthorizedHint' | t }}</p>
     } @else {
-      <p class="scan-kicker">محطة المسح</p>
+      <p class="scan-kicker">{{ 'scan.kicker' | t }}</p>
       <h1>{{ title() }}</h1>
       <p class="scan-sub">{{ subtitle() }}</p>
-      <p class="scan-hint">امسح الباركود على الورقة — النقل حسب حساب الدخول. خلّي لغة الكيبورد English وقت المسح.</p>
+      <p class="scan-hint">{{ 'scan.hint' | t }}</p>
 
       <form class="scan-form" (submit)="onScanSubmit($event)">
         <input
@@ -68,11 +68,11 @@
           [(ngModel)]="scanBuffer"
           [disabled]="busy()"
           (keydown)="onScanKeydown()"
-          placeholder="Ready to scan…"
-          aria-label="حقل مسح الباركود"
+          [placeholder]="'scan.placeholder' | t"
+          [attr.aria-label]="'scan.inputAria' | t"
         />
         <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
-          {{ busy() ? 'جاري…' : 'تنفيذ' }}
+          {{ busy() ? ('scan.busy' | t) : ('scan.execute' | t) }}
         </button>
       </form>
 
@@ -81,21 +81,21 @@
           <div class="scan-result-title">{{ fb.title }}</div>
           <div class="scan-result-detail">{{ fb.detail }}</div>
           @if (fb.stage) {
-            <div class="scan-result-stage">المرحلة: {{ fb.stage }}</div>
+            <div class="scan-result-stage">{{ 'scan.stage' | t }}: {{ fb.stage }}</div>
           }
         </div>
       } @else {
         <div class="scan-idle">
           <div class="scan-pulse" aria-hidden="true"></div>
-          <span>في انتظار المسح…</span>
+          <span>{{ 'scan.waiting' | t }}</span>
         </div>
       }
 
-      <section class="scan-queue" aria-label="قائمة حالات المحطة" (click)="$event.stopPropagation()">
+      <section class="scan-queue" [attr.aria-label]="'scan.queueAria' | t" (click)="$event.stopPropagation()">
         <div class="scan-queue-head">
           <h2>{{ queueTitle() }}</h2>
           <button type="button" class="scan-queue-refresh" (click)="reloadQueue()" [disabled]="queueLoading()">
-            {{ queueLoading() ? 'جاري…' : 'تحديث' }}
+            {{ queueLoading() ? ('scan.busy' | t) : ('common.refresh' | t) }}
           </button>
         </div>
 
@@ -110,23 +110,23 @@
             [ngModel]="queueSearch()"
             (ngModelChange)="onQueueSearch($event)"
             (click)="$event.stopPropagation()"
-            placeholder="ابحث باسم الدكتور أو المريض…"
-            aria-label="بحث باسم الدكتور أو المريض"
+            [placeholder]="'scan.searchPlaceholder' | t"
+            [attr.aria-label]="'scan.searchPlaceholder' | t"
             autocomplete="off"
           />
           @if (queueSearch().trim()) {
-            <button type="button" class="scan-search-clear" (click)="clearQueueSearch(); $event.stopPropagation()" title="مسح البحث">
-              مسح
+            <button type="button" class="scan-search-clear" (click)="clearQueueSearch(); $event.stopPropagation()" [attr.title]="'scan.clearSearch' | t">
+              {{ 'scan.clearSearch' | t }}
             </button>
           }
         </div>
 
         @if (queueLoading() && queueCases().length === 0) {
-          <p class="scan-queue-empty">جاري تحميل الحالات…</p>
+          <p class="scan-queue-empty">{{ 'scan.loadingQueue' | t }}</p>
         } @else if (queueCases().length === 0) {
-          <p class="scan-queue-empty">لا توجد حالات في هذه المرحلة بعد — امسح باركود عشان تظهر هنا.</p>
+          <p class="scan-queue-empty">{{ 'scan.emptyQueue' | t }}</p>
         } @else if (filteredQueueCases().length === 0) {
-          <p class="scan-queue-empty">لا نتائج لـ «{{ queueSearch() }}»</p>
+          <p class="scan-queue-empty">{{ 'scan.noResults' | t }} «{{ queueSearch() }}»</p>
         } @else {
           <div class="scan-queue-list">
             @for (c of filteredQueueCases(); track c.id) {
@@ -160,10 +160,10 @@
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                           </svg>
-                          تحميل السكان
+                          {{ 'scan.download' | t }}
                         </a>
                       } @else if (c.intakeType === 'scan') {
-                        <span class="scan-badge scan-badge--missing">لا يوجد ملف للتحميل</span>
+                        <span class="scan-badge scan-badge--missing">{{ 'scan.noFile' | t }}</span>
                       }
                     </div>
                   </div>
@@ -171,23 +171,23 @@
                     <div class="work-type">{{ c.workType }}</div>
                     <div class="case-spec">
                       @if (c.color) {
-                        <span class="spec-item">Color: {{ c.color }}</span>
+                        <span class="spec-item">{{ 'scan.color' | t }}: {{ c.color }}</span>
                       }
                       @if (c.branch || c.clinic) {
-                        <span class="spec-item">فرع: {{ c.branch || c.clinic }}</span>
+                        <span class="spec-item">{{ 'scan.branch' | t }}: {{ c.branch || c.clinic }}</span>
                       }
-                      <span class="spec-item">Qty: {{ c.quantity }}</span>
+                      <span class="spec-item">{{ 'scan.qty' | t }}: {{ c.quantity }}</span>
                     </div>
                     @if (cardNotes(c); as notes) {
-                      <div class="scan-case-notes" dir="rtl">
-                        <span class="scan-case-notes-lbl">ملاحظات</span>
+                      <div class="scan-case-notes" [attr.dir]="lang.dir()">
+                        <span class="scan-case-notes-lbl">{{ 'scan.notes' | t }}</span>
                         <span class="scan-case-notes-txt">{{ notes }}</span>
                       </div>
                     }
                   </div>
                   <div class="case-meta">
                     <div class="date-block">
-                      <span class="date-label">تاريخ الاستلام</span>
+                      <span class="date-label">{{ 'date.received' | t }}</span>
                       <span class="date-value">{{ c.receivedDate }}</span>
                     </div>
                   </div>
@@ -199,8 +199,8 @@
       </section>
 
       @if (lastScans().length > 0) {
-        <section class="scan-history" aria-label="آخر عمليات المسح">
-          <h2>آخر المسحات</h2>
+        <section class="scan-history" [attr.aria-label]="'scan.historyAria' | t">
+          <h2>{{ 'scan.history' | t }}</h2>
           <ul>
             @for (item of lastScans(); track $index) {
               <li [class.ok]="item.ok" [class.err]="!item.ok">

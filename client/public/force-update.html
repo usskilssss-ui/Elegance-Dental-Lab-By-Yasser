@@ -43,9 +43,10 @@
   <body>
     <div class="box">
       <h1>جاري تحديث التطبيق…</h1>
-      <p id="status">بنمسح الكاش القديم ونحمّل النسخة الجديدة.</p>
+      <p id="status">بنمسح الكاش القديم ونحمّل النسخة الجديدة.<br /><span style="opacity:.75;font-size:.9em">Clearing cache &amp; loading the latest version…</span></p>
     </div>
     <script>
+      // bump: 2026-08-30-i18n-full
       (async function () {
         const status = document.getElementById('status');
         try {
@@ -60,10 +61,10 @@
           try {
             localStorage.removeItem('ngsw:debug');
           } catch (_) {}
-          status.textContent = 'تم المسح — هتفتح النسخة الجديدة الآن…';
+          status.innerHTML = 'تم المسح — هتفتح النسخة الجديدة الآن…<br /><span style="opacity:.75;font-size:.9em">Done — opening the new version…</span>';
           status.className = 'ok';
         } catch (e) {
-          status.textContent = 'حصل خطأ بسيط — هنعمل إعادة تحميل برضه.';
+          status.innerHTML = 'حصل خطأ بسيط — هنعمل إعادة تحميل برضه.<br /><span style="opacity:.75;font-size:.9em">Minor error — reloading anyway.</span>';
         }
         setTimeout(function () {
           location.replace('/?updated=' + Date.now());

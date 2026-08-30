@@ -15,6 +15,7 @@ import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { environment } from '../../../environments/environment';
 import {
   LabConfigService,
@@ -144,7 +145,7 @@ export interface AiChatMessage {
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, RouterModule, FinancePanel, AppOverflowMenuComponent],
+  imports: [CommonModule, FormsModule, RouterModule, FinancePanel, AppOverflowMenuComponent, TPipe],
   templateUrl: './admin.html',
   styleUrl: './admin.css',
   standalone: true

@@ -29,13 +29,13 @@
 
     <div class="topbar-right notifications-anchor">
       @if (view === 'detail') {
-        <button type="button" class="icon-btn" aria-label="رجوع" (click)="handleNavAction()" title="رجوع" style="margin-left: 8px;">
+        <button type="button" class="icon-btn" [attr.aria-label]="'common.back' | t" (click)="handleNavAction()" [attr.title]="'common.back' | t" style="margin-left: 8px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </button>
       }
-      <button type="button" class="icon-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme()" title="تغيير المظهر">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t">
         <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
@@ -51,12 +51,12 @@
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
         </svg>
       </button>
-      <button type="button" class="icon-btn" aria-label="تسجيل الخروج" (click)="logout()" title="تسجيل الخروج">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.logout' | t" (click)="logout()" [attr.title]="'common.logout' | t">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
         </svg>
       </button>
-      <button type="button" class="icon-btn" aria-label="الإشعارات" (click)="toggleNotifications($event)">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.notifications' | t" (click)="toggleNotifications($event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
           <path stroke-linecap="round" d="M12 21a2 2 0 0 0 2-2H10a2 2 0 0 0 2 2z" />
@@ -64,8 +64,8 @@
       </button>
       @if (notificationsOpen()) {
         <div class="notifications-panel" (click)="$event.stopPropagation()">
-          <p class="notifications-title">الإشعارات</p>
-          <p class="notifications-empty">لا توجد إشعارات جديدة</p>
+          <p class="notifications-title">{{ 'common.notifications' | t }}</p>
+          <p class="notifications-empty">{{ 'common.notificationsEmpty' | t }}</p>
         </div>
       }
     </div>
@@ -80,10 +80,10 @@
   <!-- Header -->
   <div class="list-header">
     <div>
-      <h1 class="list-title">قائمة الحالات</h1>
-      <p class="list-subtitle">حالات تحت الديزاين (بعد سكان الديزاين)</p>
+      <h1 class="list-title">{{ 'design.listTitle' | t }}</h1>
+      <p class="list-subtitle">{{ 'design.listSubtitle' | t }}</p>
     </div>
-    <div class="list-total-badge">{{ filteredCases.length }} حالة</div>
+    <div class="list-total-badge">{{ filteredCases.length }} {{ 'common.caseWord' | t }}</div>
   </div>
 
   <!-- Search bar -->
@@ -96,15 +96,15 @@
       <input
         class="search-input"
         type="text"
-        placeholder="ابحث عن حالة أو مريض..."
+        [placeholder]="'design.searchPlaceholder' | t"
         [(ngModel)]="searchTerm"
-        dir="rtl"
+        [attr.dir]="lang.dir()"
       />
       <button
         *ngIf="searchTerm"
         class="search-clear-btn"
         (click)="clearSearch()"
-        aria-label="مسح البحث"
+        [attr.aria-label]="'design.clearSearch' | t"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <line x1="18" y1="6" x2="6" y2="18"/>
@@ -112,7 +112,7 @@
         </svg>
       </button>
     </div>
-    <span class="search-results-count" *ngIf="searchTerm">{{ filteredCases.length }} نتيجة</span>
+    <span class="search-results-count" *ngIf="searchTerm">{{ filteredCases.length }} {{ 'common.resultWord' | t }}</span>
   </div>
 
   <!-- Cases list -->
@@ -144,7 +144,7 @@
             <div class="doctor-info">
               <span class="doctor-name">{{ cleanDoctorName(c.doctor) }}</span>
               <span *ngIf="c.requesterType === 'student'" class="requester-badge requester-badge--student">
-                طالب
+                {{ 'common.student' | t }}
               </span>
             </div>
           </div>
@@ -161,21 +161,21 @@
         <div class="card-col col-work">
           <div class="work-type-tag">{{ c.workType }}</div>
           <div class="work-specs">
-            <span class="spec-pill" title="اللون" *ngIf="c.color">
+            <span class="spec-pill" [attr.title]="'common.color' | t" *ngIf="c.color">
               <span class="spec-dot" [style.background]="c.color === 'A1' || c.color === 'B1' ? '#fde047' : '#e2e8f0'"></span>
               {{ c.color }}
             </span>
-            <span class="spec-pill" title="العدد" *ngIf="c.quantity">
+            <span class="spec-pill" [attr.title]="'common.qty' | t" *ngIf="c.quantity">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-              العدد: {{ c.quantity }}
+              {{ 'common.qtyColon' | t }} {{ c.quantity }}
             </span>
-            <span class="spec-pill" *ngIf="c.branch || c.clinic">فرع: {{ c.branch || c.clinic }}</span>
-            <span class="spec-pill intake-pill" *ngIf="c.intakeType === 'scan' || c.plyScanUrl">سكان</span>
-            <span class="spec-pill intake-pill impression" *ngIf="c.intakeType === 'impression' && !c.plyScanUrl">امبرشن</span>
+            <span class="spec-pill" *ngIf="c.branch || c.clinic">{{ 'common.branchColon' | t }} {{ c.branch || c.clinic }}</span>
+            <span class="spec-pill intake-pill" *ngIf="c.intakeType === 'scan' || c.plyScanUrl">{{ 'common.scan' | t }}</span>
+            <span class="spec-pill intake-pill impression" *ngIf="c.intakeType === 'impression' && !c.plyScanUrl">{{ 'common.impression' | t }}</span>
           </div>
-          <a *ngIf="c.plyScanUrl" class="ply-download-btn scan-badge" [href]="c.plyScanUrl" [attr.download]="c.plyFileName || 'scan'" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()" title="تحميل ملف السكان">
+          <a *ngIf="c.plyScanUrl" class="ply-download-btn scan-badge" [href]="c.plyScanUrl" [attr.download]="c.plyFileName || 'scan'" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()" [attr.title]="'scan.download' | t">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span class="ply-text">تحميل السكان{{ c.plyFileName ? ' — ' + c.plyFileName : '' }}</span>
+            <span class="ply-text">{{ 'scan.download' | t }}{{ c.plyFileName ? ' — ' + c.plyFileName : '' }}</span>
           </a>
         </div>
 
@@ -185,11 +185,11 @@
         <!-- Col 4: Dates -->
         <div class="card-col col-dates">
           <div class="date-item">
-            <span class="date-lbl">الاستلام</span>
+            <span class="date-lbl">{{ 'design.received' | t }}</span>
             <span class="date-val">{{ formatDateValue(c.receivedDate).date }}</span>
           </div>
           <div class="date-item" *ngIf="c.deliveryDate">
-            <span class="date-lbl">التسليم</span>
+            <span class="date-lbl">{{ 'design.delivery' | t }}</span>
             <span class="date-val text-blue">{{ formatDateValue(c.deliveryDate).date }}</span>
           </div>
         </div>
@@ -200,7 +200,7 @@
                   class="btn-status-toggle" 
                   [class.is-ready]="c.status === 'finished'"
                   (click)="updateCaseStatusFromCard(c, 'finished')"
-                  title="تحديد كـ منتهية">
+                  [attr.title]="'design.finishTitle' | t">
             <div class="toggle-icon">
               <svg *ngIf="c.status !== 'finished'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12l5 5L20 7"></path>
@@ -209,7 +209,7 @@
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
               </svg>
             </div>
-            <span>إنهاء</span>
+            <span>{{ 'design.finish' | t }}</span>
           </button>
         </div>
       </div>
@@ -220,7 +220,7 @@
       <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <p>لا توجد حالات في هذا التصنيف</p>
+      <p>{{ 'design.empty' | t }}</p>
     </div>
   </div>
 </div>
@@ -238,19 +238,19 @@
         <span class="badge badge-emergency" *ngIf="selectedCase.priority === 'emergency'">
           <span class="pulse-dot"></span> Emergency Priority
         </span>
-        <span class="badge badge-normal" *ngIf="selectedCase.priority === 'normal'">عادي</span>
-        <span class="badge badge-low"    *ngIf="selectedCase.priority === 'low'">منخفض</span>
+        <span class="badge badge-normal" *ngIf="selectedCase.priority === 'normal'">{{ 'design.priority.normal' | t }}</span>
+        <span class="badge badge-low"    *ngIf="selectedCase.priority === 'low'">{{ 'design.priority.low' | t }}</span>
         <span class="badge badge-requester" [class.badge-requester-student]="selectedCase.requesterType === 'student'">
-          {{ selectedCase.requesterType === 'student' ? 'حالة طالب' : 'حالة دكتور' }}
+          {{ selectedCase.requesterType === 'student' ? ('design.caseStudent' | t) : ('design.caseDoctor' | t) }}
         </span>
         <span class="badge badge-case">Case #{{ selectedCase.caseNumber }}</span>
       </div>
-      <h1 class="page-title">تفاصيل الحالة التصميمية</h1>
-      <p class="page-subtitle">عرض شامل لبيانات المريض وتعليمات الطبيب</p>
+      <h1 class="page-title">{{ 'design.detailTitle' | t }}</h1>
+      <p class="page-subtitle">{{ 'design.detailSubtitle' | t }}</p>
 
       <div class="active-status-pill" [ngClass]="selectedCase.status">
         <span class="pill-dot" [ngClass]="selectedCase.status"></span>
-        الحالة: {{ statusLabel(selectedCase.status) }}
+        {{ 'design.statusPrefix' | t }} {{ statusLabel(selectedCase.status) }}
       </div>
     </div>
   </header>
@@ -270,7 +270,7 @@
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          حالة العمل الحالية
+          {{ 'design.workStage' | t }}
         </div>
         <div class="status-list">
           <button
@@ -300,13 +300,13 @@
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
-          <span>ملاحظات التصميم</span>
+          <span>{{ 'design.notes' | t }}</span>
         </label>
         <textarea
           class="notes-textarea"
           [(ngModel)]="selectedCase.designNotes"
           (ngModelChange)="onNotesChange()"
-          placeholder="اكتب أي ملاحظات تقنية أو تعديلات..."
+          [placeholder]="'design.notesPlaceholder' | t"
           rows="5"
           (blur)="saveNotesOnBlur()"
           maxlength="500"
@@ -327,8 +327,8 @@
           </svg>
         </div>
         <div>
-          <p class="upload-title">رفع صور التصميم</p>
-          <p class="upload-hint">PNG, JPG, JPEG (Max 10MB لكل صورة)</p>
+          <p class="upload-title">{{ 'design.uploadImages' | t }}</p>
+          <p class="upload-hint">{{ 'design.uploadHint' | t }}</p>
         </div>
       </div>
 
@@ -339,19 +339,19 @@
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
             <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
           </svg>
-          تحديث بيانات الحالة
+          {{ 'design.updateCase' | t }}
         </ng-container>
         <ng-container *ngIf="isSaving">
           <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
           </svg>
-          جارٍ الحفظ...
+          {{ 'design.saving' | t }}
         </ng-container>
         <ng-container *ngIf="saveSuccess && !isSaving">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
-          تم الحفظ!
+          {{ 'design.saved' | t }}
         </ng-container>
       </button>
 
@@ -367,31 +367,31 @@
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
             <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
-          بيانات الحالة الأساسية
+          {{ 'design.basicInfo' | t }}
         </div>
         <div class="info-grid">
           <div class="info-field">
-            <span class="info-label">المريض</span>
+            <span class="info-label">{{ 'design.patient' | t }}</span>
             <span class="info-value">{{ selectedCase.patient }}</span>
           </div>
           <div class="info-field">
-            <span class="info-label">تاريخ الاستلام</span>
+            <span class="info-label">{{ 'design.receivedDate' | t }}</span>
             <span class="info-value">{{ selectedCase.receivedDate }}</span>
           </div>
           <div class="info-field">
-            <span class="info-label">الطبيب المعالج</span>
+            <span class="info-label">{{ 'design.treatingDoctor' | t }}</span>
             <span class="info-value">{{ selectedCase.doctor }}</span>
           </div>
           <div class="info-field">
-            <span class="info-label">نوع الحالة</span>
-            <span class="info-value">{{ selectedCase.requesterType === 'student' ? 'طالب' : 'دكتور' }}</span>
+            <span class="info-label">{{ 'design.caseKind' | t }}</span>
+            <span class="info-value">{{ selectedCase.requesterType === 'student' ? ('common.student' | t) : ('common.doctor' | t) }}</span>
           </div>
           <div class="info-field">
-            <span class="info-label">موعد التسليم المتوقع</span>
+            <span class="info-label">{{ 'design.expectedDelivery' | t }}</span>
             <span class="info-value delivery-date">{{ selectedCase.deliveryDate }}</span>
           </div>
           <div class="info-field full-width">
-            <span class="info-label">العيادة</span>
+            <span class="info-label">{{ 'design.clinic' | t }}</span>
             <span class="info-value">{{ selectedCase.clinic }}</span>
           </div>
         </div>
@@ -400,7 +400,7 @@
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
             <circle cx="12" cy="16" r="0.5" fill="currentColor"/>
           </svg>
-          تم الإدخال بواسطة: {{ selectedCase.enteredBy }}
+          {{ 'design.enteredBy' | t }} {{ selectedCase.enteredBy }}
         </div>
       </div>
 
@@ -411,23 +411,23 @@
             <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
             <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
           </svg>
-          تفاصيل العمل
+          {{ 'design.workDetails' | t }}
         </div>
         <div class="work-details-grid">
           <div class="work-detail-item">
-            <span class="work-label">نوع العمل</span>
+            <span class="work-label">{{ 'design.workType' | t }}</span>
             <span class="work-value">{{ selectedCase.workType }}</span>
           </div>
           <div class="work-detail-item">
-            <span class="work-label">اللون</span>
+            <span class="work-label">{{ 'common.color' | t }}</span>
             <span class="work-value color-tag">{{ selectedCase.color }}</span>
           </div>
           <div class="work-detail-item">
-            <span class="work-label">الحجم</span>
+            <span class="work-label">{{ 'design.size' | t }}</span>
             <span class="work-value">{{ selectedCase.size }}</span>
           </div>
           <div class="work-detail-item">
-            <span class="work-label">العدد</span>
+            <span class="work-label">{{ 'common.qty' | t }}</span>
             <span class="work-value">{{ selectedCase.quantity }}</span>
           </div>
         </div>
@@ -439,7 +439,7 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
           </svg>
-          مسح ثلاثي الأبعاد (PLY)
+          {{ 'design.plyTitle' | t }}
         </div>
         <div class="ply-scan-body">
           <p class="ply-scan-name" *ngIf="selectedCase.plyFileName">
@@ -450,13 +450,13 @@
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
               </svg>
-              معاينة
+              {{ 'common.preview' | t }}
             </button>
             <a class="btn-ply-download" [href]="selectedCase.plyScanUrl" target="_blank" rel="noopener noreferrer" download>
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              فتح / تحميل
+              {{ 'common.openDownload' | t }}
             </a>
           </div>
         </div>
@@ -468,10 +468,10 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
           </svg>
-          التفاصيل الإضافية
+          {{ 'design.extraDetails' | t }}
         </div>
         <div class="additional-details-content">
-          <span class="additional-details-text">{{ selectedCase.workDetail || 'لا توجد تفاصيل إضافية' }}</span>
+          <span class="additional-details-text">{{ selectedCase.workDetail || ('design.noExtraDetails' | t) }}</span>
         </div>
       </div>
 
@@ -483,7 +483,7 @@
             <polyline points="14 2 14 8 20 8"/>
             <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
-          الملاحظات والتعليمات
+          {{ 'design.instructions' | t }}
         </div>
         <div class="instructions-body">
           <div class="instruction-accent-line"></div>
@@ -498,16 +498,16 @@
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
           </svg>
-          الوسائط والمرفقات
+          {{ 'design.media' | t }}
         </div>
         <div class="media-grid">
           <ng-container *ngIf="selectedCase.designImages && selectedCase.designImages.length > 0">
             <div class="media-item image-preview" *ngFor="let image of selectedCase.designImages; let i = index">
               <div class="media-thumb" (click)="openImageModal(image)">
-                <img [src]="image" [alt]="'صورة تصميم ' + (i + 1)" loading="lazy" decoding="async" (error)="onImageError($event)">
+                <img [src]="image" [attr.alt]="('design.imageN' | t) + ' ' + (i + 1)" loading="lazy" decoding="async" (error)="onImageError($event)">
               </div>
-              <div class="media-caption">صورة {{ i + 1 }}</div>
-              <button class="image-delete-btn" (click)="removeImage(i); $event.stopPropagation();" type="button" aria-label="حذف الصورة">
+              <div class="media-caption">{{ 'design.imageN' | t }} {{ i + 1 }}</div>
+              <button class="image-delete-btn" (click)="removeImage(i); $event.stopPropagation();" type="button" [attr.aria-label]="'design.deleteImage' | t">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <line x1="18" y1="6" x2="6" y2="18"/>
                   <line x1="6" y1="6" x2="18" y2="18"/>
@@ -533,20 +533,20 @@
         <polyline points="20 6 9 17 4 12"/>
       </svg>
     </div>
-    <h3 class="modal-title">تأكيد إنهاء الحالة</h3>
+    <h3 class="modal-title">{{ 'design.confirmFinishTitle' | t }}</h3>
     <p class="modal-desc">
-      هل أنت متأكد من إنهاء حالة
+      {{ 'design.confirmFinishBody' | t }}
       <strong>{{ selectedCase?.patient }}</strong>
-      رقم <strong>{{ selectedCase?.caseNumber }}</strong>؟
-      <br>لا يمكن التراجع عن هذا الإجراء.
+      {{ 'design.confirmFinishNumber' | t }} <strong>{{ selectedCase?.caseNumber }}</strong>?
+      <br>{{ 'design.confirmFinishIrreversible' | t }}
     </p>
     <div class="modal-actions">
-      <button class="btn-modal-cancel" (click)="cancelFinish()" type="button">إلغاء</button>
+      <button class="btn-modal-cancel" (click)="cancelFinish()" type="button">{{ 'common.cancel' | t }}</button>
       <button class="btn-modal-confirm" (click)="confirmFinish()" type="button">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
-        نعم، إنهاء الحالة
+        {{ 'design.confirmFinishYes' | t }}
       </button>
     </div>
   </div>
@@ -565,19 +565,19 @@
 <!-- ═══════ PLY VIEWER MODAL ═══════ -->
 <div class="ply-modal-overlay" [class.visible]="plyViewerOpen" (click)="closePlyViewer()">
   <div class="ply-modal-content" (click)="$event.stopPropagation()">
-    <button class="ply-modal-close" type="button" aria-label="إغلاق" (click)="closePlyViewer()">
+    <button class="ply-modal-close" type="button" [attr.aria-label]="'common.close' | t" (click)="closePlyViewer()">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
-    <h3 class="ply-modal-title">معاينة مسح PLY</h3>
+    <h3 class="ply-modal-title">{{ 'design.plyPreviewTitle' | t }}</h3>
     <p class="ply-modal-filename" *ngIf="selectedCase?.plyFileName">{{ selectedCase?.plyFileName }}</p>
-    <p class="ply-modal-hint">اسحب لتدوير النموذج · التكبير بعجلة الفأرة</p>
-    <div class="ply-modal-loading" *ngIf="plyViewerLoading">جاري تحميل النموذج…</div>
+    <p class="ply-modal-hint">{{ 'design.plyHint' | t }}</p>
+    <div class="ply-modal-loading" *ngIf="plyViewerLoading">{{ 'design.plyLoading' | t }}</div>
     <div class="ply-modal-error" *ngIf="plyViewerError">{{ plyViewerError }}</div>
     <div id="designer-ply-view-host" class="ply-view-host"></div>
     <div class="ply-modal-footer" *ngIf="selectedCase?.plyScanUrl as plyUrl">
-      <a class="btn-ply-download-inline" [href]="plyUrl" target="_blank" rel="noopener noreferrer" download>تحميل الملف</a>
+      <a class="btn-ply-download-inline" [href]="plyUrl" target="_blank" rel="noopener noreferrer" download>{{ 'common.downloadFile' | t }}</a>
     </div>
   </div>
 </div>
@@ -585,12 +585,12 @@
 <!-- ═══════ IMAGE MODAL ═══════ -->
 <div class="image-modal-overlay" [class.visible]="imageModalVisible" (click)="closeImageModal()">
   <div class="image-modal-content" (click)="$event.stopPropagation()">
-    <button class="image-modal-close" (click)="closeImageModal()" type="button" aria-label="إغلاق">
+    <button class="image-modal-close" (click)="closeImageModal()" type="button" [attr.aria-label]="'common.close' | t">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="18" y1="6" x2="6" y2="18"/>
         <line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
-    <img [src]="selectedImage" [alt]="'صورة التصميم'" class="image-modal-img" decoding="async" (error)="onImageError($event)">
+    <img [src]="selectedImage" [attr.alt]="'design.imageN' | t" class="image-modal-img" decoding="async" (error)="onImageError($event)">
   </div>
 </div>
