@@ -16,6 +16,7 @@ import { Subscription, switchMap } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { environment } from '../../../environments/environment';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
@@ -45,7 +46,7 @@ function emptyDraft() {
 @Component({
   selector: 'app-requester',
   standalone: true,
-  imports: [CommonModule, FormsModule, AppOverflowMenuComponent],
+  imports: [CommonModule, FormsModule, AppOverflowMenuComponent, TPipe],
   templateUrl: './requester.html',
   styleUrl: './requester.css',
 })
@@ -83,12 +84,14 @@ export class RequesterComponent implements OnInit, OnDestroy {
     'Night Guard', 'Wax', 'Ring'
   ];
 
-  readonly caseTypeOptions = [
-    { value: 'New', label: 'جديد' },
-    { value: 'Modification', label: 'تعديل' },
-    { value: 'Redo', label: 'اعادة' },
-    { value: 'Empty', label: 'غير معروف' },
-  ];
+  get caseTypeOptions() {
+    return [
+      { value: 'New', label: this.lang.t('caseType.new') },
+      { value: 'Modification', label: this.lang.t('caseType.modification') },
+      { value: 'Redo', label: this.lang.t('caseType.redo') },
+      { value: 'Empty', label: this.lang.t('caseType.empty') },
+    ];
+  }
 
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
@@ -321,15 +324,15 @@ export class RequesterComponent implements OnInit, OnDestroy {
   save(): void {
     const d = this.formDraft;
 
-    if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
-    if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
-    if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
+    if (!d.doctor.trim()) { this.flash(this.lang.t('form.errDoctor')); return; }
+    if (!d.patient?.trim()) { this.flash(this.lang.t('form.errPatient')); return; }
+    if (!d.branch?.trim()) { this.flash(this.lang.t('form.errBranch')); return; }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
-      this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
-      this.flash('يرجى اختيار نوع العمل');
+      this.workTypeError = this.lang.t('form.errWorkTypeAtLeast');
+      this.flash(this.lang.t('form.errWorkType'));
       return;
     }
-    if (!this.isColorOptional && !d.color?.trim()) { this.flash('يرجى إدخال اللون'); return; }
+    if (!this.isColorOptional && !d.color?.trim()) { this.flash(this.lang.t('form.errColor')); return; }
 
     this.updateWorkTypeString();
     const draft = {
@@ -364,11 +367,11 @@ export class RequesterComponent implements OnInit, OnDestroy {
     createThenPrint.subscribe({
       next: () => {
         this.saveInProgress.set(false);
-        this.flash('✅ تم إرسال الريكويست للطباعة');
+        this.flash(this.lang.t('requester.toast.sent'));
       },
       error: () => {
         this.saveInProgress.set(false);
-        this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
+        this.flash(this.lang.t('requester.toast.fail'));
       },
     });
   }

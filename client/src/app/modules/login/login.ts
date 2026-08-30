@@ -6,6 +6,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { LabConfigService, LabBranding } from '../../core/services/lab-config.service';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
@@ -13,7 +14,7 @@ import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-ove
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, AppOverflowMenuComponent],
+  imports: [CommonModule, FormsModule, RouterLink, AppOverflowMenuComponent, TPipe],
   templateUrl: './login.html',
   styleUrl: './login.css',
 })
@@ -93,14 +94,14 @@ export class Login implements OnInit {
   login(): void {
     const email = this.email.trim();
     if (!email) {
-      this.loginError = 'يرجى إدخال البريد الإلكتروني';
+      this.loginError = this.lang.t('login.err.email');
       return;
     }
 
     if (this.usePinLogin) {
       const pin = this.pin.trim();
       if (!/^\d{4,6}$/.test(pin)) {
-        this.loginError = 'أدخل الرقم السري (4–6 أرقام)';
+        this.loginError = this.lang.t('login.err.pin');
         return;
       }
       this.loginError = '';
@@ -116,7 +117,7 @@ export class Login implements OnInit {
     }
 
     if (!this.password) {
-      this.loginError = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+      this.loginError = this.lang.t('login.err.emailPassword');
       return;
     }
     this.loginError = '';
@@ -160,11 +161,11 @@ export class Login implements OnInit {
       }
       if (err.status === 401) {
         return this.usePinLogin
-          ? 'الرقم السري غير صحيح'
-          : 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+          ? this.lang.t('login.err.badPin')
+          : this.lang.t('login.err.badCreds');
       }
     }
-    return 'تعذر تسجيل الدخول. حاول مرة أخرى.';
+    return this.lang.t('login.err.generic');
   }
 
   private safeReturnUrl(raw: string | null): string | null {

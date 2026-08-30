@@ -16,6 +16,7 @@ import {
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
@@ -66,7 +67,15 @@ export type DoctorNotif = {
 @Component({
   selector: 'app-doctor',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent, AppOverflowMenuComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    PatientLabelPipe,
+    CaseBarcodeComponent,
+    ToothChartComponent,
+    AppOverflowMenuComponent,
+    TPipe,
+  ],
   templateUrl: './doctor.html',
   styleUrls: ['../secretary/secretary.css', './doctor.css'],
 })
@@ -98,6 +107,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const as = this.viewingAsDoctor()?.trim();
     if (as && this.auth.getSession()?.role === 'admin') return as;
     return this.auth.getSession()?.name?.trim() || '—';
+  });
+  readonly pageTitle = computed(() => {
+    this.lang.lang();
+    return this.lang.t('doctor.title').replace('{name}', this.doctorName());
   });
   readonly casesLoading = signal(true);
   readonly toast = signal<string | null>(null);
@@ -158,12 +171,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
   ];
   brandTitle = 'Elegance';
 
-  readonly caseTypeOptions = [
-    { value: 'New', label: 'جديد' },
-    { value: 'Modification', label: 'تعديل' },
-    { value: 'Redo', label: 'اعادة' },
-    { value: 'Empty', label: 'غير معروف' },
-  ];
+  get caseTypeOptions() {
+    return [
+      { value: 'New', label: this.lang.t('caseType.new') },
+      { value: 'Modification', label: this.lang.t('caseType.modification') },
+      { value: 'Redo', label: this.lang.t('caseType.redo') },
+      { value: 'Empty', label: this.lang.t('caseType.empty') },
+    ];
+  }
 
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
@@ -210,9 +225,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   intakeLabel(c: { intakeType?: string; plyScanUrl?: string }): string {
-    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
-    if (c.intakeType === 'impression') return 'امبرشن';
-    return 'غير محدد';
+    if (c.intakeType === 'scan' || c.plyScanUrl) return this.lang.t('intake.scan');
+    if (c.intakeType === 'impression') return this.lang.t('intake.impression');
+    return this.lang.t('intake.unknown');
   }
 
   intakeBadgeClass(c: { intakeType?: string; plyScanUrl?: string }): string {
@@ -245,8 +260,8 @@ export class DoctorComponent implements OnInit, OnDestroy {
       next: () => {
         this.flash(
           makeUrgent
-            ? '✅ تم تمييز الحالة كمستعجلة — هتظهر للسكرتارية'
-            : 'تم إلغاء تمييز الاستعجال'
+            ? this.lang.t('doctor.toast.markedUrgent')
+            : this.lang.t('doctor.toast.unmarkedUrgent')
         );
       },
       error: (err) => {
@@ -254,7 +269,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
         if (this.detailCase()?.id === c.id) {
           this.detailCase.set({ ...c, priority: prev });
         }
-        this.flash(err?.error?.message || 'تعذر تحديث الأولوية');
+        this.flash(err?.error?.message || this.lang.t('doctor.toast.priorityFail'));
       },
     });
   }
@@ -268,6 +283,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   });
 
   readonly stats = computed(() => {
+    this.lang.lang();
     const all = this.allCases();
     const pending = all.filter((c) => this.bucket(c) === 'pending').length;
     const design = all.filter((c) => this.bucket(c) === 'design').length;
@@ -275,12 +291,12 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const finished = all.filter((c) => this.bucket(c) === 'finished').length;
     const exited = all.filter((c) => this.bucket(c) === 'exited').length;
     return [
-      { label: 'إجمالي الحالات', value: all.length, color: 'purple' as const },
-      { label: 'الحالات الجديدة', value: pending, color: 'amber' as const },
-      { label: 'تحت الديزاين', value: design, color: 'blue' as const },
-      { label: 'تحت الفينيش', value: finishing, color: 'teal' as const },
-      { label: 'الحالات المنتهية', value: finished, color: 'emerald' as const },
-      { label: 'الحالات الخارجة', value: exited, color: 'rose' as const },
+      { label: this.lang.t('stats.total'), value: all.length, color: 'purple' as const },
+      { label: this.lang.t('stats.new'), value: pending, color: 'amber' as const },
+      { label: this.lang.t('stats.design'), value: design, color: 'blue' as const },
+      { label: this.lang.t('stats.finishing'), value: finishing, color: 'teal' as const },
+      { label: this.lang.t('stats.finished'), value: finished, color: 'emerald' as const },
+      { label: this.lang.t('stats.exited'), value: exited, color: 'rose' as const },
     ];
   });
 
@@ -423,7 +439,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.casesLoading.set(false);
-        if (!opts?.silent) this.flash('❌ تعذر تحميل الحالات');
+        if (!opts?.silent) this.flash(this.lang.t('secretary.toast.loadFail'));
       },
     });
   }
@@ -477,8 +493,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
       const kind = b as 'finished' | 'exited';
       const message =
         kind === 'finished'
-          ? `حالة ${c.caseNumber} للمريض ${c.patient} أصبحتتهية`
-          : `حالة ${c.caseNumber} للمريض ${c.patient} خرجت من المعمل`;
+          ? this.lang
+              .t('doctor.notif.caseFinished')
+              .replace('{n}', c.caseNumber)
+              .replace('{p}', c.patient)
+          : this.lang
+              .t('doctor.notif.caseExited')
+              .replace('{n}', c.caseNumber)
+              .replace('{p}', c.patient);
       fresh.push({
         id: `${c.id}-${kind}-${Date.now()}`,
         caseId: c.id,
@@ -524,7 +546,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
     this.activeFilter.set(n.kind);
-    this.flash('الحالة غير موجودة في القائمة الحالية');
+    this.flash(this.lang.t('doctor.toast.notFound'));
   }
 
   setFilter(f: DoctorFilter): void {
@@ -620,7 +642,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       return;
     }
     if (!/\.(ply|stl|obj|rar|zip)$/i.test(file.name)) {
-      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj أو .rar أو .zip');
+      this.flash(this.lang.t('doctor.toast.fileType'));
       input.value = '';
       this.selectedPlyFile = null;
       return;
@@ -686,11 +708,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
   savePinSetup(): void {
     const pin = this.pinDraft.trim();
     if (!/^\d{4,6}$/.test(pin)) {
-      this.pinError = 'الرقم السري من 4 إلى 6 أرقام';
+      this.pinError = this.lang.t('doctor.err.pinLength');
       return;
     }
     if (pin !== this.pinConfirm.trim()) {
-      this.pinError = 'الرقمان غير متطابقين';
+      this.pinError = this.lang.t('doctor.err.pinMismatch');
       return;
     }
     this.pinError = '';
@@ -699,11 +721,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
       next: () => {
         this.pinSaving = false;
         this.pinSetupOpen.set(false);
-        this.flash('✅ تم حفظ الرقم السري — تقدر تدخل بيه المرة الجاية');
+        this.flash(this.lang.t('doctor.toast.pinSaved'));
       },
       error: (err: { error?: { message?: string } }) => {
         this.pinSaving = false;
-        this.pinError = err?.error?.message || 'تعذر حفظ الرقم السري';
+        this.pinError = err?.error?.message || this.lang.t('doctor.err.pinSave');
       },
     });
   }
@@ -711,7 +733,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   openEditFromDetail(): void {
     const c = this.detailCase();
     if (!c || !this.canEdit(c)) {
-      this.flash('التعديل متاح فقط قبل دخول الديزاين');
+      this.flash(this.lang.t('doctor.toast.editLocked'));
       return;
     }
     this.closeDetails();
@@ -720,7 +742,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   openEdit(c: DentalCase): void {
     if (!this.canEdit(c)) {
-      this.flash('التعديل متاح فقط قبل دخول الديزاين');
+      this.flash(this.lang.t('doctor.toast.editLocked'));
       return;
     }
     this.dialogMode.set('edit');
@@ -938,25 +960,25 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const d = this.formDraft;
     const doctor = this.doctorName();
     if (!doctor || doctor === '—') {
-      this.flash('تعذر قراءة اسم الدكتور من الحساب');
+      this.flash(this.lang.t('doctor.toast.needDoctor'));
       return;
     }
     if (!d.patient?.trim()) {
-      this.flash('يرجى إدخال اسم المريض');
+      this.flash(this.lang.t('doctor.toast.needPatient'));
       return;
     }
     if (!this.isBinaryPatientName(d.patient)) {
-      this.patientNameError = 'يرجى كتابة الاسم ثنائي';
-      this.flash('يرجى كتابة الاسم ثنائي');
+      this.patientNameError = this.lang.t('doctor.err.patientBinary');
+      this.flash(this.lang.t('doctor.err.patientBinary'));
       return;
     }
     this.patientNameError = '';
     if (!d.branch?.trim()) {
-      this.flash('يرجى إدخال الفرع');
+      this.flash(this.lang.t('doctor.toast.needBranch'));
       return;
     }
     if (!this.intakeType) {
-      this.flash('اختَر امبرشن أو سكان');
+      this.flash(this.lang.t('doctor.toast.needIntake'));
       return;
     }
     if (this.intakeType === 'scan') {
@@ -964,25 +986,25 @@ export class DoctorComponent implements OnInit, OnDestroy {
       const hasFile = !!this.selectedPlyFile;
       const hasExisting = !!this.existingPlyFileName;
       if (!hasFile && !link && !hasExisting) {
-        this.flash('ارفع ملف السكان أو الصق لينك السكان');
+        this.flash(this.lang.t('doctor.toast.needScan'));
         return;
       }
       if (link && !this.isValidScanLink(link)) {
-        this.flash('لينك السكان غير صالح — لازم يبدأ بـ http أو https');
+        this.flash(this.lang.t('doctor.toast.badLink'));
         return;
       }
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
-      this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
-      this.flash('يرجى اختيار نوع العمل');
+      this.workTypeError = this.lang.t('doctor.err.needWorkType');
+      this.flash(this.lang.t('doctor.toast.needWorkType'));
       return;
     }
     if (d.caseType !== 'Empty' && this.hasWorkTypesWithQuantity && this.toothAssignments.length === 0) {
-      this.flash('يرجى تعبئة مخطط الأسنان');
+      this.flash(this.lang.t('doctor.toast.needChart'));
       return;
     }
     if (this.isColorRequired && !d.color?.trim()) {
-      this.flash('يرجى إدخال اللون');
+      this.flash(this.lang.t('doctor.toast.needColor'));
       return;
     }
 
@@ -1023,7 +1045,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
         next: () => {
           const done = () => {
             this.saveInProgress.set(false);
-            this.flash('✅ تم تحديث الريكويست');
+            this.flash(this.lang.t('secretary.toast.savedEdit'));
             this.loadCases();
           };
           const attach$ = this.attachScanAfterSave(editId, ply, plyLink);
@@ -1032,7 +1054,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
               next: () => done(),
               error: () => {
                 this.saveInProgress.set(false);
-                this.flash('تم التحديث لكن تعذر حفظ ملف/لينك السكان');
+                this.flash(this.lang.t('doctor.toast.updatedScanFail'));
                 this.loadCases({ silent: true });
               },
             });
@@ -1042,7 +1064,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.saveInProgress.set(false);
-          this.flash(err?.error?.message || '❌ فشل التحديث');
+          this.flash(err?.error?.message || this.lang.t('doctor.toast.updateFail'));
           this.loadCases({ silent: true });
         },
       });
@@ -1063,7 +1085,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
             return attach$.pipe(
               switchMap(() => print$),
               catchError(() => {
-                this.flash('تم حفظ الحالة لكن تعذر حفظ ملف/لينك السكان — أعد المحاولة من التعديل');
+                this.flash(this.lang.t('doctor.toast.savedScanFail'));
                 return print$;
               })
             );
@@ -1076,14 +1098,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
           this.saveInProgress.set(false);
           this.flash(
             d.urgent
-              ? '✅ تم حفظ الحالة المستعجلة وإرسالها للطباعة'
-              : '✅ تم حفظ الحالة وإرسال الريكويست للطباعة'
+              ? this.lang.t('doctor.toast.savedUrgent')
+              : this.lang.t('doctor.toast.saved')
           );
           this.loadCases();
         },
         error: () => {
           this.saveInProgress.set(false);
-          this.flash('❌ فشل الحفظ أو الطباعة، تحقق من الاتصال');
+          this.flash(this.lang.t('doctor.toast.saveFail'));
           this.loadCases({ silent: true });
         },
       });
@@ -1115,11 +1137,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
   getCasePhase(c: DentalCase): { label: string; color: string } {
     const b = this.bucket(c);
     const map: Record<DoctorStage, { label: string; color: string }> = {
-      pending: { label: 'الجديدة', color: 'pending' },
-      design: { label: 'ديزاين', color: 'design' },
-      finishing: { label: 'فينيش', color: 'khart' },
-      finished: { label: 'منتهية', color: 'finished' },
-      exited: { label: 'خارجة', color: 'exited' },
+      pending: { label: this.lang.t('phase.pending'), color: 'pending' },
+      design: { label: this.lang.t('phase.design'), color: 'design' },
+      finishing: { label: this.lang.t('phase.finishing'), color: 'khart' },
+      finished: { label: this.lang.t('phase.finished'), color: 'finished' },
+      exited: { label: this.lang.t('phase.exited'), color: 'exited' },
     };
     return map[b];
   }
