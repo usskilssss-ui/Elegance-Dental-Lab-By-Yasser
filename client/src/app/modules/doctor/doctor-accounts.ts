@@ -5,6 +5,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export type DoctorAccountCaseRow = {
@@ -36,7 +37,7 @@ export type DoctorAccountSummary = {
 @Component({
   selector: 'app-doctor-accounts',
   standalone: true,
-  imports: [CommonModule, AppOverflowMenuComponent],
+  imports: [CommonModule, AppOverflowMenuComponent, TPipe],
   templateUrl: './doctor-accounts.html',
   styleUrls: ['./doctor-accounts.css'],
 })
@@ -62,6 +63,14 @@ export class DoctorAccountsComponent implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly summary = signal<DoctorAccountSummary | null>(null);
+
+  pageTitle(): string {
+    return this.lang.t('doctorPages.accounts.title').replace('{name}', this.doctorName());
+  }
+
+  billableMeta(n: number): string {
+    return this.lang.t('doctorPages.accounts.billableMeta').replace('{n}', String(n));
+  }
 
   ngOnInit(): void {
     const as = (this.route.snapshot.queryParamMap.get('as') || '').trim();
@@ -99,7 +108,7 @@ export class DoctorAccountsComponent implements OnInit {
       error: (err) => {
         this.summary.set(null);
         this.loading.set(false);
-        this.error.set(err?.error?.message || 'تعذر تحميل الحسابات');
+        this.error.set(err?.error?.message || this.lang.t('doctorPages.accounts.loadError'));
       },
     });
   }

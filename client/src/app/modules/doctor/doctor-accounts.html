@@ -1,10 +1,10 @@
 <div class="doctor-accounts-page" [attr.dir]="lang.dir()">
   <header class="da-topbar">
-    <button type="button" class="da-back-btn" (click)="backToDashboard()" aria-label="رجوع للوحة الحالات">
+    <button type="button" class="da-back-btn" (click)="backToDashboard()" [attr.aria-label]="'doctorPages.backAria' | t">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
       </svg>
-      <span>رجوع</span>
+      <span>{{ 'common.back' | t }}</span>
     </button>
 
     <div class="da-brand">
@@ -18,8 +18,8 @@
       <button
         type="button"
         class="da-icon-btn"
-        aria-label="تغيير المظهر"
-        title="تغيير المظهر"
+        [attr.aria-label]="'common.theme' | t"
+        [attr.title]="'common.theme' | t"
         (click)="themeService.toggleTheme()"
       >
         <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -42,49 +42,49 @@
 
   <main class="da-main">
     <section class="da-hero">
-      <p class="da-eyebrow">الحسابات</p>
-      <h1>ملخص حساب دكتور {{ doctorName() }}</h1>
+      <p class="da-eyebrow">{{ 'doctorPages.accounts.eyebrow' | t }}</p>
+      <h1>{{ pageTitle() }}</h1>
       <p class="da-lead">
-        الحالات الخارجة القابلة للفوترة — عرض فقط
+        {{ 'doctorPages.accounts.lead' | t }}
         @if (isAdminView()) {
-          <span class="da-admin-pill">عرض كأدمن</span>
+          <span class="da-admin-pill">{{ 'doctorPages.adminView' | t }}</span>
         }
       </p>
     </section>
 
     @if (loading()) {
-      <p class="da-status">جاري تحميل الحسابات…</p>
+      <p class="da-status">{{ 'doctorPages.accounts.loading' | t }}</p>
     } @else if (error()) {
       <p class="da-status da-status--err">{{ error() }}</p>
     } @else if (summary(); as s) {
-      <section class="da-totals" aria-label="ملخص الحساب">
+      <section class="da-totals" [attr.aria-label]="'doctorPages.accounts.summaryAria' | t">
         <article class="da-total-card da-total-card--hero">
-          <span class="da-total-label">إجمالي المستحق</span>
+          <span class="da-total-label">{{ 'doctorPages.accounts.totalDue' | t }}</span>
           <strong class="da-total-value">{{ formatMoney(s.totalDue) }}</strong>
-          <span class="da-total-meta">{{ s.caseCount }} حالة خارجة قابلة للفوترة</span>
+          <span class="da-total-meta">{{ billableMeta(s.caseCount) }}</span>
         </article>
         <article class="da-total-card">
-          <span class="da-total-label">مطلوب</span>
+          <span class="da-total-label">{{ 'doctorPages.accounts.due' | t }}</span>
           <strong class="da-total-value">{{ formatMoney(s.totalDue) }}</strong>
         </article>
         <article class="da-total-card da-total-card--paid">
-          <span class="da-total-label">مدفوع</span>
+          <span class="da-total-label">{{ 'doctorPages.accounts.paid' | t }}</span>
           <strong class="da-total-value">{{ formatMoney(s.totalPaid) }}</strong>
         </article>
         <article class="da-total-card da-total-card--remain">
-          <span class="da-total-label">متبقي</span>
+          <span class="da-total-label">{{ 'doctorPages.accounts.remaining' | t }}</span>
           <strong class="da-total-value">{{ formatMoney(s.remaining) }}</strong>
         </article>
       </section>
 
-      <section class="da-cases" aria-label="تفاصيل الحالات">
+      <section class="da-cases" [attr.aria-label]="'doctorPages.accounts.casesAria' | t">
         <div class="da-cases-head">
-          <h2>تفاصيل الحالات</h2>
-          <p>المريض · رقم الحالة · الكمية × سعر الوحدة · الإجمالي · حالة الدفع</p>
+          <h2>{{ 'doctorPages.accounts.casesTitle' | t }}</h2>
+          <p>{{ 'doctorPages.accounts.casesHint' | t }}</p>
         </div>
 
         @if (!s.cases?.length) {
-          <p class="da-status">لا توجد حالات خارجة قابلة للفوترة</p>
+          <p class="da-status">{{ 'doctorPages.accounts.empty' | t }}</p>
         } @else {
           <ul class="da-case-list">
             @for (row of s.cases; track row.id) {
@@ -93,7 +93,7 @@
                   <div class="da-case-top">
                     <span class="da-case-num">{{ row.caseNumber }}</span>
                     <span class="da-case-pay" [class.is-paid]="row.paymentStatus === 'paid'">
-                      {{ row.paymentStatus === 'paid' ? 'مدفوع' : 'غير مدفوع' }}
+                      {{ row.paymentStatus === 'paid' ? ('doctorPages.accounts.paid' | t) : ('doctorPages.accounts.unpaid' | t) }}
                     </span>
                   </div>
                   <p class="da-case-patient">{{ row.patientName }}</p>
@@ -108,14 +108,14 @@
                       }
                     } @else {
                       <div class="da-price-line">
-                        <span>الكمية × سعر الوحدة</span>
+                        <span>{{ 'doctorPages.accounts.qtyUnit' | t }}</span>
                         <span>{{ row.quantity || 1 }} × {{ formatMoney(row.unitPrice || row.amount) }}</span>
                       </div>
                     }
                   </div>
                 </div>
                 <div class="da-case-side">
-                  <span class="da-case-amount-label">الإجمالي</span>
+                  <span class="da-case-amount-label">{{ 'doctorPages.accounts.total' | t }}</span>
                   <span class="da-case-amount">{{ formatMoney(row.amount) }}</span>
                 </div>
               </li>
@@ -124,7 +124,7 @@
         }
       </section>
 
-      <p class="da-footnote">عرض فقط — الحالات الخارجة القابلة للفوترة</p>
+      <p class="da-footnote">{{ 'doctorPages.accounts.footnote' | t }}</p>
     }
   </main>
 </div>
