@@ -429,13 +429,13 @@
 
               @if (!hasWorkTypesWithQuantity) {
                 <p class="wt-error" style="color:#64748b;margin:8px 0 0;">
-                  اختَر نوع العمل من الأزرار فوق عشان يظهر مخطط الأسنان
+                  اختَر نوع العمل من الأزرار فوق عشان يظهر مخطط الأسنان (اختياري)
                 </p>
               }
 
               @if (hasWorkTypesWithQuantity) {
                 <div class="form-field" style="margin-top:12px;">
-                  <span>مخطط الأسنان <abbr title="مطلوب">*</abbr></span>
+                  <span>مخطط الأسنان <span class="label-optional">(اختياري)</span></span>
                   <app-tooth-chart
                     [assignments]="toothAssignments"
                     [materials]="chartMaterials"
