@@ -15,7 +15,9 @@ import {
 import { Subscription, switchMap } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { environment } from '../../../environments/environment';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 function todayYmd(): string {
   const d = new Date();
@@ -43,7 +45,7 @@ function emptyDraft() {
 @Component({
   selector: 'app-requester',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AppOverflowMenuComponent],
   templateUrl: './requester.html',
   styleUrl: './requester.css',
 })
@@ -55,6 +57,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
 
   private readonly apiBase = environment.apiUrl;
 

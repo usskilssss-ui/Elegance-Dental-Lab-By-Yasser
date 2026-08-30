@@ -4,6 +4,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export type DoctorAccountCaseRow = {
   id: string;
@@ -34,7 +36,7 @@ export type DoctorAccountSummary = {
 @Component({
   selector: 'app-doctor-accounts',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppOverflowMenuComponent],
   templateUrl: './doctor-accounts.html',
   styleUrls: ['./doctor-accounts.css'],
 })
@@ -44,6 +46,7 @@ export class DoctorAccountsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   readonly themeService = inject(ThemeService);
+  readonly lang = inject(LanguageService);
 
   readonly viewingAsDoctor = signal<string | null>(null);
   readonly isAdminView = computed(() => {

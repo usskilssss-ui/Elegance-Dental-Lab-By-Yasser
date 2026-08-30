@@ -1,4 +1,4 @@
-<div class="finisher" dir="rtl">
+<div class="finisher" [attr.dir]="lang.dir()">
 
   <!-- Toast -->
   @if (toast) {
@@ -8,6 +8,7 @@
   <!-- Top bar -->
   <header class="topbar">
     <div class="topbar-left">
+      <app-overflow-menu></app-overflow-menu>
       <div class="avatar" aria-label="Elegance Precision Labs Logo">
         <div class="elegance-logo-container">
           <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">

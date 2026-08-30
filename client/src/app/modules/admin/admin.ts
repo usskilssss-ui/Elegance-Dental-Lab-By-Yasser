@@ -14,6 +14,7 @@ import { Subject, merge } from 'rxjs';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { environment } from '../../../environments/environment';
 import {
   LabConfigService,
@@ -22,6 +23,7 @@ import {
   LabWorkflow,
 } from '../../core/services/lab-config.service';
 import { FinancePanel } from './finance-panel/finance-panel';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export interface StaffMember {
   id: string;
@@ -142,7 +144,7 @@ export interface AiChatMessage {
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, RouterModule, FinancePanel],
+  imports: [CommonModule, FormsModule, RouterModule, FinancePanel, AppOverflowMenuComponent],
   templateUrl: './admin.html',
   styleUrl: './admin.css',
   standalone: true
@@ -343,6 +345,7 @@ export class Admin implements OnInit, OnDestroy {
     private socketService: SocketService,
     private http: HttpClient,
     public themeService: ThemeService,
+    public lang: LanguageService,
     private labConfig: LabConfigService
   ) {}
 

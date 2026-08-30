@@ -21,6 +21,8 @@ import { SocketService } from '../../core/services/socket.service';
 import { CaseDraft, SecretaryService } from './secretary.service';
 import { PatientLabelPipe } from './patient-label.pipe';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { LabConfigService } from '../../core/services/lab-config.service';
 import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
@@ -53,7 +55,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent, AppOverflowMenuComponent],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })
@@ -111,6 +113,7 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   private readonly labConfig = inject(LabConfigService);
   brandTitle = 'Elegance';
   private readonly apiBase = environment.apiUrl;

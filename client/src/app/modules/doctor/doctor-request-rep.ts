@@ -3,11 +3,13 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 @Component({
   selector: 'app-doctor-request-rep',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppOverflowMenuComponent],
   templateUrl: './doctor-request-rep.html',
   styleUrls: ['./doctor-request-rep.css'],
 })
@@ -16,6 +18,7 @@ export class DoctorRequestRepComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   readonly themeService = inject(ThemeService);
+  readonly lang = inject(LanguageService);
 
   readonly viewingAsDoctor = signal<string | null>(null);
   readonly isAdminView = computed(() => {

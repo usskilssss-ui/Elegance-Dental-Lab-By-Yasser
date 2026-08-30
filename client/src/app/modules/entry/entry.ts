@@ -17,8 +17,10 @@ import { Subscription, catchError, switchMap } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { environment } from '../../../environments/environment';
 import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function todayYmd(): string {
@@ -68,7 +70,7 @@ export interface PrintJobCard {
 @Component({
   selector: 'app-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, ToothChartComponent],
+  imports: [CommonModule, FormsModule, RouterLink, ToothChartComponent, AppOverflowMenuComponent],
   templateUrl: './entry.html',
   styleUrl: './entry.css',
 })
@@ -81,6 +83,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];

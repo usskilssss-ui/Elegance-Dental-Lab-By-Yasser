@@ -2,16 +2,19 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 @Component({
   selector: 'app-for-doctors',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, AppOverflowMenuComponent],
   templateUrl: './for-doctors.html',
   styleUrl: './for-doctors.css',
 })
 export class ForDoctorsComponent {
   readonly themeService = inject(ThemeService);
+  readonly lang = inject(LanguageService);
 
   readonly features = [
     {

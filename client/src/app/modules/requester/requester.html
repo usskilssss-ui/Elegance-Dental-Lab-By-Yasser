@@ -1,4 +1,4 @@
-<div class="requester-page" dir="rtl">
+<div class="requester-page" [attr.dir]="lang.dir()">
   @if (toast(); as message) {
     <div class="toast" role="status">{{ message }}</div>
   }
@@ -6,6 +6,7 @@
   <!-- Header -->
   <header class="topbar">
     <div class="topbar-left">
+      <app-overflow-menu></app-overflow-menu>
       <div class="avatar">
         <div class="elegance-logo-container">
           <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">

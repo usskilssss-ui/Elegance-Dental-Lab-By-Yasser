@@ -31,6 +31,17 @@
   padding: clamp(1rem, 4vw, 2.5rem);
   background: var(--page-bg);
   box-sizing: border-box;
+  position: relative;
+}
+
+.login-top-actions {
+  position: absolute;
+  top: 20px;
+  inset-inline-end: 20px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .login-shell {

@@ -78,6 +78,13 @@
   cursor: pointer;
 }
 
+.drr-top-actions {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .drr-main {
   width: min(720px, calc(100% - 32px));
   margin: 0 auto;

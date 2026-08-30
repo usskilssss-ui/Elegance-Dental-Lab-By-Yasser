@@ -15,6 +15,7 @@ import {
 } from '../../core/utils/print-job.util';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { environment } from '../../../environments/environment';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
@@ -22,6 +23,7 @@ import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { LabConfigService } from '../../core/services/lab-config.service';
 import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
 import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
+import { AppOverflowMenuComponent, type AppMenuItem } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 function todayYmd(): string {
   const d = new Date();
@@ -64,7 +66,7 @@ export type DoctorNotif = {
 @Component({
   selector: 'app-doctor',
   standalone: true,
-  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent],
+  imports: [CommonModule, FormsModule, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent, AppOverflowMenuComponent],
   templateUrl: './doctor.html',
   styleUrls: ['../secretary/secretary.css', './doctor.css'],
 })
@@ -77,6 +79,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   public readonly pwa = inject(PwaInstallService);
   private readonly labConfig = inject(LabConfigService);
 
@@ -108,7 +111,23 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly activeFilter = signal<DoctorFilter>('all');
   readonly searchQuery = signal('');
 
-  readonly portalMenuOpen = signal(false);
+  readonly portalMenuItems: AppMenuItem[] = [
+    {
+      id: 'accounts',
+      labelKey: 'menu.accounts',
+      action: () => this.openAccountsFromMenu(),
+    },
+    {
+      id: 'request-rep',
+      labelKey: 'menu.requestRep',
+      action: () => this.requestRepFromMenu(),
+    },
+    {
+      id: 'exited-materials',
+      labelKey: 'menu.exitedMaterials',
+      action: () => this.openExitedMaterialsFromMenu(),
+    },
+  ];
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
@@ -359,22 +378,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const el = ev.target as HTMLElement;
     if (el.closest('.notif-bell') || el.closest('.notifications-panel')) return;
     this.notificationsOpen.set(false);
-    if (el.closest('.doctor-menu-anchor')) return;
-    this.portalMenuOpen.set(false);
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    if (this.portalMenuOpen()) {
-      this.portalMenuOpen.set(false);
-    }
-  }
-
-  togglePortalMenu(ev?: Event): void {
-    ev?.stopPropagation();
-    const opening = !this.portalMenuOpen();
-    this.notificationsOpen.set(false);
-    this.portalMenuOpen.set(opening);
   }
 
   private doctorNavQueryParams(): Record<string, string> {
@@ -383,23 +386,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return {};
   }
 
-  openAccountsFromMenu(ev?: Event): void {
-    ev?.stopPropagation();
-    this.portalMenuOpen.set(false);
+  openAccountsFromMenu(): void {
     this.notificationsOpen.set(false);
     this.router.navigate(['/doctor/accounts'], { queryParams: this.doctorNavQueryParams() });
   }
 
-  requestRepFromMenu(ev?: Event): void {
-    ev?.stopPropagation();
-    this.portalMenuOpen.set(false);
+  requestRepFromMenu(): void {
     this.notificationsOpen.set(false);
     this.router.navigate(['/doctor/request-rep'], { queryParams: this.doctorNavQueryParams() });
   }
 
-  openExitedMaterialsFromMenu(ev?: Event): void {
-    ev?.stopPropagation();
-    this.portalMenuOpen.set(false);
+  openExitedMaterialsFromMenu(): void {
     this.notificationsOpen.set(false);
     this.router.navigate(['/doctor/exited-materials'], { queryParams: this.doctorNavQueryParams() });
   }
@@ -508,7 +505,6 @@ export class DoctorComponent implements OnInit, OnDestroy {
   toggleNotifications(ev: Event): void {
     ev.stopPropagation();
     const opening = !this.notificationsOpen();
-    this.portalMenuOpen.set(false);
     this.notificationsOpen.set(opening);
     if (opening) this.markAllNotificationsRead();
   }
