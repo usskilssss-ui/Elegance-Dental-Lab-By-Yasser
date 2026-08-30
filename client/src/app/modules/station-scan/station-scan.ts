@@ -144,11 +144,31 @@ export class StationScanComponent implements OnInit, OnDestroy {
   focusScanner(): void {
     if (this.busy() || this.unauthorized()) return;
     if (Date.now() - this.lastKeyAt < 200) return;
+    // Don't steal focus while the user is typing in search or using other controls
+    if (this.shouldPauseScanFocus()) return;
     const el = this.scanInput?.nativeElement;
     if (!el) return;
     if (document.activeElement !== el) {
       el.focus({ preventScroll: true });
     }
+  }
+
+  /** True when autofocus would interrupt search / menus / other inputs. */
+  private shouldPauseScanFocus(): boolean {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === this.scanInput?.nativeElement) return false;
+
+    const tag = active.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (active.isContentEditable) return true;
+    if (
+      active.closest(
+        '.scan-search, .scan-search-input, .app-menu-panel, .app-menu-anchor, .scan-queue-refresh, .scan-link, button, a, [role="menu"], [role="search"]'
+      )
+    ) {
+      return true;
+    }
+    return false;
   }
 
   onScanKeydown(): void {
