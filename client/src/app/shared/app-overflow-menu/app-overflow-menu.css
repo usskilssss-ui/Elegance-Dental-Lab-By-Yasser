@@ -40,6 +40,8 @@
   background: var(--card, var(--bg-card, #fff));
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
   animation: app-menu-in 0.14s ease;
+  text-align: left;
+  direction: ltr;
 }
 
 .app-menu-section {
@@ -48,25 +50,30 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--text-muted, #94a3b8);
-  text-align: start;
+  text-align: left;
 }
 
 .app-menu-item {
   display: flex;
   width: 100%;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   border: none;
   background: transparent;
   color: var(--text-primary, #0f172a);
-  text-align: start;
+  text-align: left;
   font: inherit;
   font-size: 14px;
   font-weight: 700;
   padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
+  direction: ltr;
+}
+
+.app-menu-item.app-menu-lang {
+  justify-content: space-between;
 }
 
 .app-menu-item:hover,

@@ -5,6 +5,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export type DoctorExitedMaterialRow = {
@@ -20,12 +21,10 @@ export type DoctorExitedMaterialsSummary = {
   materials: DoctorExitedMaterialRow[];
 };
 
-const ARABIC_LOAD_ERROR = 'تعذر تحميل عدد الماتريال الخارجة. حاول مرة أخرى.';
-
 @Component({
   selector: 'app-doctor-exited-materials',
   standalone: true,
-  imports: [CommonModule, AppOverflowMenuComponent],
+  imports: [CommonModule, AppOverflowMenuComponent, TPipe],
   templateUrl: './doctor-exited-materials.html',
   styleUrls: ['./doctor-exited-materials.css'],
 })
@@ -53,6 +52,16 @@ export class DoctorExitedMaterialsComponent implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly summary = signal<DoctorExitedMaterialsSummary | null>(null);
+
+  leadText(): string {
+    return this.lang.t('doctorPages.materials.lead').replace('{name}', this.doctorName());
+  }
+
+  fromCasesMeta(n: number): string {
+    return this.lang
+      .t('doctorPages.materials.fromCases')
+      .replace('{n}', this.formatCount(n));
+  }
 
   ngOnInit(): void {
     const as = (this.route.snapshot.queryParamMap.get('as') || '').trim();
@@ -92,6 +101,7 @@ export class DoctorExitedMaterialsComponent implements OnInit {
   private friendlyError(err: any): string {
     const status = Number(err?.status);
     const raw = String(err?.error?.message || err?.message || '').trim();
+    const fallback = this.lang.t('doctorPages.materials.loadError');
     // Missing backend route hits GET /:id → CastError → "Failed to fetch case"
     if (
       !raw ||
@@ -100,20 +110,19 @@ export class DoctorExitedMaterialsComponent implements OnInit {
       status === 404 ||
       status === 0
     ) {
-      return ARABIC_LOAD_ERROR;
+      return fallback;
     }
     if (/failed to fetch doctor exited materials/i.test(raw)) {
-      return ARABIC_LOAD_ERROR;
+      return fallback;
     }
     if (/query parameter doctor is required/i.test(raw) || /doctor name is required/i.test(raw)) {
-      return 'يرجى فتح صفحة الدكتور من لوحة الأدمن ثم إعادة المحاولة.';
+      return this.lang.t('doctorPages.materials.loadError');
     }
     if (status === 401 || status === 403 || /access denied/i.test(raw) || /not authenticated/i.test(raw)) {
-      return 'انتهت الجلسة أو لا يوجد صلاحية. سجّل الدخول مجددًا.';
+      return fallback;
     }
-    // Prefer Arabic; avoid leaking English infra messages.
-    if (/[\u0600-\u06FF]/.test(raw)) return raw;
-    return ARABIC_LOAD_ERROR;
+    if (/[\u0600-\u06FF]/.test(raw) && this.lang.isArabic()) return raw;
+    return fallback;
   }
 
   private loadSummary(): void {

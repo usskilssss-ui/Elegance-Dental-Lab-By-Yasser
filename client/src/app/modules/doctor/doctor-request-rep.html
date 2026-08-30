@@ -1,10 +1,10 @@
 <div class="doctor-request-rep-page" [attr.dir]="lang.dir()">
   <header class="drr-topbar">
-    <button type="button" class="drr-back-btn" (click)="backToDashboard()" aria-label="رجوع للوحة الحالات">
+    <button type="button" class="drr-back-btn" (click)="backToDashboard()" [attr.aria-label]="'doctorPages.backAria' | t">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
       </svg>
-      <span>رجوع</span>
+      <span>{{ 'common.back' | t }}</span>
     </button>
 
     <div class="drr-brand">
@@ -18,8 +18,8 @@
       <button
         type="button"
         class="drr-icon-btn"
-        aria-label="تغيير المظهر"
-        title="تغيير المظهر"
+        [attr.aria-label]="'common.theme' | t"
+        [attr.title]="'common.theme' | t"
         (click)="themeService.toggleTheme()"
       >
         <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -54,12 +54,10 @@
           </svg>
         </div>
       </div>
-      <p class="drr-eyebrow">طلب مندوب</p>
-      <h1 id="drr-title">سوف تتاح قريبا</h1>
-      <p class="drr-lead">
-        خدمة طلب المندوب لدكتور {{ doctorName() }} قيد التجهيز — هنفعّلها قريبًا من بوابة الدكتور.
-      </p>
-      <button type="button" class="drr-cta" (click)="backToDashboard()">العودة للوحة الحالات</button>
+      <p class="drr-eyebrow">{{ 'doctorPages.rep.eyebrow' | t }}</p>
+      <h1 id="drr-title">{{ 'doctorPages.rep.title' | t }}</h1>
+      <p class="drr-lead">{{ leadText() }}</p>
+      <button type="button" class="drr-cta" (click)="backToDashboard()">{{ 'doctorPages.rep.cta' | t }}</button>
     </section>
   </main>
 </div>

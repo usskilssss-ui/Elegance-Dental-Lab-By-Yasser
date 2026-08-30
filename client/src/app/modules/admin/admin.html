@@ -1,58 +1,58 @@
-<div class="shell">
+<div class="shell" [attr.dir]="lang.dir()">
   <div class="sidebar">
     <div class="logo-area">
       <div class="logo-name">{{ labBranding.labName || 'Lab Core' }}</div>
-      <div class="logo-sub">Lab Settings</div>
+      <div class="logo-sub">{{ 'admin.logoSub' | t }}</div>
     </div>
     <div class="nav-item" [class.active]="activeNav === 'dashboard'" (click)="setNav('dashboard')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      لوحة التحكم
+      {{ 'admin.nav.dashboard' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'staff'" (click)="setNav('staff')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      الموظفون
+      {{ 'admin.nav.staff' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'doctors'" (click)="setNav('doctors')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      الدكاترة
+      {{ 'admin.nav.doctors' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'financials'" (click)="setNav('financials')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-      المالية
+      {{ 'admin.nav.financials' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'reports'" (click)="setNav('reports')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-      التقارير
+      {{ 'admin.nav.reports' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'archive'" (click)="setNav('archive')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
-      الأرشيف
+      {{ 'admin.nav.archive' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'lab'" (click)="setNav('lab')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      الماتريال والأسعار
+      {{ 'admin.nav.lab' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'whatsapp'" (click)="setNav('whatsapp')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-      واتساب
+      {{ 'admin.nav.whatsapp' | t }}
     </div>
 
     <div class="sidebar-bottom">
       <div class="nav-item" (click)="logout()" role="button" tabindex="0" (keydown.enter)="logout()" (keydown.space)="$event.preventDefault(); logout()">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        تسجيل الخروج
+        {{ 'common.logout' | t }}
       </div>
     </div>
   </div>
 
   <div class="main">
     <div class="topbar">
-      <div class="topbar-left" style="display:flex;align-items:center;gap:10px;">
+      <div class="topbar-left">
         <app-overflow-menu></app-overflow-menu>
       </div>
-      <div class="topbar-right" style="margin-inline-start:auto;">
+      <div class="topbar-right">
         <a routerLink="/secretary/dashboard" class="action-btn topbar-secretary-btn">{{ 'admin.openSecretary' | t }}</a>
-        <button type="button" (click)="themeService.toggleTheme()" title="تغيير المظهر" style="border:none;background:transparent;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;">
+        <button type="button" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t" style="border:none;background:transparent;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;">
           <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
@@ -73,7 +73,7 @@
         <div class="admin-pill">
           <div>
             <div class="admin-name">SE Yasser</div>
-            <div class="admin-role">مدير النظام</div>
+            <div class="admin-role">{{ 'admin.role' | t }}</div>
           </div>
           <div class="avatar">SY</div>
         </div>
@@ -85,8 +85,8 @@
       <ng-container *ngIf="activeNav === 'dashboard'">
       <div class="page-header">
         <div>
-          <div class="page-label">نظرة عامة</div>
-          <div class="page-title">لوحة تحكم المدير</div>
+          <div class="page-label">{{ 'admin.dashboard.label' | t }}</div>
+          <div class="page-title">{{ 'admin.dashboard.title' | t }}</div>
         </div>
       </div>
 
@@ -97,14 +97,14 @@
             <span class="stat-label" [style.color]="m.color" style="font-size:13px;font-weight:600;">{{ m.label }}</span>
           </div>
           <div class="stat-val" [style.color]="m.color" style="font-size:2.25rem;font-weight:800;">{{ m.qty }}</div>
-          <div class="stat-sub">وحدة خارجة</div>
+          <div class="stat-sub">{{ 'admin.dashboard.exitedUnit' | t }}</div>
         </div>
         <div class="stat-card elegance-dash-panel">
           <div class="elegance-dash-mark">E</div>
           <div class="elegance-dash-copy">
             <div class="elegance-dash-kicker">Elegance Core</div>
             <div class="elegance-dash-title">Precision Labs</div>
-            <div class="elegance-dash-sub">لوحة تشغيل المعمل — متابعة المواد الخارجة لحظة بلحظة</div>
+            <div class="elegance-dash-sub">{{ 'admin.dashboard.eleganceSub' | t }}</div>
           </div>
         </div>
       </div>
@@ -121,10 +121,10 @@
                   <path d="M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <span class="stat-label" style="font-size:13px;font-weight:600;color:#6366f1;">إجمالي الزيركونيا</span>
+              <span class="stat-label" style="font-size:13px;font-weight:600;color:#6366f1;">{{ 'admin.dashboard.totalZirconia' | t }}</span>
             </div>
             <div class="stat-val" style="font-size:3rem;font-weight:800;color:#6366f1;">{{ zirconCount }}</div>
-            <div class="stat-sub">جميع الوحدات الخارجة للزيركون بأنواعه</div>
+            <div class="stat-sub">{{ 'admin.dashboard.totalZirconiaSub' | t }}</div>
           </div>
           
           <div style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #e2e8f0; padding-top:12px; margin-top:auto;">
@@ -158,7 +158,7 @@
             <span class="stat-label" style="font-size:13px;font-weight:600;color:#0ea5e9;">Emax</span>
           </div>
           <div class="stat-val" style="font-size:3rem;font-weight:800;color:#0ea5e9;">{{ emaxCount }}</div>
-          <div class="stat-sub">وحدة Emax خارجة (غير إعادة)</div>
+          <div class="stat-sub">{{ 'admin.dashboard.emaxSub' | t }}</div>
         </div>
       </div>
 
@@ -174,10 +174,10 @@
                   <path d="M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <span class="stat-label" style="font-size:13px;font-weight:600;color:#f59e0b;">إجمالي زيركون - د. الجندي</span>
+              <span class="stat-label" style="font-size:13px;font-weight:600;color:#f59e0b;">{{ 'admin.dashboard.jundiZircon' | t }}</span>
             </div>
             <div class="stat-val" style="font-size:3rem;font-weight:800;color:#f59e0b;">{{ jundiZirconCount }}</div>
-            <div class="stat-sub">جميع الوحدات الخارجة للزيركون بأنواعه للجندي</div>
+            <div class="stat-sub">{{ 'admin.dashboard.jundiZirconSub' | t }}</div>
           </div>
           
           <div style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #e2e8f0; padding-top:12px; margin-top:auto;">
@@ -208,10 +208,10 @@
                 <path d="M8 12h8M12 8v8"/>
               </svg>
             </div>
-            <span class="stat-label" style="font-size:13px;font-weight:600;color:#8b5cf6;">Emax - د. الجندي</span>
+            <span class="stat-label" style="font-size:13px;font-weight:600;color:#8b5cf6;">{{ 'admin.dashboard.jundiEmax' | t }}</span>
           </div>
           <div class="stat-val" style="font-size:3rem;font-weight:800;color:#8b5cf6;">{{ jundiEmaxCount }}</div>
-          <div class="stat-sub">وحدة Emax خارجة للجندي (غير إعادة/تعديل)</div>
+          <div class="stat-sub">{{ 'admin.dashboard.jundiEmaxSub' | t }}</div>
         </div>
       </div>
 
@@ -221,8 +221,8 @@
       <ng-container *ngIf="activeNav === 'staff'">
       <div class="page-header">
         <div>
-          <div class="page-label">إدارة الموظفين</div>
-          <div class="page-title">أعضاء الفريق</div>
+          <div class="page-label">{{ 'admin.staff.label' | t }}</div>
+          <div class="page-title">{{ 'admin.staff.title' | t }}</div>
         </div>
         <button type="button" class="export-btn" (click)="openAddStaffModal()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -385,8 +385,8 @@
       <ng-container *ngIf="activeNav === 'doctors'">
       <div class="page-header">
         <div>
-          <div class="page-label">إدارة حسابات الدكاترة</div>
-          <div class="page-title">الدكاترة</div>
+          <div class="page-label">{{ 'admin.doctors.label' | t }}</div>
+          <div class="page-title">{{ 'admin.doctors.title' | t }}</div>
         </div>
         <button type="button" class="export-btn" (click)="openAddDoctorModal()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -548,8 +548,8 @@
       <ng-container *ngIf="activeNav === 'financials'">
         <div class="page-header">
           <div>
-            <div class="page-label">نظرة مالية شاملة</div>
-            <div class="page-title">المالية</div>
+            <div class="page-label">{{ 'admin.financials.label' | t }}</div>
+            <div class="page-title">{{ 'admin.financials.title' | t }}</div>
           </div>
         </div>
 
@@ -578,8 +578,8 @@
       <ng-container *ngIf="activeNav === 'reports'">
         <div class="page-header">
           <div>
-            <div class="page-label">التقارير</div>
-            <div class="page-title" *ngIf="!reportDoctorFilter">تقارير حسابات الأطباء</div>
+            <div class="page-label">{{ 'admin.reports.label' | t }}</div>
+            <div class="page-title" *ngIf="!reportDoctorFilter">{{ 'admin.reports.title' | t }}</div>
             <div class="page-title" *ngIf="reportDoctorFilter">تفاصيل حساب: {{ reportDoctorFilter }}</div>
           </div>
           <div *ngIf="reportDoctorFilter">
@@ -958,8 +958,8 @@
       <ng-container *ngIf="activeNav === 'lab'">
         <div class="page-header">
           <div>
-            <div class="page-label">الأسعار والخامات</div>
-            <div class="page-title">الماتريال والأسعار</div>
+            <div class="page-label">{{ 'admin.lab.label' | t }}</div>
+            <div class="page-title">{{ 'admin.lab.title' | t }}</div>
           </div>
         </div>
 
@@ -1022,8 +1022,8 @@
       <ng-container *ngIf="activeNav === 'whatsapp'">
         <div class="page-header">
           <div>
-            <div class="page-label">إشعارات الدكاترة</div>
-            <div class="page-title">إعدادات واتساب</div>
+            <div class="page-label">{{ 'admin.whatsapp.label' | t }}</div>
+            <div class="page-title">{{ 'admin.whatsapp.title' | t }}</div>
           </div>
           <span
             class="staff-status-badge"
@@ -1198,8 +1198,8 @@
       <ng-container *ngIf="activeNav === 'archive'">
         <div class="page-header">
           <div>
-            <div class="page-label">نهاية الشهر</div>
-            <div class="page-title">الأرشيف والإغلاق</div>
+            <div class="page-label">{{ 'admin.archive.label' | t }}</div>
+            <div class="page-title">{{ 'admin.archive.title' | t }}</div>
           </div>
         </div>
 

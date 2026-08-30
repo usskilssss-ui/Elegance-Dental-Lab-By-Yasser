@@ -4,12 +4,13 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 @Component({
   selector: 'app-doctor-request-rep',
   standalone: true,
-  imports: [CommonModule, AppOverflowMenuComponent],
+  imports: [CommonModule, AppOverflowMenuComponent, TPipe],
   templateUrl: './doctor-request-rep.html',
   styleUrls: ['./doctor-request-rep.css'],
 })
@@ -30,6 +31,10 @@ export class DoctorRequestRepComponent implements OnInit {
     if (as && this.auth.getSession()?.role === 'admin') return as;
     return this.auth.getSession()?.name?.trim() || '—';
   });
+
+  leadText(): string {
+    return this.lang.t('doctorPages.rep.lead').replace('{name}', this.doctorName());
+  }
 
   ngOnInit(): void {
     const as = (this.route.snapshot.queryParamMap.get('as') || '').trim();
