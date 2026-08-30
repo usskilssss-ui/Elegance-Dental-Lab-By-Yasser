@@ -1,11 +1,11 @@
 <div class="fp-root">
   <div class="fp-tabs">
-    <button type="button" [class.active]="innerTab === 'overview'" (click)="setInnerTab('overview')">نظرة عامة / الأرباح</button>
-    <button type="button" [class.active]="innerTab === 'debts'" (click)="setInnerTab('debts')">ديون الأطباء</button>
-    <button type="button" [class.active]="innerTab === 'profits'" (click)="setInnerTab('profits')">ربحية الحالات</button>
-    <button type="button" [class.active]="innerTab === 'inventory'" (click)="setInnerTab('inventory')">المخزون والمشتريات</button>
-    <button type="button" [class.active]="innerTab === 'payroll'" (click)="setInnerTab('payroll')">رواتب الموظفين</button>
-    <button type="button" [class.active]="innerTab === 'expenses'" (click)="setInnerTab('expenses')">مصاريف التشغيل</button>
+    <button type="button" [class.active]="innerTab === 'overview'" (click)="setInnerTab('overview')">{{ 'admin.finance.tab.overview' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'debts'" (click)="setInnerTab('debts')">{{ 'admin.finance.tab.debts' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'profits'" (click)="setInnerTab('profits')">{{ 'admin.finance.tab.profits' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'inventory'" (click)="setInnerTab('inventory')">{{ 'admin.finance.tab.inventory' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'payroll'" (click)="setInnerTab('payroll')">{{ 'admin.finance.tab.payroll' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'expenses'" (click)="setInnerTab('expenses')">{{ 'admin.finance.tab.expenses' | t }}</button>
   </div>
 
   <p class="fp-hint">الشهر والسنة من الفلاتر فوق. غيّر طريقة حساب الربح بين المقبوض والفواتير في أي وقت.</p>

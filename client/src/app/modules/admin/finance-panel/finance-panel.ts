@@ -2,13 +2,14 @@ import { Component, Input, OnChanges, OnInit, SimpleChanges, inject } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FinanceApiService, ProfitMode } from '../../../core/services/finance-api.service';
+import { TPipe } from '../../../core/i18n/t.pipe';
 
 type FinanceInnerTab = 'overview' | 'inventory' | 'payroll' | 'expenses' | 'debts' | 'profits';
 
 @Component({
   selector: 'app-finance-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TPipe],
   templateUrl: './finance-panel.html',
   styleUrl: './finance-panel.css',
 })
