@@ -592,10 +592,6 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.flash('يرجى اختيار نوع العمل');
       return;
     }
-    if (d.caseType !== 'Empty' && this.hasWorkTypesWithQuantity && this.toothAssignments.length === 0) {
-      this.flash('يرجى تعبئة مخطط الأسنان');
-      return;
-    }
 
     this.updateWorkTypeString();
     const draft = {

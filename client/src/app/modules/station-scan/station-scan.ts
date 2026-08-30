@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
@@ -73,6 +73,19 @@ export class StationScanComponent implements OnInit, OnDestroy {
   /** Cases currently at this station — shown as cards under the scanner */
   readonly queueCases = signal<DentalCase[]>([]);
   readonly queueLoading = signal(false);
+  readonly queueSearch = signal('');
+
+  readonly filteredQueueCases = computed(() => {
+    const q = this.normalizeSearch(this.queueSearch());
+    const list = this.sortNewestFirst(this.queueCases());
+    if (!q) return list;
+    return list.filter((c) => {
+      const doctor = this.normalizeSearch(c.doctor);
+      const patient = this.normalizeSearch(c.patient);
+      const caseNumber = this.normalizeSearch(c.caseNumber);
+      return doctor.includes(q) || patient.includes(q) || caseNumber.includes(q);
+    });
+  });
 
   scanBuffer = '';
   private focusTimer: ReturnType<typeof setInterval> | null = null;
@@ -183,6 +196,42 @@ export class StationScanComponent implements OnInit, OnDestroy {
     return parts.join(' — ');
   }
 
+  onQueueSearch(value: string): void {
+    this.queueSearch.set(value);
+  }
+
+  clearQueueSearch(): void {
+    this.queueSearch.set('');
+  }
+
+  private normalizeSearch(value: string | undefined | null): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private sortNewestFirst(list: DentalCase[]): DentalCase[] {
+    return [...list].sort((a, b) => {
+      const ta = this.caseSortTime(a);
+      const tb = this.caseSortTime(b);
+      if (tb !== ta) return tb - ta;
+      return String(b.caseNumber || '').localeCompare(String(a.caseNumber || ''), 'en', {
+        numeric: true,
+      });
+    });
+  }
+
+  private caseSortTime(c: DentalCase): number {
+    const raw = c.createdAt || c.receivedDateRaw || c.receivedDate || '';
+    const t = Date.parse(String(raw));
+    if (!Number.isNaN(t)) return t;
+    // Fallback: parse CASE-YYYY-NNNNN
+    const m = String(c.caseNumber || '').match(/(\d{4})-(\d+)/);
+    if (m) return Number(m[1]) * 1_000_000 + Number(m[2]);
+    return 0;
+  }
+
   private stationApiStage(): string {
     const s = this.station();
     if (s === 'reception') return 'completed';
@@ -195,7 +244,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];
-        this.queueCases.set(mapped);
+        this.queueCases.set(this.sortNewestFirst(mapped));
         this.queueLoading.set(false);
       },
       error: () => {
@@ -237,7 +286,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
               this.queueCases.update((list) => {
                 const id = mapped.id || String(c._id || c.id || '');
                 const without = list.filter((x) => x.id !== id && x.caseNumber !== mapped.caseNumber);
-                return [mapped, ...without];
+                return this.sortNewestFirst([mapped, ...without]);
               });
             }
           }
