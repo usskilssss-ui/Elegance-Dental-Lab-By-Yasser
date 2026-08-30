@@ -1,38 +1,105 @@
-import { ApplicationRef, Injectable, inject } from '@angular/core';
+import { ApplicationRef, Injectable, inject, signal } from '@angular/core';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
-import { concat, filter, first, interval, of, switchMap } from 'rxjs';
+import { concat, filter, first, fromEvent, interval, merge, of, switchMap } from 'rxjs';
 
 /**
- * Force-activate new deploys so entry PCs don't keep an old cached bundle
- * (old entry code browser-printed + agent-printed = two different formats).
+ * Keep installed PWAs / phones on the latest deploy.
+ * Mobile PWAs throttle timers hard in background — so we also check on
+ * focus / visibility, and show a banner if auto-reload doesn't land.
  */
 @Injectable({ providedIn: 'root' })
 export class SwUpdateService {
   private readonly updates = inject(SwUpdate);
   private readonly appRef = inject(ApplicationRef);
 
+  /** True when a new version is ready and waiting for reload */
+  readonly updateReady = signal(false);
+  readonly applying = signal(false);
+
+  private started = false;
+  private reloadArmed = false;
+
   start(): void {
-    if (!this.updates.isEnabled) return;
+    if (this.started || !this.updates.isEnabled) return;
+    this.started = true;
 
     this.updates.versionUpdates
       .pipe(filter((e): e is VersionReadyEvent => e.type === 'VERSION_READY'))
-      .subscribe(async () => {
-        try {
-          await this.updates.activateUpdate();
-        } catch {
-          /* ignore */
-        }
-        document.location.reload();
+      .subscribe(() => {
+        this.updateReady.set(true);
+        void this.applyUpdate(true);
       });
 
-    // Check once app is stable, then every 60s
+    this.updates.unrecoverable.subscribe(() => {
+      void this.hardResetApp();
+    });
+
+    // Immediate check (don't wait for Angular stability — PWA reopen needs this)
+    this.safeCheck();
+
+    // After first stable, then every 30s while the tab/app is open
     this.appRef.isStable
       .pipe(
         first((stable) => stable === true),
-        switchMap(() => concat(of(0), interval(60_000)))
+        switchMap(() => concat(of(0), interval(30_000)))
       )
-      .subscribe(() => {
-        this.updates.checkForUpdate().catch(() => undefined);
+      .subscribe(() => this.safeCheck());
+
+    // Critical for installed apps: check whenever user comes back
+    if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+      merge(
+        fromEvent(document, 'visibilitychange'),
+        fromEvent(window, 'focus'),
+        fromEvent(window, 'pageshow')
+      ).subscribe(() => {
+        if (document.visibilityState === 'hidden') return;
+        this.safeCheck();
       });
+    }
+  }
+
+  /** User tapped the update banner */
+  async applyNow(): Promise<void> {
+    await this.applyUpdate(false);
+  }
+
+  private safeCheck(): void {
+    this.updates.checkForUpdate().catch(() => undefined);
+  }
+
+  private async applyUpdate(auto: boolean): Promise<void> {
+    if (this.reloadArmed) return;
+    this.applying.set(true);
+    try {
+      await this.updates.activateUpdate();
+      this.reloadArmed = true;
+      // Bust any intermediate caches and force a full navigation reload
+      const url = new URL(window.location.href);
+      url.searchParams.set('_sw', String(Date.now()));
+      window.location.replace(url.toString());
+    } catch {
+      this.applying.set(false);
+      this.updateReady.set(true);
+      if (!auto) {
+        // Last resort: unregister SW and clear caches
+        await this.hardResetApp();
+      }
+    }
+  }
+
+  private async hardResetApp(): Promise<void> {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      /* ignore */
+    }
+    window.location.reload();
   }
 }
