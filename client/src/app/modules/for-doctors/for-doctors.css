@@ -31,10 +31,6 @@
 }
 
 .icon-btn {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 100;
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border-primary);
@@ -45,6 +41,17 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  padding: 0;
+}
+
+.doctors-top-actions {
+  position: absolute;
+  top: 20px;
+  inset-inline-start: 20px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .doctors-shell {

@@ -6,9 +6,11 @@ import { AppRole } from '../../core/auth/auth.types';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { DentalCase } from '../../core/services/shared-cases.service';
 import { PatientLabelPipe } from '../secretary/patient-label.pipe';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export type ScanStation = 'reception' | 'design' | 'finishing';
 
@@ -49,7 +51,7 @@ const ROLE_META: Partial<
 @Component({
   selector: 'app-station-scan',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, AppOverflowMenuComponent],
   templateUrl: './station-scan.html',
   styleUrls: ['../secretary/secretary.css', './station-scan.css'],
 })
@@ -58,6 +60,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
   private readonly caseApi = inject(CaseApiService);
   private readonly auth = inject(AuthService);
   readonly themeService = inject(ThemeService);
+  readonly lang = inject(LanguageService);
 
   @ViewChild('scanInput') scanInput?: ElementRef<HTMLInputElement>;
 

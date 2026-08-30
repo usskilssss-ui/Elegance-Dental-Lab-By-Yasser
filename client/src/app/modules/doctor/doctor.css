@@ -93,6 +93,8 @@
   background: var(--border-primary);
   color: var(--accent-blue);
 }
+
+.doctor-portal .case-people {
   display: flex;
   flex-direction: column;
   align-items: center;

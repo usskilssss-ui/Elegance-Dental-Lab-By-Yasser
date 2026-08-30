@@ -15,7 +15,9 @@ import {
 } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 export type CasePriority = 'emergency' | 'normal' | 'low';
@@ -37,7 +39,7 @@ export interface WorkStage {
 @Component({
   selector: 'app-case-details',
   standalone: true,
-  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent, AppOverflowMenuComponent],
   templateUrl: './design.html',
   styleUrls: ['./design.css']
 })
@@ -48,6 +50,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   private socketService = inject(SocketService);
   private cdr = inject(ChangeDetectorRef);
   public themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   private socketSubs: Subscription[] = [];
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private isAutosaving = false;

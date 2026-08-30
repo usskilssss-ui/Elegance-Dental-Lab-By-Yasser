@@ -1,4 +1,4 @@
-<div class="secretary doctor-portal" dir="rtl">
+<div class="secretary doctor-portal" [attr.dir]="lang.dir()">
   @if (toast(); as message) {
     <div class="toast" role="status">{{ message }}</div>
   }
@@ -44,7 +44,7 @@
   }
 
   @if (pwa.showIosGuide() && !isAdminView()) {
-    <div class="ios-install-overlay" dir="rtl" role="dialog" aria-modal="true" (click)="pwa.closeIosGuide()">
+    <div class="ios-install-overlay" [attr.dir]="lang.dir()" role="dialog" aria-modal="true" (click)="pwa.closeIosGuide()">
       <div class="ios-install-sheet" (click)="$event.stopPropagation()">
         <h3>تثبيت على الآيفون</h3>
         <p class="ios-install-note">آبل مش بتسمح بالتحميل التلقائي — خطوتين من سفاري:</p>
@@ -65,36 +65,7 @@
 
   <header class="topbar">
     <div class="topbar-left doctor-topbar-brand">
-      <div class="doctor-menu-anchor">
-        <button
-          type="button"
-          class="icon-btn accounts-menu-btn"
-          aria-label="القائمة"
-          title="القائمة"
-          aria-haspopup="menu"
-          [attr.aria-expanded]="portalMenuOpen()"
-          (click)="togglePortalMenu($event)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20" aria-hidden="true">
-            <line x1="4" y1="7" x2="20" y2="7" stroke-linecap="round"></line>
-            <line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round"></line>
-            <line x1="4" y1="17" x2="20" y2="17" stroke-linecap="round"></line>
-          </svg>
-        </button>
-        @if (portalMenuOpen()) {
-          <div class="doctor-portal-menu" role="menu" (click)="$event.stopPropagation()">
-            <button type="button" class="doctor-portal-menu-item" role="menuitem" (click)="openAccountsFromMenu($event)">
-              الحسابات
-            </button>
-            <button type="button" class="doctor-portal-menu-item" role="menuitem" (click)="requestRepFromMenu($event)">
-              طلب مندوب
-            </button>
-            <button type="button" class="doctor-portal-menu-item" role="menuitem" (click)="openExitedMaterialsFromMenu($event)">
-              عدد الماتريال الخارجة
-            </button>
-          </div>
-        }
-      </div>
+      <app-overflow-menu [items]="portalMenuItems"></app-overflow-menu>
       <div class="avatar" aria-label="Elegance Precision Labs Logo">
         <div class="elegance-logo-container">
           <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">

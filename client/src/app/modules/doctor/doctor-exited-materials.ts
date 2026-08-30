@@ -4,6 +4,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export type DoctorExitedMaterialRow = {
   key: string;
@@ -23,7 +25,7 @@ const ARABIC_LOAD_ERROR = 'تعذر تحميل عدد الماتريال الخ�
 @Component({
   selector: 'app-doctor-exited-materials',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppOverflowMenuComponent],
   templateUrl: './doctor-exited-materials.html',
   styleUrls: ['./doctor-exited-materials.css'],
 })
@@ -33,6 +35,7 @@ export class DoctorExitedMaterialsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   readonly themeService = inject(ThemeService);
+  readonly lang = inject(LanguageService);
 
   readonly viewingAsDoctor = signal<string | null>(null);
   readonly isAdminView = computed(() => {

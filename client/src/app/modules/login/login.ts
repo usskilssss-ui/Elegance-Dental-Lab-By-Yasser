@@ -5,13 +5,15 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { LabConfigService, LabBranding } from '../../core/services/lab-config.service';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, AppOverflowMenuComponent],
   templateUrl: './login.html',
   styleUrl: './login.css',
 })
@@ -27,6 +29,7 @@ export class Login implements OnInit {
   loginError = '';
   submitting = false;
   public themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   public readonly pwa = inject(PwaInstallService);
   private readonly labConfig = inject(LabConfigService);
   branding: LabBranding = {

@@ -47,6 +47,9 @@
 
   <div class="main">
     <div class="topbar">
+      <div class="topbar-left" style="display:flex;align-items:center;gap:10px;">
+        <app-overflow-menu></app-overflow-menu>
+      </div>
       <div class="topbar-right" style="margin-inline-start:auto;">
         <a routerLink="/secretary/dashboard" class="action-btn topbar-secretary-btn">فتح شاشة السكرتارية</a>
         <button type="button" (click)="themeService.toggleTheme()" title="تغيير المظهر" style="border:none;background:transparent;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;">

@@ -9,13 +9,15 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 @Component({
   selector: 'app-finishing',
   standalone: true,
-  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent, AppOverflowMenuComponent],
   templateUrl: './finishing.html',
   styleUrl: './finishing.css',
 })
@@ -26,6 +28,7 @@ export class Finishing implements OnInit, OnDestroy {
   private readonly caseApi = inject(CaseApiService);
   private readonly socketService = inject(SocketService);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   private socketSubs: Subscription[] = [];
   private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 

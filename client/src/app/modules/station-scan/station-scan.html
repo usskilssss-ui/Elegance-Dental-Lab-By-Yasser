@@ -1,11 +1,14 @@
-<div class="station-scan" dir="rtl" (click)="focusScanner()">
+<div class="station-scan" [attr.dir]="lang.dir()" (click)="focusScanner()">
   <header class="scan-topbar">
     <div class="scan-brand">
-      <strong>Elegance</strong>
-      <span>Precision Labs</span>
-      @if (accountName()) {
-        <span class="scan-account">{{ accountName() }}</span>
-      }
+      <app-overflow-menu (click)="$event.stopPropagation()"></app-overflow-menu>
+      <div class="scan-brand-text">
+        <strong>Elegance</strong>
+        <span>Precision Labs</span>
+        @if (accountName()) {
+          <span class="scan-account">{{ accountName() }}</span>
+        }
+      </div>
     </div>
     <div class="scan-top-actions">
       <button type="button" class="icon-btn scan-theme-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme(); $event.stopPropagation()" title="تغيير المظهر">
