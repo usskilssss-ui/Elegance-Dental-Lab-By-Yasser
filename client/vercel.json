@@ -15,6 +15,12 @@
       ]
     },
     {
+      "source": "/force-update.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
       "source": "/ngsw-worker.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
@@ -37,7 +43,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!ngsw\\.json|ngsw-worker\\.js|manifest\\.webmanifest|icons/|assets/|favicon\\.png|favicon\\.ico).*)",
+      "source": "/((?!ngsw\\.json|ngsw-worker\\.js|manifest\\.webmanifest|force-update\\.html|icons/|assets/|favicon\\.png|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]
