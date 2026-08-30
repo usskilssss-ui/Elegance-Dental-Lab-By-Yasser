@@ -687,8 +687,9 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   monthName(monthNumber: number): string {
-    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    return months[monthNumber - 1] || `شهر ${monthNumber}`;
+    const key = `month.${monthNumber}`;
+    const label = this.lang.t(key);
+    return label !== key ? label : String(monthNumber);
   }
 
   private parseDate(value?: string): Date | null {
@@ -1892,13 +1893,13 @@ export class Admin implements OnInit, OnDestroy {
   get waWebStatusLabel(): string {
     switch (this.waWebStatus) {
       case 'open':
-        return 'متصل';
+        return this.lang.t('admin.wa.statusOpen');
       case 'qr':
-        return 'امسح QR';
+        return this.lang.t('admin.wa.statusQr');
       case 'connecting':
-        return 'جاري الاتصال…';
+        return this.lang.t('admin.wa.statusConnecting');
       default:
-        return 'غير متصل';
+        return this.lang.t('admin.wa.statusClosed');
     }
   }
 
@@ -2028,7 +2029,7 @@ export class Admin implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.waWebBusy = false;
-          this.waMsg = err?.error?.message || 'فشل بدء واتساب Web';
+          this.waMsg = err?.error?.message || this.lang.t('admin.wa.errStart');
         },
       });
   }
@@ -2049,11 +2050,11 @@ export class Admin implements OnInit, OnDestroy {
           this.waWebError = '';
           this.waWebLinkedPhone = '';
           this.waLiveConfigured = false;
-          this.waMsg = res.message || 'تم فصل الجلسة';
+          this.waMsg = res.message || this.lang.t('admin.wa.loggedOut');
         },
         error: (err) => {
           this.waWebBusy = false;
-          this.waMsg = err?.error?.message || 'فشل الفصل';
+          this.waMsg = err?.error?.message || this.lang.t('admin.wa.errLogout');
         },
       });
   }
@@ -2081,7 +2082,7 @@ export class Admin implements OnInit, OnDestroy {
       next: (res) => {
         this.waSaving = false;
         this.waLiveConfigured = !!res.liveConfigured;
-        this.waMsg = res.message || 'تم الحفظ';
+        this.waMsg = res.message || this.lang.t('admin.wa.saved');
         this.waToken = '';
         this.applyWaWebStatus(res.web);
         this.loadWhatsAppSettings();
@@ -2091,7 +2092,7 @@ export class Admin implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.waSaving = false;
-        this.waMsg = err?.error?.message || 'فشل الحفظ';
+        this.waMsg = err?.error?.message || this.lang.t('admin.wa.errSave');
       },
     });
   }
@@ -2108,15 +2109,15 @@ export class Admin implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          let msg = res.message || 'تم الإرسال';
+          let msg = res.message || this.lang.t('admin.wa.sent');
           if (res.to) {
-            msg = `${msg} — تم الإرسال إلى ${res.to}`;
+            msg = `${msg} — ${res.to}`;
           }
           this.waMsg = msg;
         },
         error: (err) => {
           const body = err?.error;
-          let msg = body?.message || 'فشل الاختبار';
+          let msg = body?.message || this.lang.t('admin.wa.errTest');
           if (body?.detail?.self) {
             msg =
               '⛔ هذا رقم واتساب المعمل المربوط نفسه — الرسائل المرسلة لنفس الرقم مش هتظهر كإشعار على الموبايل. جرّب رقم موبايل تاني عليه واتساب للاختبار.' +
@@ -2135,10 +2136,10 @@ export class Admin implements OnInit, OnDestroy {
       {}
     ).subscribe({
       next: (res) => {
-        this.waMsg = res.message || 'تم إرسال الملخص';
+        this.waMsg = res.message || this.lang.t('admin.wa.dailySent');
       },
       error: (err) => {
-        this.waMsg = err?.error?.message || 'فشل إرسال الملخص';
+        this.waMsg = err?.error?.message || this.lang.t('admin.wa.errDaily');
       },
     });
   }

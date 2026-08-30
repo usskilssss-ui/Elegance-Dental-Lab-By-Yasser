@@ -2,6 +2,8 @@
   position: relative;
   display: inline-flex;
   flex-shrink: 0;
+  overflow: visible;
+  z-index: 60;
 }
 
 .app-menu-btn {
@@ -31,9 +33,12 @@
 .app-menu-panel {
   position: absolute;
   top: calc(100% + 8px);
-  inset-inline-start: 0;
-  z-index: 1200;
-  min-width: 220px;
+  /* Prefer opening toward the center of the screen so RTL/LTR never clips */
+  left: 0;
+  right: auto;
+  z-index: 5000;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 24px));
   padding: 8px;
   border-radius: 14px;
   border: 1px solid var(--border, var(--border-primary, #e2e8f0));
@@ -42,6 +47,19 @@
   animation: app-menu-in 0.14s ease;
   text-align: left;
   direction: ltr;
+  overflow: visible;
+  white-space: normal;
+  box-sizing: border-box;
+}
+
+/* When Arabic/RTL, open panel leftward so text is not clipped by the screen edge */
+.app-menu-panel.app-menu-panel--rtl,
+:host-context([dir='rtl']) .app-menu-panel,
+:host-context(html[dir='rtl']) .app-menu-panel,
+:host-context(body[dir='rtl']) .app-menu-panel,
+[dir='rtl'] .app-menu-panel {
+  left: auto;
+  right: 0;
 }
 
 .app-menu-section {
@@ -51,6 +69,8 @@
   letter-spacing: 0.04em;
   color: var(--text-muted, #94a3b8);
   text-align: left;
+  white-space: normal;
+  overflow: visible;
 }
 
 .app-menu-item {
@@ -66,10 +86,20 @@
   font: inherit;
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.35;
   padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
   direction: ltr;
+  white-space: normal;
+  overflow: visible;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.app-menu-item > span {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .app-menu-item.app-menu-lang {
@@ -91,6 +121,7 @@
 .app-menu-check {
   font-size: 13px;
   font-weight: 900;
+  flex-shrink: 0;
 }
 
 .app-menu-sep {
@@ -144,6 +175,6 @@
 
 @media (max-width: 640px) {
   .app-menu-panel {
-    min-width: 200px;
+    min-width: 220px;
   }
 }

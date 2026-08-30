@@ -16,8 +16,12 @@
   </button>
 
   @if (open()) {
-    <div class="app-menu-panel" role="menu" (click)="$event.stopPropagation()">
-      @for (item of items; track item.id) {
+    <div
+      class="app-menu-panel"
+      [class.app-menu-panel--rtl]="lang.isArabic()"
+      role="menu"
+      (click)="$event.stopPropagation()"
+    >      @for (item of items; track item.id) {
         <button
           type="button"
           class="app-menu-item"
