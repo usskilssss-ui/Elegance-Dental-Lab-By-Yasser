@@ -22,13 +22,23 @@ export function toStoredCaseImagePath(rawUrl: string): string {
   if (/^https?:\/\//i.test(clean)) {
     try {
       const parsed = new URL(clean);
-      return parsed.pathname || '';
+      // Our own uploads host → store pathname only
+      if (MEDIA_BASE_URL && clean.startsWith(MEDIA_BASE_URL)) {
+        return parsed.pathname || '';
+      }
+      // External scan links (Drive / WeTransfer / lab cloud) → keep full URL
+      return clean;
     } catch {
       return '';
     }
   }
 
   return clean.startsWith('/') ? clean : `/${clean}`;
+}
+
+export function isExternalScanUrl(rawUrl: string | undefined | null): boolean {
+  const clean = String(rawUrl || '').trim();
+  return /^https?:\/\//i.test(clean);
 }
 
 export function sanitizeCaseImageListForStorage(images: string[] | undefined): string[] {
@@ -66,6 +76,11 @@ export type CaseMeta = {
   intakeType?: 'impression' | 'scan';
   /** مصدر تسجيل الحالة */
   entrySource?: 'secretary' | 'print' | 'doctor';
+  /**
+   * مخطط الأسنان (FDI): خامة لكل سن + groupId للجسور المتصلة.
+   * مثال: [{ fdi:'16', material:'Zircon', groupId:'g1' }, ...]
+   */
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
 };
 
 export type SecretaryCaseFormPayload = {
@@ -87,6 +102,7 @@ export type SecretaryCaseFormPayload = {
   exitedAt?: string;
   intakeType?: 'impression' | 'scan';
   entrySource?: 'secretary' | 'print' | 'doctor';
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
 };
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
@@ -126,6 +142,15 @@ export function buildSecretaryNotes(
   }
   if (form.entrySource === 'secretary' || form.entrySource === 'print' || form.entrySource === 'doctor') {
     meta.entrySource = form.entrySource;
+  }
+  if (Array.isArray(form.teeth) && form.teeth.length) {
+    meta.teeth = form.teeth
+      .filter((t) => t && t.fdi && t.material && t.groupId)
+      .map((t) => ({
+        fdi: String(t.fdi),
+        material: String(t.material),
+        groupId: String(t.groupId),
+      }));
   }
   const path = plyPreserve?.plyScanPath?.trim();
   if (path) {
@@ -254,9 +279,9 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const finishingNotes = String(meta['finishingNotes'] ?? '');
   const selectedFileName = String(meta['selectedFileName'] ?? '');
   const uiStatusOverride = String(meta['uiStatusOverride'] ?? '');
-  const plyPathRaw = meta['plyScanPath'];
-  const plyScanPath = typeof plyPathRaw === 'string' ? plyPathRaw : '';
-  const plyFileName = String(meta['plyFileName'] ?? '');
+  const plyPathRaw = doc['plyScanPath'] || meta['plyScanPath'];
+  const plyScanPath = typeof plyPathRaw === 'string' ? plyPathRaw.trim() : '';
+  const plyFileName = String(doc['plyFileName'] ?? meta['plyFileName'] ?? '').trim();
   const plyScanUrl = plyScanPath ? normalizeCaseImageUrl(plyScanPath) : '';
   const intakeRaw = String(meta['intakeType'] ?? '').toLowerCase();
   const intakeType: 'impression' | 'scan' | undefined =
@@ -274,6 +299,20 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
   const requesterType: 'doctor' | 'student' =
     requesterTypeRaw === 'student' ? 'student' : 'doctor';
+  const teethRaw = meta['teeth'];
+  const teeth = Array.isArray(teethRaw)
+    ? teethRaw
+        .map((t) => {
+          if (!t || typeof t !== 'object') return null;
+          const row = t as Record<string, unknown>;
+          const fdi = String(row['fdi'] ?? '').trim();
+          const material = String(row['material'] ?? '').trim();
+          const groupId = String(row['groupId'] ?? '').trim();
+          if (!fdi || !material || !groupId) return null;
+          return { fdi, material, groupId };
+        })
+        .filter((t): t is { fdi: string; material: string; groupId: string } => !!t)
+    : undefined;
   const salaryAmountRaw = doc['salaryAmount'];
   const salaryAmount =
     typeof salaryAmountRaw === 'number' && !Number.isNaN(salaryAmountRaw)
@@ -327,6 +366,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     plyFileName: plyFileName || undefined,
     intakeType,
     entrySource,
+    teeth,
     exitedAt: exitedDisplay || undefined,
     exitedAtRaw: exitedAtRaw ? String(exitedAtRaw) : undefined,
   };

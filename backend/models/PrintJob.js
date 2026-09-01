@@ -14,6 +14,14 @@ const printJobSchema = new mongoose.Schema(
       caseNumber: { type: String, default: '' },
       printDate:  { type: String, default: '' },
       intakeType: { type: String, enum: ['', 'impression', 'scan'], default: '' },
+      /** FDI tooth chart selections for print sheet highlighting */
+      teeth: [
+        {
+          fdi: { type: String, required: true },
+          material: { type: String, required: true },
+          groupId: { type: String, required: true },
+        },
+      ],
     },
     status: {
       type: String,

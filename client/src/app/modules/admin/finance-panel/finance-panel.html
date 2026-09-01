@@ -1,0 +1,475 @@
+<div class="fp-root">
+  <div class="fp-tabs">
+    <button type="button" [class.active]="innerTab === 'overview'" (click)="setInnerTab('overview')">{{ 'admin.finance.tab.overview' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'debts'" (click)="setInnerTab('debts')">{{ 'admin.finance.tab.debts' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'profits'" (click)="setInnerTab('profits')">{{ 'admin.finance.tab.profits' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'inventory'" (click)="setInnerTab('inventory')">{{ 'admin.finance.tab.inventory' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'payroll'" (click)="setInnerTab('payroll')">{{ 'admin.finance.tab.payroll' | t }}</button>
+    <button type="button" [class.active]="innerTab === 'expenses'" (click)="setInnerTab('expenses')">{{ 'admin.finance.tab.expenses' | t }}</button>
+  </div>
+
+  <p class="fp-hint">الشهر والسنة من الفلاتر فوق. غيّر طريقة حساب الربح بين المقبوض والفواتير في أي وقت.</p>
+
+  <div class="fp-msg ok" *ngIf="okMsg">{{ okMsg }}</div>
+  <div class="fp-msg err" *ngIf="error">{{ error }}</div>
+  <div class="fp-loading" *ngIf="loading">جاري التحميل…</div>
+
+  <!-- OVERVIEW -->
+  <section *ngIf="innerTab === 'overview' && summary" class="fp-section">
+    <div class="fp-mode">
+      <span>حساب الربح:</span>
+      <button type="button" [class.active]="profitMode === 'cash'" (click)="setProfitMode('cash')">على المقبوض</button>
+      <button type="button" [class.active]="profitMode === 'accrual'" (click)="setProfitMode('accrual')">على إجمالي الفواتير</button>
+    </div>
+
+    <div class="fp-cards">
+      <div class="fp-card">
+        <div class="lbl">الإيراد</div>
+        <div class="val">{{ summary.revenue | number:'1.0-0' }} EGP</div>
+        <div class="sub">{{ summary.revenueDetail?.label }}</div>
+      </div>
+      <div class="fp-card danger">
+        <div class="lbl">إجمالي التكاليف المحتسبة</div>
+        <div class="val">{{ summary.costs?.expensesForProfit | number:'1.0-0' }} EGP</div>
+      </div>
+      <div class="fp-card" [class.good]="summary.netProfit >= 0" [class.bad]="summary.netProfit < 0">
+        <div class="lbl">صافي الربح</div>
+        <div class="val">{{ summary.netProfit | number:'1.0-0' }} EGP</div>
+        <div class="sub">{{ summary.modeLabel }}</div>
+      </div>
+      <div class="fp-card">
+        <div class="lbl">قيمة المخزون الحالي</div>
+        <div class="val">{{ summary.inventoryValue | number:'1.0-0' }} EGP</div>
+        <div class="sub" *ngIf="summary.lowStockCount">تنبيه نقص: {{ summary.lowStockCount }} صنف</div>
+      </div>
+    </div>
+
+    <div class="fp-breakdown">
+      <h3>تفصيل التكاليف</h3>
+      <table>
+        <tr><td>مشتريات مواد (الشهر)</td><td>{{ summary.costs?.materialPurchasesTotal | number:'1.0-0' }} EGP</td></tr>
+        <tr><td>تكلفة مواد مستهلكة COGS</td><td>{{ summary.costs?.cogs | number:'1.0-0' }} EGP</td></tr>
+        <tr><td>رواتب الشهر (كل المسودات)</td><td>{{ summary.costs?.payrollTotal | number:'1.0-0' }} EGP</td></tr>
+        <tr><td>رواتب مدفوعة</td><td>{{ summary.costs?.payrollPaid | number:'1.0-0' }} EGP</td></tr>
+        <tr><td>مصاريف تشغيل</td><td>{{ summary.costs?.operatingTotal | number:'1.0-0' }} EGP</td></tr>
+      </table>
+      <p class="fp-explain">{{ summary.explain }}</p>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px" *ngIf="lowStock.length">
+      <h3>تنبيه مخزون ناقص ({{ lowStock.length }})</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>المادة</th>
+            <th>المتبقي</th>
+            <th>حد التنبيه</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let m of lowStock" class="low">
+            <td>{{ m.label }}</td>
+            <td><strong>{{ m.stockQty | number:'1.0-2' }}</strong></td>
+            <td>{{ m.lowStockAlert }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="fp-mini">عند النقص بيحصل إشعار للأدمن + واتساب (لو مفعّل وفيه أرقام تنبيه).</p>
+    </div>
+  </section>
+
+  <!-- DOCTOR DEBTS -->
+  <section *ngIf="innerTab === 'debts'" class="fp-section">
+    <div class="fp-cards">
+      <div class="fp-card danger">
+        <div class="lbl">إجمالي المستحق على الأطباء</div>
+        <div class="val">{{ debtsTotal | number:'1.0-0' }} EGP</div>
+        <div class="sub">{{ debts.length }} طبيب</div>
+      </div>
+    </div>
+    <div class="fp-box">
+      <h3>ديون الأطباء (حالات خارجة غير مدفوعة)</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الطبيب</th>
+            <th>المبلغ</th>
+            <th>حالات</th>
+            <th>أقدم تأخير (يوم)</th>
+            <th>واتساب</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let d of debts">
+            <td>{{ d.doctorName }}</td>
+            <td><strong>{{ d.unpaidAmount | number:'1.0-0' }}</strong></td>
+            <td>{{ d.unpaidCases }}</td>
+            <td>{{ d.maxDaysOverdue }}</td>
+            <td>{{ d.phone || '—' }}</td>
+            <td>
+              <button type="button" class="fp-btn sm primary" (click)="remindDebt(d)">إرسال تذكير</button>
+            </td>
+          </tr>
+          <tr *ngIf="!debts.length"><td colspan="6" class="empty">مفيش ديون حالياً</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CASE PROFITS -->
+  <section *ngIf="innerTab === 'profits'" class="fp-section">
+    <div class="fp-cards" *ngIf="profitTotals">
+      <div class="fp-card">
+        <div class="lbl">إيراد الحالات</div>
+        <div class="val">{{ profitTotals.revenue | number:'1.0-0' }} EGP</div>
+      </div>
+      <div class="fp-card danger">
+        <div class="lbl">تكلفة مواد</div>
+        <div class="val">{{ profitTotals.materialCost | number:'1.0-0' }} EGP</div>
+      </div>
+      <div class="fp-card" [class.good]="profitTotals.caseProfit >= 0" [class.bad]="profitTotals.caseProfit < 0">
+        <div class="lbl">صافي ربح المواد</div>
+        <div class="val">{{ profitTotals.caseProfit | number:'1.0-0' }} EGP</div>
+      </div>
+    </div>
+    <div class="fp-box">
+      <h3>ربحية كل حالة (بعد الخروج)</h3>
+      <p class="fp-mini">الربح = فاتورة الحالة − تكلفة المواد المستهلكة من المخزون. الحالات القديمة قبل التحديث ممكن تبقى تكلفة موادها 0.</p>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الحالة</th>
+            <th>الطبيب</th>
+            <th>المريض</th>
+            <th>إيراد</th>
+            <th>تكلفة مواد</th>
+            <th>ربح</th>
+            <th>الدفع</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of profitRows">
+            <td>{{ r.caseNumber }}</td>
+            <td>{{ r.doctorName }}</td>
+            <td>{{ r.patientName }}</td>
+            <td>{{ r.revenue | number:'1.0-0' }}</td>
+            <td>{{ r.materialCost | number:'1.0-0' }}</td>
+            <td [style.color]="r.caseProfit >= 0 ? '#047857' : '#b91c1c'"><strong>{{ r.caseProfit | number:'1.0-0' }}</strong></td>
+            <td>{{ r.paymentStatus === 'paid' ? 'مدفوع' : 'مستحق' }}</td>
+          </tr>
+          <tr *ngIf="!profitRows.length"><td colspan="7" class="empty">لا حالات خارجة في هذه الفترة</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- INVENTORY -->
+  <section *ngIf="innerTab === 'inventory'" class="fp-section">
+    <div class="fp-grid-2">
+      <div class="fp-box">
+        <h3>تسجيل شراء مادة</h3>
+        <label>الماتريال</label>
+        <select [(ngModel)]="purchaseForm.materialId">
+          <option *ngFor="let m of stock" [value]="m._id">{{ m.label }} (متبقي {{ m.stockQty || 0 }})</option>
+        </select>
+        <div class="fp-row2">
+          <div>
+            <label>الكمية</label>
+            <input type="number" min="0.01" step="0.01" [(ngModel)]="purchaseForm.quantity" />
+          </div>
+          <div>
+            <label>سعر الوحدة (تكلفة)</label>
+            <input type="number" min="0" step="0.01" [(ngModel)]="purchaseForm.unitCost" />
+          </div>
+        </div>
+        <label>المورد</label>
+        <input type="text" [(ngModel)]="purchaseForm.supplier" />
+        <label>رقم الفاتورة</label>
+        <input type="text" [(ngModel)]="purchaseForm.invoiceRef" />
+        <label>التاريخ</label>
+        <input type="date" [(ngModel)]="purchaseForm.purchaseDate" />
+        <label>ملاحظات</label>
+        <input type="text" [(ngModel)]="purchaseForm.notes" />
+        <button type="button" class="fp-btn primary" (click)="submitPurchase()">حفظ الشراء + زيادة المخزون</button>
+      </div>
+
+      <div class="fp-box">
+        <h3>تعديل يدوي للمخزون</h3>
+        <p class="fp-mini">موجب = زيادة · سالب = نقصان (جرد / تلف)</p>
+        <label>الماتريال</label>
+        <select [(ngModel)]="adjustForm.materialId">
+          <option *ngFor="let m of stock" [value]="m._id">{{ m.label }}</option>
+        </select>
+        <label>الكمية (+/−)</label>
+        <input type="number" step="0.01" [(ngModel)]="adjustForm.quantityDelta" />
+        <label>تكلفة الوحدة (للزيادة فقط، اختياري)</label>
+        <input type="number" min="0" step="0.01" [(ngModel)]="adjustForm.unitCost" />
+        <label>السبب</label>
+        <input type="text" [(ngModel)]="adjustForm.notes" />
+        <button type="button" class="fp-btn" (click)="submitAdjust()">تطبيق التعديل</button>
+      </div>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>المخزون الحالي</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>المادة</th>
+            <th>الكمية المتبقية</th>
+            <th>متوسط التكلفة</th>
+            <th>قيمة المخزون</th>
+            <th>سعر البيع</th>
+            <th>تنبيه عند ≤</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let m of stock" [class.low]="m.lowStockAlert > 0 && m.stockQty <= m.lowStockAlert">
+            <td>{{ m.label }}</td>
+            <td><strong>{{ m.stockQty | number:'1.0-2' }}</strong></td>
+            <td>{{ m.avgUnitCost | number:'1.0-2' }}</td>
+            <td>{{ stockValue(m) | number:'1.0-0' }}</td>
+            <td>{{ m.defaultPrice | number:'1.0-0' }}</td>
+            <td><input class="tiny" type="number" [(ngModel)]="m.lowStockAlert" /></td>
+            <td><button type="button" class="fp-btn sm" (click)="saveLowStock(m)">حفظ</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>مشتريات الشهر</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>المادة</th>
+            <th>كمية</th>
+            <th>سعر الوحدة</th>
+            <th>الإجمالي</th>
+            <th>المورد</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let p of purchases">
+            <td>{{ p.purchaseDate | date:'dd/MM/yyyy' }}</td>
+            <td>{{ p.materialLabel }}</td>
+            <td>{{ p.quantity }}</td>
+            <td>{{ p.unitCost | number:'1.0-2' }}</td>
+            <td>{{ p.totalCost | number:'1.0-0' }}</td>
+            <td>{{ p.supplier || '—' }}</td>
+          </tr>
+          <tr *ngIf="!purchases.length"><td colspan="6" class="empty">لا مشتريات في هذه الفترة</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>حركة المخزون (شراء / استهلاك عند خروج الحالة / تعديل)</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>النوع</th>
+            <th>المادة</th>
+            <th>Δ كمية</th>
+            <th>التكلفة</th>
+            <th>الرصيد بعد</th>
+            <th>ملاحظة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let mv of movements">
+            <td>{{ mv.movementDate | date:'dd/MM/yyyy' }}</td>
+            <td>{{ movementTypeLabel(mv.type) }}</td>
+            <td>{{ mv.materialLabel }}</td>
+            <td>{{ mv.quantityDelta }}</td>
+            <td>{{ mv.costImpact | number:'1.0-0' }}</td>
+            <td>{{ mv.balanceAfter }}</td>
+            <td>{{ mv.notes || '—' }}</td>
+          </tr>
+          <tr *ngIf="!movements.length"><td colspan="7" class="empty">لا حركة في هذه الفترة</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PAYROLL -->
+  <section *ngIf="innerTab === 'payroll'" class="fp-section">
+    <div class="fp-box">
+      <h3>إضافة موظف للرواتب (مش لازم يكون له أكونت في السيستم)</h3>
+      <div class="fp-row2">
+        <div>
+          <label>الاسم</label>
+          <input type="text" [(ngModel)]="newEmployee.name" placeholder="اسم الموظف" />
+        </div>
+        <div>
+          <label>المسمى الوظيفي</label>
+          <input type="text" [(ngModel)]="newEmployee.jobTitle" placeholder="مثال: فني إنهاء" />
+        </div>
+      </div>
+      <div class="fp-row2">
+        <div>
+          <label>نوع الدفع</label>
+          <select [(ngModel)]="newEmployee.payType">
+            <option value="fixed">ثابت شهري</option>
+            <option value="piece">بالقطعة</option>
+            <option value="mixed">ثابت + قطعة</option>
+          </select>
+        </div>
+        <div>
+          <label>هاتف (اختياري)</label>
+          <input type="text" [(ngModel)]="newEmployee.phone" />
+        </div>
+      </div>
+      <div class="fp-row2">
+        <div>
+          <label>راتب ثابت</label>
+          <input type="number" min="0" [(ngModel)]="newEmployee.baseSalary" />
+        </div>
+        <div>
+          <label>سعر القطعة</label>
+          <input type="number" min="0" [(ngModel)]="newEmployee.defaultPieceRate" />
+        </div>
+      </div>
+      <button type="button" class="fp-btn primary" (click)="addEmployee()">إضافة موظف</button>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>قائمة موظفي الرواتب</h3>
+      <p class="fp-mini">دي قائمة مستقلة عن «الموظفون» في السيستم — تقدر تضيف أي حد هنا للرواتب.</p>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الموظف</th>
+            <th>الوظيفة</th>
+            <th>في الرواتب؟</th>
+            <th>نوع الدفع</th>
+            <th>راتب ثابت</th>
+            <th>سعر القطعة</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let emp of employees">
+            <td><input type="text" [(ngModel)]="emp.name" /></td>
+            <td><input type="text" [(ngModel)]="emp.jobTitle" /></td>
+            <td><input type="checkbox" [(ngModel)]="emp.payrollEnabled" /></td>
+            <td>
+              <select [(ngModel)]="emp.payType">
+                <option value="fixed">ثابت شهري</option>
+                <option value="piece">بالقطعة</option>
+                <option value="mixed">ثابت + قطعة</option>
+              </select>
+            </td>
+            <td><input class="tiny" type="number" [(ngModel)]="emp.baseSalary" /></td>
+            <td><input class="tiny" type="number" [(ngModel)]="emp.defaultPieceRate" /></td>
+            <td class="actions">
+              <button type="button" class="fp-btn sm" (click)="saveEmployeePay(emp)">حفظ</button>
+              <button type="button" class="fp-btn sm danger" (click)="removeEmployee(emp)">إيقاف</button>
+            </td>
+          </tr>
+          <tr *ngIf="!employees.length"><td colspan="7" class="empty">لا موظفين بعد — أضف من النموذج فوق</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <div class="fp-toolbar">
+        <h3>كشف رواتب الشهر</h3>
+        <button type="button" class="fp-btn primary" (click)="generateDrafts()">توليد مسودات من القائمة</button>
+      </div>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>الموظف</th>
+            <th>أساسي</th>
+            <th>حافز</th>
+            <th>وحدات</th>
+            <th>سعر قطعة</th>
+            <th>خصم</th>
+            <th>الإجمالي</th>
+            <th>الحالة</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of payrollRows">
+            <td>{{ row.employeeName }}</td>
+            <td><input class="tiny" type="number" [(ngModel)]="payrollEdit[row._id].baseAmount" /></td>
+            <td><input class="tiny" type="number" [(ngModel)]="payrollEdit[row._id].incentiveAmount" /></td>
+            <td><input class="tiny" type="number" [(ngModel)]="payrollEdit[row._id].pieceUnits" /></td>
+            <td><input class="tiny" type="number" [(ngModel)]="payrollEdit[row._id].pieceRate" /></td>
+            <td><input class="tiny" type="number" [(ngModel)]="payrollEdit[row._id].deductions" /></td>
+            <td><strong>{{ row.totalAmount | number:'1.0-0' }}</strong></td>
+            <td>{{ row.status === 'paid' ? 'مدفوع' : 'مسودة' }}</td>
+            <td class="actions">
+              <button type="button" class="fp-btn sm" (click)="savePayrollRow(row)">حفظ</button>
+              <button type="button" class="fp-btn sm primary" *ngIf="row.status !== 'paid'" (click)="markPaid(row)">تم الدفع</button>
+              <button type="button" class="fp-btn sm danger" (click)="deletePayrollRow(row)">حذف</button>
+            </td>
+          </tr>
+          <tr *ngIf="!payrollRows.length"><td colspan="9" class="empty">لا كشف بعد — أضف موظفين ثم اضغط توليد مسودات</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- EXPENSES -->
+  <section *ngIf="innerTab === 'expenses'" class="fp-section">
+    <div class="fp-box">
+      <h3>إضافة مصروف تشغيل</h3>
+      <div class="fp-row2">
+        <div>
+          <label>التصنيف</label>
+          <select [(ngModel)]="expenseForm.category">
+            <option value="rent">إيجار</option>
+            <option value="utilities">مرافق</option>
+            <option value="maintenance">صيانة</option>
+            <option value="delivery">توصيل</option>
+            <option value="supplies">مستلزمات</option>
+            <option value="other">أخرى</option>
+          </select>
+        </div>
+        <div>
+          <label>المبلغ</label>
+          <input type="number" min="0" [(ngModel)]="expenseForm.amount" />
+        </div>
+      </div>
+      <label>العنوان</label>
+      <input type="text" [(ngModel)]="expenseForm.title" placeholder="مثال: فاتورة كهربا" />
+      <label>التاريخ</label>
+      <input type="date" [(ngModel)]="expenseForm.expenseDate" />
+      <label>ملاحظات</label>
+      <input type="text" [(ngModel)]="expenseForm.notes" />
+      <button type="button" class="fp-btn primary" (click)="submitExpense()">حفظ المصروف</button>
+    </div>
+
+    <div class="fp-box" style="margin-top:16px">
+      <h3>مصاريف الشهر</h3>
+      <table class="fp-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>التصنيف</th>
+            <th>العنوان</th>
+            <th>المبلغ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of expenses">
+            <td>{{ e.expenseDate | date:'dd/MM/yyyy' }}</td>
+            <td>{{ categoryLabels[e.category] || e.category }}</td>
+            <td>{{ e.title }}</td>
+            <td>{{ e.amount | number:'1.0-0' }}</td>
+            <td><button type="button" class="fp-btn sm danger" (click)="deleteExpense(e)">حذف</button></td>
+          </tr>
+          <tr *ngIf="!expenses.length"><td colspan="5" class="empty">لا مصاريف في هذه الفترة</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

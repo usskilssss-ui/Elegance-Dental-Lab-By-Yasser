@@ -1,0 +1,69 @@
+<div class="app-menu-anchor" (click)="$event.stopPropagation()">
+  <button
+    type="button"
+    class="icon-btn app-menu-btn"
+    [attr.aria-label]="'menu.title' | t"
+    [attr.title]="'menu.title' | t"
+    aria-haspopup="menu"
+    [attr.aria-expanded]="open()"
+    (click)="toggle($event)"
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20" aria-hidden="true">
+      <line x1="4" y1="7" x2="20" y2="7" stroke-linecap="round"></line>
+      <line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round"></line>
+      <line x1="4" y1="17" x2="20" y2="17" stroke-linecap="round"></line>
+    </svg>
+  </button>
+
+  @if (open()) {
+    <div
+      class="app-menu-panel"
+      [class.app-menu-panel--rtl]="lang.isArabic()"
+      role="menu"
+      (click)="$event.stopPropagation()"
+    >      @for (item of items; track item.id) {
+        <button
+          type="button"
+          class="app-menu-item"
+          role="menuitem"
+          (click)="onItem(item, $event)"
+        >
+          {{ item.labelKey | t: item.labelFallback }}
+        </button>
+      }
+
+      @if (items.length) {
+        <div class="app-menu-sep" role="separator"></div>
+      }
+      <p class="app-menu-section">{{ 'lang.dialogTitle' | t }}</p>
+
+      <button
+        type="button"
+        class="app-menu-item app-menu-lang"
+        role="menuitemradio"
+        [attr.aria-checked]="lang.isArabic()"
+        [class.active]="lang.isArabic()"
+        (click)="setArabic($event)"
+      >
+        <span>{{ 'menu.language.ar' | t }}</span>
+        @if (lang.isArabic()) {
+          <span class="app-menu-check" aria-hidden="true">✓</span>
+        }
+      </button>
+
+      <button
+        type="button"
+        class="app-menu-item app-menu-lang"
+        role="menuitemradio"
+        [attr.aria-checked]="lang.isEnglish()"
+        [class.active]="lang.isEnglish()"
+        (click)="setEnglish($event)"
+      >
+        <span>{{ 'menu.language.en' | t }}</span>
+        @if (lang.isEnglish()) {
+          <span class="app-menu-check" aria-hidden="true">✓</span>
+        }
+      </button>
+    </div>
+  }
+</div>

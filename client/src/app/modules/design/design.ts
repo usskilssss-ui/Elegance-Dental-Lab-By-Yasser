@@ -15,7 +15,11 @@ import {
 } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 export type CasePriority = 'emergency' | 'normal' | 'low';
 export type CaseStatus =
@@ -36,7 +40,7 @@ export interface WorkStage {
 @Component({
   selector: 'app-case-details',
   standalone: true,
-  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent, AppOverflowMenuComponent, TPipe],
   templateUrl: './design.html',
   styleUrls: ['./design.css']
 })
@@ -47,6 +51,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   private socketService = inject(SocketService);
   private cdr = inject(ChangeDetectorRef);
   public themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   private socketSubs: Subscription[] = [];
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private isAutosaving = false;
@@ -62,7 +67,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   showFinishConfirm = false;
   toastMsg          = '';
   toastVisible      = false;
-  activeFilter: CaseStatus | 'all' = 'pending';
+  activeFilter: CaseStatus | 'all' = 'all';
   searchTerm        = '';
 
   /* ── Notifications ── */
@@ -110,7 +115,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     if (parts.length >= 4) {
       const datePart = parts.slice(0, 3).join(' ');
       let timePart = parts.slice(3).join(' ');
-      if (timePart && !timePart.includes('م') && !timePart.includes('ص')) {
+      if (timePart && !/[مص]|AM|PM/i.test(timePart)) {
         timePart = this.localTimeTo12Hour(timePart);
       }
       return { date: datePart, time: timePart };
@@ -119,7 +124,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     if (dateMatch) {
       const datePart = dateMatch[1];
       let timePart = dateMatch[2] ? dateMatch[2].trim() : '';
-      if (timePart && !timePart.includes('م') && !timePart.includes('ص')) {
+      if (timePart && !/[مص]|AM|PM/i.test(timePart)) {
         timePart = this.localTimeTo12Hour(timePart);
       }
       return { date: datePart, time: timePart };
@@ -134,17 +139,19 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     let hour = parseInt(parts[0], 10);
     const minute = parts[1];
     if (isNaN(hour)) return timeStr;
-    const ampm = hour >= 12 ? 'م' : 'ص';
+    const ampm = hour >= 12 ? this.lang.t('time.pm') : this.lang.t('time.am');
     hour = hour % 12;
     hour = hour ? hour : 12;
     return `${hour}:${minute} ${ampm}`;
   }
 
   /* ── Work stages shown inside detail view ── */
-  workStages: WorkStage[] = [
-    { id: 'in-progress',    label: 'تحت الديزاين',    icon: 'clock'   },
-    { id: 'finished',       label: 'منتهية',         icon: 'check'   },
-  ];
+  get workStages(): WorkStage[] {
+    return [
+      { id: 'in-progress', label: this.lang.t('design.stage.inProgress'), icon: 'clock' },
+      { id: 'finished', label: this.lang.t('design.stage.finished'), icon: 'check' },
+    ];
+  }
 
   /* ── Cases list - مأخوذة من service مشترك ── */
   get cases(): DentalCase[] {
@@ -238,7 +245,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
       },
       error: () => {
         if (showErrorToast) {
-          this.showToast('تعذر تحميل الحالات من الخادم');
+          this.showToast(this.lang.t('design.toast.loadFail'));
         }
       },
     });
@@ -246,9 +253,18 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   /* ════════ COMPUTED ════════ */
 
-  /** الحالات المرئية للديزاينر - تستثني الخارجة (exited) */
+  /** الحالات المرئية للديزاينر — فقط مرحلة الديزاين */
   get designerVisibleCases(): DentalCase[] {
-    return this.cases.filter(c => c.status !== 'exited');
+    return this.cases.filter((c) => {
+      const stage = String(c.currentStage || '').toLowerCase();
+      if (stage === 'design') return true;
+      // Legacy: status in-progress without stage field
+      if (!stage && c.status === 'in-progress') return true;
+      if (c.status === 'needs-revision' && stage !== 'finishing' && stage !== 'completed' && stage !== 'exited') {
+        return true;
+      }
+      return false;
+    });
   }
 
   get filteredCases(): DentalCase[] {
@@ -286,7 +302,11 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   }
 
   priorityLabel(p: CasePriority): string {
-    return { emergency: 'طارئ', normal: 'عادي', low: 'منخفض' }[p];
+    return {
+      emergency: this.lang.t('design.priority.emergency'),
+      normal: this.lang.t('design.priority.normal'),
+      low: this.lang.t('design.priority.low'),
+    }[p];
   }
 
   cleanDoctorName(name: string): string {
@@ -296,13 +316,13 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   statusLabel(s: CaseStatus): string {
     return {
-      pending:               'قيد الانتظار',
-      'in-progress':         'تحت الديزاين',
-      'needs-revision':      'محتاجة تعديل',
-      'under-khart':         'تحت الخرط',
-      'ready-for-finishing': 'تحت الفينيش',
-      finished:              'منتهية',
-      exited:                'خروج',
+      pending: this.lang.t('design.status.pending'),
+      'in-progress': this.lang.t('design.status.inProgress'),
+      'needs-revision': this.lang.t('design.status.needsRevision'),
+      'under-khart': this.lang.t('design.status.underKhart'),
+      'ready-for-finishing': this.lang.t('design.status.readyFinishing'),
+      finished: this.lang.t('design.status.finished'),
+      exited: this.lang.t('design.status.exited'),
     }[s];
   }
 
@@ -377,7 +397,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     this.moveStageByStatus('finished');
 
     this.isFinishing = false;
-    this.showToast('تم إنهاء الحالة بنجاح ✅');
+    this.showToast(this.lang.t('design.toast.finished'));
     setTimeout(() => this.goBack(), 1800);
   }
 
@@ -392,17 +412,17 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
         this.isSaving = false;
         this.saveSuccess = true;
         this.reloadCasesFromBackend(false);
-        this.showToast('تم حفظ بيانات الحالة');
+        this.showToast(this.lang.t('design.toast.saved'));
         setTimeout(() => (this.saveSuccess = false), 3000);
       },
       error: (err) => {
         this.isSaving = false;
         const msg = String(err?.error?.message || '');
         if (msg.includes('assigned to you')) {
-          this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+          this.showToast(this.lang.t('design.toast.assignedOther'));
           return;
         }
-        this.showToast('فشل حفظ البيانات على الخادم');
+        this.showToast(this.lang.t('design.toast.saveFail'));
       },
     });
   }
@@ -434,12 +454,12 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
       const file = files[i];
 
       if (!validTypes.includes(file.type)) {
-        this.showToast('نوع الملف غير مدعوم. يرجى اختيار صور JPEG أو PNG فقط.');
+        this.showToast(this.lang.t('design.toast.badImageType'));
         continue;
       }
 
       if (file.size > maxSize) {
-        this.showToast('حجم الملف كبير جداً. الحد الأقصى 10MB لكل صورة.');
+        this.showToast(this.lang.t('design.toast.imageTooLarge'));
         continue;
       }
 
@@ -457,7 +477,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
           this.scheduleAutosave();
         },
         error: () => {
-          this.showToast('فشل رفع الصورة إلى الخادم');
+          this.showToast(this.lang.t('design.toast.imageUploadFail'));
         },
       });
     }
@@ -645,7 +665,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     } catch (e) {
       console.error(e);
-      this.plyViewerError = 'تعذر تحميل أو عرض ملف PLY';
+      this.plyViewerError = this.lang.t('design.toast.plyFail');
       this.plyViewerLoading = false;
       this.cdr.markForCheck();
     }
@@ -675,9 +695,20 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
   private moveStageByStatus(status: CaseStatus): void {
     if (!this.selectedCase) return;
+
+    if (status === 'exited') {
+      this.caseApi.exitCase(this.selectedCase.id).subscribe({
+        next: () => this.reloadCasesFromBackend(false),
+        error: (err: unknown) => {
+          this.showToast(formatCaseWorkflowError(err, this.lang.t('design.toast.exitFail')));
+          this.sharedCasesService.syncCase({ ...this.selectedCase! });
+        },
+      });
+      return;
+    }
+
     const apiStage =
       status === 'finished'    ? 'completed' :
-      status === 'exited'      ? 'exited' :
       status === 'under-khart' ? 'khart' :
       status === 'in-progress' ? 'design' : 'secretary';
 
@@ -688,15 +719,18 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
           next: () => {
             this.reloadCasesFromBackend(false);
           },
-          error: () => {
+          error: (err: unknown) => {
+            this.showToast(formatCaseWorkflowError(err, this.lang.t('design.toast.moveFail')));
             this.sharedCasesService.syncCase({ ...this.selectedCase! });
           },
         });
       },
       error: (err) => {
-        const msg = String(err?.error?.message || '');
-        if (msg.includes('assigned to you')) {
-          this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+        const msg = formatCaseWorkflowError(err, '');
+        if (msg.includes('assigned to you') || msg.includes('مسندة')) {
+          this.showToast(this.lang.t('design.toast.assignedOther'));
+        } else if (msg) {
+          this.showToast(msg);
         }
         this.sharedCasesService.syncCase({ ...this.selectedCase! });
       },
@@ -706,9 +740,20 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   updateCaseStatusFromCard(c: DentalCase, status: CaseStatus): void {
     if (c.status === status) return;
     c.status = status;
+
+    if (status === 'exited') {
+      this.caseApi.exitCase(c.id).subscribe({
+        next: () => this.reloadCasesFromBackend(false),
+        error: (err: unknown) => {
+          this.showToast(formatCaseWorkflowError(err, this.lang.t('design.toast.exitFail')));
+          this.sharedCasesService.syncCase({ ...c });
+        },
+      });
+      return;
+    }
+
     const apiStage =
       status === 'finished'    ? 'completed' :
-      status === 'exited'      ? 'exited' :
       status === 'under-khart' ? 'khart' :
       status === 'in-progress' ? 'design' : 'secretary';
 
@@ -719,15 +764,18 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
           next: () => {
             this.reloadCasesFromBackend(false);
           },
-          error: () => {
+          error: (err: unknown) => {
+            this.showToast(formatCaseWorkflowError(err, this.lang.t('design.toast.moveFail')));
             this.sharedCasesService.syncCase({ ...c });
           },
         });
       },
       error: (err) => {
-        const msg = String(err?.error?.message || '');
-        if (msg.includes('assigned to you')) {
-          this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+        const msg = formatCaseWorkflowError(err, '');
+        if (msg.includes('assigned to you') || msg.includes('مسندة')) {
+          this.showToast(this.lang.t('design.toast.assignedOther'));
+        } else if (msg) {
+          this.showToast(msg);
         }
         this.sharedCasesService.syncCase({ ...c });
       },
@@ -790,17 +838,17 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
       next: () => {
         this.isAutosaving = false;
         if (showSuccessToast) {
-          this.showToast('تم حفظ بيانات الحالة');
+          this.showToast(this.lang.t('design.toast.saved'));
         }
       },
       error: (err) => {
         this.isAutosaving = false;
         const msg = String(err?.error?.message || '');
         if (msg.includes('assigned to you')) {
-          this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+          this.showToast(this.lang.t('design.toast.assignedOther'));
           return;
         }
-        this.showToast('فشل حفظ البيانات على الخادم');
+        this.showToast(this.lang.t('design.toast.saveFail'));
       },
     });
   }
@@ -830,11 +878,11 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
       error: (err) => {
         const msg = String(err?.error?.message || '');
         if (msg.includes('assigned to you')) {
-          this.showToast('لا يمكنك حفظ هذه الحالة لأنها مسندة لمستخدم آخر');
+          this.showToast(this.lang.t('design.toast.assignedOther'));
           onDone?.();
           return;
         }
-        this.showToast('فشل حفظ البيانات على الخادم');
+        this.showToast(this.lang.t('design.toast.saveFail'));
         onDone?.();
       },
     });

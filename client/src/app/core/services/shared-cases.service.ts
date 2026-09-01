@@ -47,6 +47,8 @@ export interface DentalCase {
   intakeType?: 'impression' | 'scan';
   /** من سجّل الحالة: سكرتارية / طباعة / دكتور */
   entrySource?: 'secretary' | 'print' | 'doctor';
+  /** مخطط الأسنان FDI + خامة + جسر */
+  teeth?: Array<{ fdi: string; material: string; groupId: string }>;
   exitedAt?: string;
   exitedAtRaw?: string;
   /** القيمة الخام لتاريخ الاستلام من قاعدة البيانات (لضمان عدم تغييره عند التعديل) */

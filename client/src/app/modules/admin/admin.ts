@@ -14,7 +14,17 @@ import { Subject, merge } from 'rxjs';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { environment } from '../../../environments/environment';
+import {
+  LabConfigService,
+  LabMaterial,
+  LabBranding,
+  LabWorkflow,
+} from '../../core/services/lab-config.service';
+import { FinancePanel } from './finance-panel/finance-panel';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 
 export interface StaffMember {
   id: string;
@@ -135,7 +145,7 @@ export interface AiChatMessage {
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, FinancePanel, AppOverflowMenuComponent, TPipe],
   templateUrl: './admin.html',
   styleUrl: './admin.css',
   standalone: true
@@ -183,6 +193,59 @@ export class Admin implements OnInit, OnDestroy {
   customWaxPrice = 0;
   customRingPrice = 0;
   customTryInPrice = 0;
+  /** Dynamic per-doctor price overrides keyed by Material.key */
+  customPricesMap: Record<string, number> = {};
+  labMaterials: LabMaterial[] = [];
+  labBranding: LabBranding = {
+    labName: 'Elegance Dental Lab',
+    logoUrl: '',
+    primaryColor: '#2563eb',
+  };
+  labWorkflow: LabWorkflow = {
+    enabledStages: [
+      'waiting',
+      'secretary',
+      'design',
+      'khart',
+      'finishing',
+      'completed',
+      'exited',
+    ],
+    allowSkipSecretary: true,
+    allowSkipKhart: true,
+    allStages: [
+      'waiting',
+      'secretary',
+      'design',
+      'khart',
+      'finishing',
+      'completed',
+      'exited',
+    ],
+  };
+  labDefaultPrices: Record<string, number> = {};
+  labMsg = '';
+  labSaving = false;
+  matSaving = false;
+  matMsgError = false;
+  matDraft: Partial<LabMaterial> = {
+    label: '',
+    key: '',
+    defaultPrice: 0,
+    matchKeywords: [],
+    sortOrder: 100,
+  };
+  matKeywordsText = '';
+  matMsg = '';
+  readonly stageLabelsAr: Record<string, string> = {
+    waiting: 'انتظار',
+    secretary: 'سكرتارية',
+    design: 'ديزاين',
+    khart: 'خرط',
+    finishing: 'فينيش',
+    completed: 'منتهية',
+    exited: 'خارجة',
+  };
 
   currentPrintDate = new Date();
 
@@ -191,6 +254,8 @@ export class Admin implements OnInit, OnDestroy {
   isPricingSaving = false;
   financialYearFilter = '';
   financialMonthFilter = '';
+  financePanelYear = new Date().getFullYear();
+  financePanelMonth = new Date().getMonth() + 1;
   financialDoctorSearch = '';
   reportYearFilter = '';
   reportMonthFilter = '';
@@ -280,7 +345,9 @@ export class Admin implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private socketService: SocketService,
     private http: HttpClient,
-    public themeService: ThemeService
+    public themeService: ThemeService,
+    public lang: LanguageService,
+    private labConfig: LabConfigService
   ) {}
 
   logout(): void {
@@ -293,6 +360,7 @@ export class Admin implements OnInit, OnDestroy {
     this.loadFinancialReportFromApi();
     this.loadDoctorPricings();
     this.loadStaffFromApi();
+    this.loadLabConfig();
     if (this.activeNav === 'staff') {
       this.loadStaffFromApi();
     }
@@ -532,6 +600,7 @@ export class Admin implements OnInit, OnDestroy {
       totalDue: number;
       totalPaid: number;
       remaining: number;
+      paidFromCases: number;
     }>();
 
     this.reportCases.forEach(c => {
@@ -542,7 +611,10 @@ export class Admin implements OnInit, OnDestroy {
       const key = this.doctorGroupKey(name);
 
       const cost = this.calculateCaseCost(c);
-      const paidAmount = c.paid ? (c.salary || 0) : 0;
+      // Prefer stored bill snapshot when present
+      const stored = Number((c as any).revenueAmount ?? c.salary ?? 0) || 0;
+      const dueAmount = stored > 0 ? stored : cost;
+      const paidFromCase = c.paid ? dueAmount : 0;
 
       if (!doctorMap.has(key)) {
         doctorMap.set(key, {
@@ -550,23 +622,24 @@ export class Admin implements OnInit, OnDestroy {
           totalCases: 0,
           totalDue: 0,
           totalPaid: 0,
-          remaining: 0
+          remaining: 0,
+          paidFromCases: 0,
         });
       }
 
       const docObj = doctorMap.get(key)!;
       docObj.totalCases += 1;
-      docObj.totalDue += cost;
-      docObj.totalPaid += paidAmount;
+      docObj.totalDue += dueAmount;
+      docObj.paidFromCases += paidFromCase;
     });
 
     doctorMap.forEach((docObj, key) => {
-      const generalPaymentsSum = this.doctorPayments
+      const paidFromPayments = this.doctorPayments
         .filter(p => this.doctorGroupKey(p.doctorName) === key)
         .reduce((sum, p) => sum + (p.amount || 0), 0);
-      
-      docObj.totalPaid += generalPaymentsSum;
-      docObj.remaining = docObj.totalDue - docObj.totalPaid;
+      // Unified rule: ledger wins if any payments exist; else case-paid flags
+      docObj.totalPaid = paidFromPayments > 0 ? paidFromPayments : docObj.paidFromCases;
+      docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
     });
 
     return Array.from(doctorMap.values()).sort((a, b) => a.doctorName.localeCompare(b.doctorName));
@@ -614,8 +687,9 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   monthName(monthNumber: number): string {
-    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    return months[monthNumber - 1] || `شهر ${monthNumber}`;
+    const key = `month.${monthNumber}`;
+    const label = this.lang.t(key);
+    return label !== key ? label : String(monthNumber);
   }
 
   private parseDate(value?: string): Date | null {
@@ -1130,17 +1204,23 @@ export class Admin implements OnInit, OnDestroy {
     return this.dashboardMetrics.staffEfficiency;
   }
 
-  /** الحالات الخارجة فقط وليست إعادة ولا تعديل */
+  /** الحالات الخارجة فقط وليست إعادة ولا تعديل ولا فاضي */
   get exitedNonRedoCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;
       
       const ct = (c.caseType || '').toLowerCase();
-      // استبعاد الإعادة والتعديل
-      const isRedo = ct.includes('redo') || ct.includes('remake') ||
-                     ct.includes('modification') ||
-                     ct.includes('اعاده') || ct.includes('إعادة');
-      return !isRedo;
+      const isExcluded =
+        ct.includes('redo') ||
+        ct.includes('remake') ||
+        ct.includes('modification') ||
+        ct.includes('تعديل') ||
+        ct.includes('اعاده') ||
+        ct.includes('إعادة') ||
+        ct.includes('empty') ||
+        ct.includes('غير معروف') ||
+        ct.includes('unknown');
+      return !isExcluded;
     });
   }
 
@@ -1198,64 +1278,96 @@ export class Admin implements OnInit, OnDestroy {
 
   calculateCaseCost(c: AdminCaseRow): number {
     const doctor = c.doctorName || c.assignedTo || 'غير محدد';
-    const normalizedDoc = doctor.toLowerCase();
-
     const ct = (c.caseType || '').toLowerCase();
-    const isExcluded = ct.includes('redo') || ct.includes('remake') ||
-                       ct.includes('modification') || ct.includes('تعديل') ||
-                       ct.includes('اعاده') || ct.includes('إعادة') ||
-                       ct.includes('غير معروف') || ct.includes('unknown');
+    const isExcluded =
+      ct.includes('redo') ||
+      ct.includes('remake') ||
+      ct.includes('modification') ||
+      ct.includes('تعديل') ||
+      ct.includes('اعاده') ||
+      ct.includes('إعادة') ||
+      ct.includes('غير معروف') ||
+      ct.includes('unknown');
     if (isExcluded) return 0;
 
     const key = this.doctorGroupKey(doctor);
-    const custom = this.doctorPricingsMap.get(key);
-    const prices = {
-      emax: custom?.emax ?? 1000,
-      germanZircon: custom?.germanZircon ?? 850,
-      zircon: custom?.zircon ?? 700,
-      titanium: custom?.titanium ?? 2200,
-      peek: custom?.peek ?? 1700,
-      pmma: custom?.pmma ?? 250,
-      nightGuard: custom?.nightGuard ?? 300,
-      mockup: custom?.mockup ?? 250,
-      wax: custom?.wax ?? 0,
-      ring: custom?.ring ?? 0,
-      tryIn: custom?.tryIn ?? 0
-    };
+    const custom = this.doctorPricingsMap.get(key) || {};
+    const prices: Record<string, number> = { ...this.labDefaultPrices };
+    for (const [k, v] of Object.entries(custom)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) prices[k] = n;
+    }
+    // Legacy fallbacks if materials not loaded yet
+    if (!Object.keys(prices).length) {
+      Object.assign(prices, {
+        emax: 1000,
+        germanZircon: 850,
+        zircon: 700,
+        titanium: 2200,
+        peek: 1700,
+        pmma: 250,
+        nightGuard: 300,
+        mockup: 250,
+        wax: 0,
+        ring: 0,
+        tryIn: 0,
+      });
+    }
 
     let total = 0;
-    const parts = (c.caseType || '').split('+').map(p => p.trim());
+    const parts = (c.caseType || '').split('+').map((p) => p.trim());
     const meta = this.parseNotesMeta(c.rawNotes || '');
     const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
+    const materials =
+      this.labMaterials.length > 0
+        ? this.labMaterials
+        : ([
+            { key: 'emax', label: 'Emax', matchKeywords: ['emax'], defaultPrice: 1000 },
+            {
+              key: 'germanZircon',
+              label: 'German Zircon',
+              matchKeywords: ['german zircon', 'german'],
+              defaultPrice: 850,
+            },
+            { key: 'zircon', label: 'Zircon', matchKeywords: ['zircon'], defaultPrice: 700 },
+            { key: 'titanium', label: 'Titanium', matchKeywords: ['titanium'], defaultPrice: 2200 },
+            { key: 'peek', label: 'Peek', matchKeywords: ['peek'], defaultPrice: 1700 },
+            { key: 'pmma', label: 'Pmma Cad', matchKeywords: ['pmma cad', 'pmma'], defaultPrice: 250 },
+            {
+              key: 'nightGuard',
+              label: 'Night Guard',
+              matchKeywords: ['night guard', 'nightguard', 'guard'],
+              defaultPrice: 300,
+            },
+            {
+              key: 'mockup',
+              label: 'Mockup',
+              matchKeywords: ['mokup', 'mockup', 'mock up', 'موكب'],
+              defaultPrice: 250,
+            },
+            { key: 'wax', label: 'Wax', matchKeywords: ['wax'], defaultPrice: 0 },
+            { key: 'ring', label: 'Ring', matchKeywords: ['ring'], defaultPrice: 0 },
+            { key: 'tryIn', label: 'Try in', matchKeywords: ['try in', 'tryin'], defaultPrice: 0 },
+          ] as LabMaterial[]);
 
     for (const part of parts) {
       const lowerPart = part.toLowerCase();
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
-
-      if (lowerPart.includes('emax')) {
-        total += qty * prices.emax;
-      } else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
-        total += qty * prices.germanZircon;
-      } else if (lowerPart.includes('zircon')) {
-        total += qty * prices.zircon;
-      } else if (lowerPart.includes('titanium')) {
-        total += qty * prices.titanium;
-      } else if (lowerPart.includes('peek')) {
-        total += qty * prices.peek;
-      } else if (lowerPart.includes('pmma cad') || lowerPart.includes('pmma')) {
-        total += qty * prices.pmma;
-      } else if (lowerPart.includes('night guard') || lowerPart.includes('nightguard') || lowerPart.includes('guard')) {
-        total += qty * prices.nightGuard;
-      } else if (lowerPart.includes('mokup') || lowerPart.includes('mockup') || lowerPart.includes('mock up') || lowerPart.includes('موكب')) {
-        total += qty * prices.mockup;
-      } else if (lowerPart.includes('wax')) {
-        total += qty * prices.wax;
-      } else if (lowerPart.includes('ring')) {
-        total += qty * prices.ring;
-      } else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-        total += qty * prices.tryIn;
+      let best: LabMaterial | null = null;
+      let bestLen = -1;
+      for (const m of materials) {
+        for (const kw of m.matchKeywords || []) {
+          const k = String(kw).toLowerCase();
+          if (k && lowerPart.includes(k) && k.length > bestLen) {
+            bestLen = k.length;
+            best = m;
+          }
+        }
       }
+      if (!best) continue;
+      const unit = prices[best.key] ?? (Number(best.defaultPrice) || 0);
+      total += qty * unit;
     }
     return total;
   }
@@ -1724,11 +1836,27 @@ export class Admin implements OnInit, OnDestroy {
       this.loadStaffFromApi();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
+      if (nav === 'financials') {
+        this.syncFinancePanelPeriod();
+      }
     } else if (nav === 'archive') {
       this.loadArchiveList();
     } else if (nav === 'whatsapp') {
       this.loadWhatsAppSettings();
+    } else if (nav === 'lab') {
+      this.loadLabConfig();
     }
+  }
+
+  syncFinancePanelPeriod(): void {
+    const now = new Date();
+    this.financePanelYear = Number(this.financialYearFilter) || now.getFullYear();
+    this.financePanelMonth = Number(this.financialMonthFilter) || now.getMonth() + 1;
+  }
+
+  onFinancePanelYearChange(year: number | string): void {
+    this.financePanelYear = Number(year) || new Date().getFullYear();
+    this.onFinancialYearChange(String(this.financePanelYear));
   }
 
   waEnabled = false;
@@ -1743,17 +1871,19 @@ export class Admin implements OnInit, OnDestroy {
   waMsgExited =
     '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
   waMsgDaily = '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+  waAlertPhones = '';
   waHasToken = false;
   waLiveConfigured = false;
   waTestPhone = '';
-  waTestMessage =
-    'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
+  waTestMessage = '';
   waMsg = '';
   waSaving = false;
   waWebStatus = 'disconnected';
   waWebQr = '';
   waWebError = '';
   waWebBusy = false;
+  /** Linked lab WhatsApp digits (from status / settings.web.linkedPhone). */
+  waWebLinkedPhone = '';
   private waWebPollTimer: ReturnType<typeof setInterval> | null = null;
 
   get waWebConnected(): boolean {
@@ -1763,13 +1893,13 @@ export class Admin implements OnInit, OnDestroy {
   get waWebStatusLabel(): string {
     switch (this.waWebStatus) {
       case 'open':
-        return 'متصل';
+        return this.lang.t('admin.wa.statusOpen');
       case 'qr':
-        return 'امسح QR';
+        return this.lang.t('admin.wa.statusQr');
       case 'connecting':
-        return 'جاري الاتصال…';
+        return this.lang.t('admin.wa.statusConnecting');
       default:
-        return 'غير متصل';
+        return this.lang.t('admin.wa.statusClosed');
     }
   }
 
@@ -1778,11 +1908,15 @@ export class Admin implements OnInit, OnDestroy {
     connected?: boolean;
     qr?: string;
     error?: string;
+    linkedPhone?: string;
   }): void {
     if (!web) return;
     this.waWebStatus = String(web.status || (web.connected ? 'open' : 'disconnected'));
     this.waWebQr = web.qr || '';
     this.waWebError = web.error || '';
+    if (web.linkedPhone != null && String(web.linkedPhone).trim()) {
+      this.waWebLinkedPhone = String(web.linkedPhone).trim();
+    }
     if (this.waWebStatus === 'open') {
       this.waLiveConfigured = true;
       this.stopWaWebPoll();
@@ -1832,6 +1966,7 @@ export class Admin implements OnInit, OnDestroy {
           '{lab}\nحالة ({patient})\n{workType} — {quantity} قطعة\nتم التسليم / خرجت من المعمل';
         this.waMsgDaily =
           s.msgDaily || '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}';
+        this.waAlertPhones = s.alertPhones || '';
         this.waHasToken = !!s.hasToken;
         this.waLiveConfigured = !!s.liveConfigured;
         this.waToken = '';
@@ -1857,9 +1992,14 @@ export class Admin implements OnInit, OnDestroy {
 
   refreshWhatsAppWebStatus(): void {
     this.http
-      .get<{ success?: boolean; status?: string; connected?: boolean; qr?: string; error?: string }>(
-        `${environment.apiUrl}/settings/whatsapp/web/status`
-      )
+      .get<{
+        success?: boolean;
+        status?: string;
+        connected?: boolean;
+        qr?: string;
+        error?: string;
+        linkedPhone?: string;
+      }>(`${environment.apiUrl}/settings/whatsapp/web/status`)
       .subscribe({
         next: (res) => this.applyWaWebStatus(res),
         error: () => {
@@ -1889,7 +2029,7 @@ export class Admin implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.waWebBusy = false;
-          this.waMsg = err?.error?.message || 'فشل بدء واتساب Web';
+          this.waMsg = err?.error?.message || this.lang.t('admin.wa.errStart');
         },
       });
   }
@@ -1908,12 +2048,13 @@ export class Admin implements OnInit, OnDestroy {
           this.waWebStatus = 'disconnected';
           this.waWebQr = '';
           this.waWebError = '';
+          this.waWebLinkedPhone = '';
           this.waLiveConfigured = false;
-          this.waMsg = res.message || 'تم فصل الجلسة';
+          this.waMsg = res.message || this.lang.t('admin.wa.loggedOut');
         },
         error: (err) => {
           this.waWebBusy = false;
-          this.waMsg = err?.error?.message || 'فشل الفصل';
+          this.waMsg = err?.error?.message || this.lang.t('admin.wa.errLogout');
         },
       });
   }
@@ -1931,6 +2072,7 @@ export class Admin implements OnInit, OnDestroy {
       msgCompleted: this.waMsgCompleted,
       msgExited: this.waMsgExited,
       msgDaily: this.waMsgDaily,
+      alertPhones: this.waAlertPhones,
     };
     if (this.waProvider !== 'waweb' && this.waToken.trim()) body['token'] = this.waToken.trim();
     this.http.put<{ success?: boolean; message?: string; liveConfigured?: boolean; web?: any }>(
@@ -1940,7 +2082,7 @@ export class Admin implements OnInit, OnDestroy {
       next: (res) => {
         this.waSaving = false;
         this.waLiveConfigured = !!res.liveConfigured;
-        this.waMsg = res.message || 'تم الحفظ';
+        this.waMsg = res.message || this.lang.t('admin.wa.saved');
         this.waToken = '';
         this.applyWaWebStatus(res.web);
         this.loadWhatsAppSettings();
@@ -1950,7 +2092,7 @@ export class Admin implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.waSaving = false;
-        this.waMsg = err?.error?.message || 'فشل الحفظ';
+        this.waMsg = err?.error?.message || this.lang.t('admin.wa.errSave');
       },
     });
   }
@@ -1958,16 +2100,31 @@ export class Admin implements OnInit, OnDestroy {
   testWhatsApp(): void {
     this.waMsg = '';
     this.http
-      .post<{ success?: boolean; message?: string }>(`${environment.apiUrl}/settings/whatsapp/test`, {
-        phone: this.waTestPhone,
-        message: this.waTestMessage,
-      })
+      .post<{ success?: boolean; message?: string; to?: string }>(
+        `${environment.apiUrl}/settings/whatsapp/test`,
+        {
+          phone: this.waTestPhone,
+          message: this.waTestMessage,
+        }
+      )
       .subscribe({
         next: (res) => {
-          this.waMsg = res.message || 'تم الإرسال';
+          let msg = res.message || this.lang.t('admin.wa.sent');
+          if (res.to) {
+            msg = `${msg} — ${res.to}`;
+          }
+          this.waMsg = msg;
         },
         error: (err) => {
-          this.waMsg = err?.error?.message || 'فشل الاختبار';
+          const body = err?.error;
+          let msg = body?.message || this.lang.t('admin.wa.errTest');
+          if (body?.detail?.self) {
+            msg =
+              '⛔ هذا رقم واتساب المعمل المربوط نفسه — الرسائل المرسلة لنفس الرقم مش هتظهر كإشعار على الموبايل. جرّب رقم موبايل تاني عليه واتساب للاختبار.' +
+              (this.waWebLinkedPhone ? ` (الرقم المربوط: ${this.waWebLinkedPhone})` : '') +
+              (body?.message ? `\n${body.message}` : '');
+          }
+          this.waMsg = msg;
         },
       });
   }
@@ -1979,10 +2136,10 @@ export class Admin implements OnInit, OnDestroy {
       {}
     ).subscribe({
       next: (res) => {
-        this.waMsg = res.message || 'تم إرسال الملخص';
+        this.waMsg = res.message || this.lang.t('admin.wa.dailySent');
       },
       error: (err) => {
-        this.waMsg = err?.error?.message || 'فشل إرسال الملخص';
+        this.waMsg = err?.error?.message || this.lang.t('admin.wa.errDaily');
       },
     });
   }
@@ -2543,6 +2700,7 @@ export class Admin implements OnInit, OnDestroy {
       'reports',
       'archive',
       'whatsapp',
+      'lab',
       'case-management',
     ]);
     if (nav && allowed.has(nav)) {
@@ -2577,35 +2735,25 @@ export class Admin implements OnInit, OnDestroy {
 
   loadCustomPricesForDoctor(doctorName: string): void {
     const key = this.doctorGroupKey(doctorName);
-    const custom = this.doctorPricingsMap.get(key);
+    const custom = this.doctorPricingsMap.get(key) || {};
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
-    
-    if (custom) {
-      this.customEmaxPrice = custom.emax ?? 1000;
-      this.customGermanZirconPrice = custom.germanZircon ?? 850;
-      this.customZirconPrice = custom.zircon ?? 700;
-      this.customTitaniumPrice = custom.titanium ?? 2200;
-      this.customPeekPrice = custom.peek ?? 1700;
-      this.customPmmaPrice = custom.pmma ?? 250;
-      this.customNightGuardPrice = custom.nightGuard ?? 300;
-      this.customMockupPrice = custom.mockup ?? 250;
-      this.customWaxPrice = custom.wax ?? 0;
-      this.customRingPrice = custom.ring ?? 0;
-      this.customTryInPrice = custom.tryIn ?? 0;
-    } else {
-      this.customEmaxPrice = 1000;
-      this.customGermanZirconPrice = 850;
-      this.customZirconPrice = 700;
-      this.customTitaniumPrice = 2200;
-      this.customPeekPrice = 1700;
-      this.customPmmaPrice = 250;
-      this.customNightGuardPrice = 300;
-      this.customMockupPrice = 250;
-      this.customWaxPrice = 0;
-      this.customRingPrice = 0;
-      this.customTryInPrice = 0;
+    this.customPricesMap = {};
+    for (const m of this.labMaterials) {
+      const def = this.labDefaultPrices[m.key] ?? (Number(m.defaultPrice) || 0);
+      this.customPricesMap[m.key] = Number(custom[m.key] ?? def);
     }
+    this.customEmaxPrice = this.customPricesMap['emax'] ?? custom.emax ?? 1000;
+    this.customGermanZirconPrice = this.customPricesMap['germanZircon'] ?? custom.germanZircon ?? 850;
+    this.customZirconPrice = this.customPricesMap['zircon'] ?? custom.zircon ?? 700;
+    this.customTitaniumPrice = this.customPricesMap['titanium'] ?? custom.titanium ?? 2200;
+    this.customPeekPrice = this.customPricesMap['peek'] ?? custom.peek ?? 1700;
+    this.customPmmaPrice = this.customPricesMap['pmma'] ?? custom.pmma ?? 250;
+    this.customNightGuardPrice = this.customPricesMap['nightGuard'] ?? custom.nightGuard ?? 300;
+    this.customMockupPrice = this.customPricesMap['mockup'] ?? custom.mockup ?? 250;
+    this.customWaxPrice = this.customPricesMap['wax'] ?? custom.wax ?? 0;
+    this.customRingPrice = this.customPricesMap['ring'] ?? custom.ring ?? 0;
+    this.customTryInPrice = this.customPricesMap['tryIn'] ?? custom.tryIn ?? 0;
   }
 
   saveDoctorCustomPrices(): void {
@@ -2614,36 +2762,218 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
 
-    const prices = {
-      emax: this.customEmaxPrice,
-      germanZircon: this.customGermanZirconPrice,
-      zircon: this.customZirconPrice,
-      titanium: this.customTitaniumPrice,
-      peek: this.customPeekPrice,
-      pmma: this.customPmmaPrice,
-      nightGuard: this.customNightGuardPrice,
-      mockup: this.customMockupPrice,
-      wax: this.customWaxPrice,
-      ring: this.customRingPrice,
-      tryIn: this.customTryInPrice
-    };
+    const prices: Record<string, number> =
+      Object.keys(this.customPricesMap).length > 0
+        ? { ...this.customPricesMap }
+        : {
+            emax: this.customEmaxPrice,
+            germanZircon: this.customGermanZirconPrice,
+            zircon: this.customZirconPrice,
+            titanium: this.customTitaniumPrice,
+            peek: this.customPeekPrice,
+            pmma: this.customPmmaPrice,
+            nightGuard: this.customNightGuardPrice,
+            mockup: this.customMockupPrice,
+            wax: this.customWaxPrice,
+            ring: this.customRingPrice,
+            tryIn: this.customTryInPrice,
+          };
 
     this.caseApi.updateDoctorPricing(this.reportDoctorFilter, prices).subscribe({
-      next: (res) => {
+      next: () => {
         this.isPricingSaving = false;
         this.pricingSaveSuccess = true;
-        
         const key = this.doctorGroupKey(this.reportDoctorFilter);
         this.doctorPricingsMap.set(key, prices);
-        
         this.loadFinancialReportFromApi();
       },
       error: (err) => {
         this.isPricingSaving = false;
         this.pricingSaveError = 'تعذر حفظ الأسعار المخصصة';
         console.error('Failed to update doctor pricing:', err);
-      }
+      },
     });
+  }
+
+  loadLabConfig(): void {
+    this.labMsg = '';
+    this.matMsg = '';
+    this.matMsgError = false;
+    // Materials first — this is what the admin page needs
+    this.labConfig.listMaterials(false).subscribe({
+      next: (materials) => {
+        this.labMaterials = materials || [];
+        this.labDefaultPrices = {};
+        for (const m of this.labMaterials) {
+          this.labDefaultPrices[m.key] = Number(m.defaultPrice) || 0;
+        }
+        if (this.reportDoctorFilter) {
+          this.loadCustomPricesForDoctor(this.reportDoctorFilter);
+        }
+      },
+      error: (err) => {
+        const status = err?.status;
+        this.labMsg =
+          status === 404
+            ? 'الباكند لسه مش محدّث على Railway — مسار الماتريال غير موجود. لازم نشر الباكند.'
+            : 'تعذر تحميل قائمة الماتريال';
+        console.error(err);
+      },
+    });
+    // Optional branding/workflow (ignore failures)
+    this.labConfig.getLabSettings().subscribe({
+      next: (res) => {
+        this.labBranding = { ...res.branding };
+        this.labWorkflow = { ...res.workflow };
+        if (res.defaultPrices) this.labDefaultPrices = { ...res.defaultPrices };
+      },
+      error: () => {
+        /* branding optional */
+      },
+    });
+  }
+
+  isStageEnabled(stage: string): boolean {
+    return (this.labWorkflow.enabledStages || []).includes(stage);
+  }
+
+  toggleStage(stage: string, enabled: boolean): void {
+    const locked = stage === 'waiting' || stage === 'completed' || stage === 'exited';
+    if (locked) return;
+    const all = this.labWorkflow.allStages || [];
+    const set = new Set(this.labWorkflow.enabledStages || []);
+    if (enabled) set.add(stage);
+    else set.delete(stage);
+    this.labWorkflow.enabledStages = all.filter((s) => set.has(s));
+  }
+
+  saveLabSettings(): void {
+    this.labSaving = true;
+    this.labMsg = '';
+    this.labConfig
+      .updateLabSettings({
+        branding: this.labBranding,
+        workflow: {
+          enabledStages: this.labWorkflow.enabledStages,
+          allowSkipSecretary: this.labWorkflow.allowSkipSecretary,
+          allowSkipKhart: this.labWorkflow.allowSkipKhart,
+        },
+      })
+      .subscribe({
+        next: () => {
+          this.labSaving = false;
+          this.labMsg = 'تم حفظ إعدادات المعمل';
+          this.waLabName = this.labBranding.labName;
+        },
+        error: (err) => {
+          this.labSaving = false;
+          this.labMsg = err?.error?.message || 'تعذر حفظ الإعدادات';
+        },
+      });
+  }
+
+  addMaterial(): void {
+    this.matMsg = '';
+    this.matMsgError = false;
+    const label = String(this.matDraft.label || '').trim();
+    if (!label) {
+      this.matMsg = 'اكتب اسم الماتريال';
+      this.matMsgError = true;
+      return;
+    }
+    this.matSaving = true;
+    const keywords = this.matKeywordsText
+      .split(/[,|\n]/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    this.labConfig
+      .createMaterial({
+        label,
+        key: this.matDraft.key || label,
+        labelAr: this.matDraft.labelAr || '',
+        defaultPrice: Number(this.matDraft.defaultPrice) || 0,
+        matchKeywords: keywords.length ? keywords : [label.toLowerCase()],
+        sortOrder: Number(this.matDraft.sortOrder) || 100,
+        active: true,
+        showInWorkTypes: true,
+        showInCounters: true,
+      })
+      .subscribe({
+        next: () => {
+          this.matSaving = false;
+          this.matDraft = { label: '', key: '', defaultPrice: 0, matchKeywords: [], sortOrder: 100 };
+          this.matKeywordsText = '';
+          this.matMsg = 'تمت إضافة الماتريال';
+          this.loadLabConfig();
+        },
+        error: (err) => {
+          this.matSaving = false;
+          this.matMsgError = true;
+          this.matMsg =
+            err?.status === 404
+              ? 'الباكند مش محدّث — انشر Railway الأول'
+              : err?.error?.message || 'تعذر الإضافة';
+        },
+      });
+  }
+
+  saveMaterialRow(m: LabMaterial): void {
+    if (!m._id) return;
+    this.matSaving = true;
+    this.matMsgError = false;
+    this.labConfig
+      .updateMaterial(m._id, {
+        label: m.label,
+        labelAr: m.labelAr,
+        defaultPrice: Number(m.defaultPrice) || 0,
+        matchKeywords: m.matchKeywords?.length ? m.matchKeywords : [String(m.label || '').toLowerCase()],
+        active: m.active,
+        sortOrder: Number(m.sortOrder) || 100,
+        showInWorkTypes: m.showInWorkTypes,
+        showInCounters: m.showInCounters,
+      })
+      .subscribe({
+        next: () => {
+          this.matSaving = false;
+          this.matMsg = `تم حفظ «${m.label}»`;
+          this.loadLabConfig();
+        },
+        error: (err) => {
+          this.matSaving = false;
+          this.matMsgError = true;
+          this.matMsg = err?.error?.message || 'تعذر الحفظ';
+        },
+      });
+  }
+
+  removeMaterial(m: LabMaterial): void {
+    if (!m._id) return;
+    if (!confirm(`حذف الماتريال «${m.label}»؟`)) return;
+    this.matSaving = true;
+    this.matMsgError = false;
+    this.labConfig.deleteMaterial(m._id).subscribe({
+      next: () => {
+        this.matSaving = false;
+        this.matMsg = 'تم الحذف';
+        this.loadLabConfig();
+      },
+      error: (err) => {
+        this.matSaving = false;
+        this.matMsgError = true;
+        this.matMsg = err?.error?.message || 'تعذر الحذف';
+      },
+    });
+  }
+
+  keywordsToText(m: LabMaterial): string {
+    return (m.matchKeywords || []).join(', ');
+  }
+
+  setMaterialKeywords(m: LabMaterial, text: string): void {
+    m.matchKeywords = String(text || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
 
   loadDoctorPayments(): void {

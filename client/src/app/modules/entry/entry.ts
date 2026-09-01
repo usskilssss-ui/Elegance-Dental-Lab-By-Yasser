@@ -17,7 +17,12 @@ import { Subscription, catchError, switchMap } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { environment } from '../../../environments/environment';
+import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
+import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function todayYmd(): string {
   const d = new Date();
@@ -66,7 +71,7 @@ export interface PrintJobCard {
 @Component({
   selector: 'app-entry',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ToothChartComponent, AppOverflowMenuComponent, TPipe],
   templateUrl: './entry.html',
   styleUrl: './entry.css',
 })
@@ -79,6 +84,7 @@ export class EntryComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
 
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
@@ -129,12 +135,14 @@ export class EntryComponent implements OnInit, OnDestroy {
     'Night Guard', 'Wax', 'Ring'
   ];
 
-  readonly caseTypeOptions = [
-    { value: 'New', label: 'جديد' },
-    { value: 'Modification', label: 'تعديل' },
-    { value: 'Redo', label: 'اعادة' },
-    { value: 'Empty', label: 'غير معروف' },
-  ];
+  get caseTypeOptions() {
+    return [
+      { value: 'New', label: this.lang.t('caseType.new') },
+      { value: 'Modification', label: this.lang.t('caseType.modification') },
+      { value: 'Redo', label: this.lang.t('caseType.redo') },
+      { value: 'Empty', label: this.lang.t('caseType.empty') },
+    ];
+  }
 
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
@@ -143,6 +151,10 @@ export class EntryComponent implements OnInit, OnDestroy {
   patientWarning = '';
   intakeType: 'impression' | 'scan' | '' = '';
   selectedPlyFile: File | null = null;
+  plyScanLink = '';
+  toothAssignments: ToothAssignment[] = [];
+  toothLinkMode: 'connected' | 'separate' = 'separate';
+  activeToothMaterial = '';
 
   // Doctor autocomplete — اقتراحات من أكونتات الدكاترة فقط (الكتابة الحرة مسموحة)
   readonly accountDoctors = signal<string[]>([]);
@@ -184,10 +196,14 @@ export class EntryComponent implements OnInit, OnDestroy {
     if (this.intakeType === type) {
       this.intakeType = '';
       this.clearPlySelection();
+      this.plyScanLink = '';
       return;
     }
     this.intakeType = type;
-    if (type === 'impression') this.clearPlySelection();
+    if (type === 'impression') {
+      this.clearPlySelection();
+      this.plyScanLink = '';
+    }
   }
 
   onPatientInputChange(): void {
@@ -198,7 +214,7 @@ export class EntryComponent implements OnInit, OnDestroy {
     }
     const parts = name.split(/\s+/).filter((p) => p);
     this.patientWarning =
-      parts.length < 2 ? 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).' : '';
+      parts.length < 2 ? this.lang.t('form.patientDualWarning') : '';
   }
 
   onPlyFileSelected(event: Event): void {
@@ -208,19 +224,41 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.selectedPlyFile = null;
       return;
     }
-    if (!/\.(ply|stl|obj)$/i.test(file.name)) {
-      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj');
+    if (!/\.(ply|stl|obj|rar|zip)$/i.test(file.name)) {
+      this.flash(this.lang.t('form.errFileType'));
       input.value = '';
       this.selectedPlyFile = null;
       return;
     }
     this.selectedPlyFile = file;
+    this.plyScanLink = '';
+  }
+
+  onPlyLinkChange(): void {
+    if (this.plyScanLink.trim()) this.clearPlySelection();
   }
 
   clearPlySelection(): void {
     this.selectedPlyFile = null;
     const el = document.getElementById('entryPlyInput') as HTMLInputElement | null;
     if (el) el.value = '';
+  }
+
+  private isValidScanLink(raw: string): boolean {
+    const url = String(raw || '').trim();
+    if (!url || url.length > 2000) return false;
+    try {
+      const u = new URL(url);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  private attachScanAfterSave(caseId: string, ply: File | null, link: string) {
+    if (ply) return this.caseApi.uploadCasePly(caseId, ply);
+    if (link) return this.caseApi.setCasePlyLink(caseId, link);
+    return null;
   }
 
   onDoctorInputChange(): void {
@@ -274,6 +312,8 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.nightGuardType = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
+      this.toothAssignments = [];
+      this.activeToothMaterial = '';
     } else {
       this.updateWorkTypeString();
     }
@@ -285,6 +325,10 @@ export class EntryComponent implements OnInit, OnDestroy {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
       if (type === 'Night Guard') this.nightGuardType = '';
+      this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
+      if (this.activeToothMaterial === type) {
+        this.activeToothMaterial = this.chartMaterials[0] || '';
+      }
     } else {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
@@ -292,12 +336,15 @@ export class EntryComponent implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
+        this.toothAssignments = [];
+        this.activeToothMaterial = '';
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
         this.selectedWorkTypes.add(type);
         this.workTypeQuantities[type] = 1;
         if (type === 'Night Guard') this.nightGuardType = 'Soft';
+        if (!this.activeToothMaterial) this.activeToothMaterial = type;
       }
     }
     this.updateWorkTypeString();
@@ -312,6 +359,35 @@ export class EntryComponent implements OnInit, OnDestroy {
       if (wt !== 'Remake' && wt !== 'Empty') return true;
     }
     return false;
+  }
+
+  get chartMaterials(): string[] {
+    return [...this.selectedWorkTypes].filter((wt) => wt !== 'Remake' && wt !== 'Empty');
+  }
+
+  onToothAssignmentsChange(list: ToothAssignment[]): void {
+    this.toothAssignments = list || [];
+    const counts = countByMaterial(this.toothAssignments);
+    for (const [mat, n] of Object.entries(counts)) {
+      if (this.selectedWorkTypes.has(mat) && n > 0) {
+        this.workTypeQuantities[mat] = n;
+      }
+    }
+    for (const wt of this.selectedWorkTypes) {
+      if (wt === 'Remake' || wt === 'Empty') continue;
+      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
+        this.workTypeQuantities[wt] = 1;
+      }
+    }
+    this.updateWorkTypeString();
+  }
+
+  onActiveToothMaterialChange(mat: string): void {
+    this.activeToothMaterial = mat || '';
+  }
+
+  onToothLinkModeChange(mode: 'connected' | 'separate'): void {
+    this.toothLinkMode = mode;
   }
 
   setNightGuardType(type: 'Soft' | 'Hard'): void {
@@ -483,34 +559,43 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.nightGuardType = '';
     this.patientWarning = '';
     this.intakeType = '';
+    this.toothAssignments = [];
+    this.activeToothMaterial = '';
+    this.toothLinkMode = 'separate';
+    this.plyScanLink = '';
     this.clearPlySelection();
     this.dialogOpen.set(true);
   }
 
   closeDialog(): void {
     this.dialogOpen.set(false);
+    this.plyScanLink = '';
     this.clearPlySelection();
   }
 
   save(): void {
     const d = this.formDraft;
 
-    if (!d.doctor.trim()) { this.flash('يرجى تعبئة اسم الطبيب'); return; }
-    if (!d.patient?.trim()) { this.flash('يرجى إدخال اسم المريض'); return; }
+    if (!d.doctor.trim()) { this.flash(this.lang.t('form.errDoctor')); return; }
+    if (!d.patient?.trim()) { this.flash(this.lang.t('form.errPatient')); return; }
     const patientParts = d.patient.trim().split(/\s+/).filter((p) => p);
     if (patientParts.length < 2) {
-      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
-      this.flash('اسم المريض يجب أن يكون ثنائيًا على الأقل');
+      this.patientWarning = this.lang.t('form.patientDualWarning');
+      this.flash(this.lang.t('form.errPatientDual'));
       return;
     }
-    if (!d.branch?.trim()) { this.flash('يرجى إدخال الفرع'); return; }
+    if (!d.branch?.trim()) { this.flash(this.lang.t('form.errBranch')); return; }
     if (!this.intakeType) {
-      this.flash('اختَر امبرشن أو سكان');
+      this.flash(this.lang.t('form.errIntake'));
+      return;
+    }
+    if (this.intakeType === 'scan' && this.plyScanLink.trim() && !this.isValidScanLink(this.plyScanLink)) {
+      this.flash(this.lang.t('form.errScanLink'));
       return;
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
-      this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
-      this.flash('يرجى اختيار نوع العمل');
+      this.workTypeError = this.lang.t('form.errWorkTypeAtLeast');
+      this.flash(this.lang.t('form.errWorkType'));
       return;
     }
 
@@ -528,8 +613,10 @@ export class EntryComponent implements OnInit, OnDestroy {
       intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
         ? this.intakeType
         : undefined) as 'impression' | 'scan' | undefined,
+      teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
     const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+    const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
 
     this.closeDialog();
     this.saveInProgress.set(true);
@@ -543,8 +630,9 @@ export class EntryComponent implements OnInit, OnDestroy {
           const print$ = this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
           });
-          if (ply && caseId) {
-            return this.caseApi.uploadCasePly(caseId, ply).pipe(
+          const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+          if (attach$) {
+            return attach$.pipe(
               switchMap(() => print$),
               catchError(() => print$)
             );
@@ -555,12 +643,12 @@ export class EntryComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.saveInProgress.set(false);
-          this.flash('✅ تم حفظ الحالة وإرسالها للطباعة');
+          this.flash(this.lang.t('entry.toast.saved'));
           this.loadTodayJobs();
         },
         error: () => {
           this.saveInProgress.set(false);
-          this.flash('❌ فشل إرسال الريكويست، تحقق من الاتصال');
+          this.flash(this.lang.t('entry.toast.saveFail'));
         },
       });
   }
@@ -606,21 +694,21 @@ export class EntryComponent implements OnInit, OnDestroy {
   getStatusLabel(jobOrStatus: PrintJobCard | string): string {
     if (typeof jobOrStatus === 'string') {
       switch (jobOrStatus) {
-        case 'pending': return 'انتظار';
-        case 'printing': return 'جاري الطباعة';
-        case 'done': return 'تمت الطباعة';
-        case 'failed': return 'فشل';
+        case 'pending': return this.lang.t('entry.status.pending');
+        case 'printing': return this.lang.t('entry.status.printing');
+        case 'done': return this.lang.t('entry.status.done');
+        case 'failed': return this.lang.t('entry.status.failed');
         default: return jobOrStatus;
       }
     }
     const job = jobOrStatus;
-    if (job.status === 'done' && job.paperConfirmed === 'yes') return 'تم التأكيد';
-    if (job.status === 'done') return 'بانتظار تأكيد الورقة';
-    if (job.status === 'failed' && job.paperConfirmed === 'no') return 'لم تُطبع';
+    if (job.status === 'done' && job.paperConfirmed === 'yes') return this.lang.t('entry.status.confirmed');
+    if (job.status === 'done') return this.lang.t('entry.status.awaitingPaper');
+    if (job.status === 'failed' && job.paperConfirmed === 'no') return this.lang.t('entry.status.notPrinted');
     switch (job.status) {
-      case 'pending': return 'انتظار';
-      case 'printing': return 'جاري الطباعة';
-      case 'failed': return 'فشل';
+      case 'pending': return this.lang.t('entry.status.pending');
+      case 'printing': return this.lang.t('entry.status.printing');
+      case 'failed': return this.lang.t('entry.status.failed');
       default: return job.status;
     }
   }
@@ -644,9 +732,10 @@ export class EntryComponent implements OnInit, OnDestroy {
   }
 
   confirmPaper(job: PrintJobCard, confirmed: boolean): void {
-    const msg = confirmed
-      ? `تأكيد إن ورقة ${job.printData.patient} طلعت؟`
-      : `تأكيد إن ورقة ${job.printData.patient} ما اتطبعتش؟`;
+    const msg = (confirmed
+      ? this.lang.t('entry.confirmPaperOut')
+      : this.lang.t('entry.confirmPaperFail')
+    ).replace('{patient}', job.printData.patient);
     if (!confirm(msg)) return;
 
     this.http
@@ -664,10 +753,12 @@ export class EntryComponent implements OnInit, OnDestroy {
             this.loadTodayJobs({ silent: true });
           }
           this.flash(
-            confirmed ? '✅ تم تأكيد خروج الورقة' : '❌ تم تسجيل أن الورقة لم تُطبع — يمكن إعادة الطباعة'
+            confirmed
+              ? this.lang.t('entry.toast.paperConfirmed')
+              : this.lang.t('entry.toast.paperNotPrinted')
           );
         },
-        error: () => this.flash('❌ تعذر حفظ التأكيد'),
+        error: () => this.flash(this.lang.t('entry.toast.confirmFail')),
       });
   }
 
@@ -679,32 +770,32 @@ export class EntryComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: () => {
-          this.flash('🖨️ تم إرسال إعادة الطباعة');
+          this.flash(this.lang.t('entry.toast.reprinted'));
           this.loadTodayJobs();
         },
-        error: () => this.flash('❌ فشل إعادة الطباعة، تحقق من الاتصال'),
+        error: () => this.flash(this.lang.t('entry.toast.reprintFail')),
       });
   }
 
   deleteJob(jobId: string): void {
-    if (!confirm('هل أنت تأكد من حذف هذا الريكويست؟')) return;
+    if (!confirm(this.lang.t('entry.confirmDelete'))) return;
     this.http.delete<{ success: boolean }>(`${this.apiBase}/print/job/${jobId}`).subscribe({
       next: () => {
         this.printJobs.update(jobs => jobs.filter(j => j._id !== jobId));
-        this.flash('✅ تم حذف الريكويست');
+        this.flash(this.lang.t('entry.toast.deleted'));
       },
-      error: () => this.flash('❌ فشل حذف الريكويست'),
+      error: () => this.flash(this.lang.t('entry.toast.deleteFail')),
     });
   }
 
   clearAllJobs(): void {
-    if (!confirm('هل أنت تأكد من مسح جميع الريكويستات في صفحة الدخول؟')) return;
+    if (!confirm(this.lang.t('entry.confirmClearAll'))) return;
     this.http.delete<{ success: boolean }>(`${this.apiBase}/print/jobs/all`).subscribe({
       next: () => {
         this.printJobs.set([]);
-        this.flash('✅ تم مسح جميع الريكويستات');
+        this.flash(this.lang.t('entry.toast.cleared'));
       },
-      error: () => this.flash('❌ فشل مسح الريكويستات'),
+      error: () => this.flash(this.lang.t('entry.toast.clearFail')),
     });
   }
 }

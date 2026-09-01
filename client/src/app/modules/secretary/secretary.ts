@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -14,13 +14,20 @@ import {
   toStoredCaseImagePath,
 } from '../../core/mappers/dental-case-api.mapper';
 import { buildPrintData } from '../../core/utils/print-job.util';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 import { environment } from '../../../environments/environment';
 
 import { SocketService } from '../../core/services/socket.service';
 import { CaseDraft, SecretaryService } from './secretary.service';
 import { PatientLabelPipe } from './patient-label.pipe';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { LabConfigService } from '../../core/services/lab-config.service';
+import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
+import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 
 function emptyDraft(): CaseDraft {
   const today = new Date();
@@ -49,7 +56,7 @@ function emptyDraft(): CaseDraft {
 @Component({
   selector: 'app-secretary',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, RouterLink, PatientLabelPipe, CaseBarcodeComponent, ToothChartComponent, AppOverflowMenuComponent, TPipe],
   templateUrl: './secretary.html',
   styleUrl: './secretary.css',
 })
@@ -107,6 +114,9 @@ export class Secretary implements OnInit, OnDestroy {
   private readonly socketService = inject(SocketService);
   private readonly router = inject(Router);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
+  private readonly labConfig = inject(LabConfigService);
+  brandTitle = 'Elegance';
   private readonly apiBase = environment.apiUrl;
   private readonly socketSubs: Subscription[] = [];
   readonly activeFilter = signal<
@@ -173,6 +183,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   /** حالات لم تخرج خلال 4 أيام من تاريخ الدخول */
   readonly overdueCases = computed(() => {
+    this.lang.lang();
     const now = Date.now();
     const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
     return this.sharedCases
@@ -180,7 +191,7 @@ export class Secretary implements OnInit, OnDestroy {
       .filter((c) => c.status !== 'exited')
       .map((c) => {
         const receivedAt = this.parseCaseReceivedDate(c);
-        return { id: c.id, doctor: c.doctor || 'غير محدد', patient: c.patient || '—', receivedAt };
+        return { id: c.id, doctor: c.doctor || this.lang.t('common.unknown'), patient: c.patient || '—', receivedAt };
       })
       .filter((item) => item.receivedAt != null && now - item.receivedAt! >= fourDaysMs)
       .sort((a, b) => (a.receivedAt || 0) - (b.receivedAt || 0));
@@ -217,6 +228,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   readonly stats = computed(() => {
+    this.lang.lang();
     const allCases = this.sharedCases.cases();
     const pending = allCases.filter((c) => this.caseBucket(c) === 'pending').length;
     const design = allCases.filter((c) => this.caseBucket(c) === 'design').length;
@@ -225,12 +237,12 @@ export class Secretary implements OnInit, OnDestroy {
     const exited = allCases.filter((c) => this.caseBucket(c) === 'exited').length;
 
     return [
-      { label: 'إجمالي الحالات', value: allCases.length, color: 'purple' as const },
-      { label: 'الحالات الجديدة', value: pending, color: 'amber' as const },
-      { label: 'تحت الديزاين', value: design, color: 'blue' as const },
-      { label: 'تحت الفينيش', value: finishing, color: 'teal' as const },
-      { label: 'الحالات المنتهية', value: finished, color: 'emerald' as const },
-      { label: 'الحالات الخارجة', value: exited, color: 'rose' as const },
+      { label: this.lang.t('stats.total'), value: allCases.length, color: 'purple' as const },
+      { label: this.lang.t('stats.new'), value: pending, color: 'amber' as const },
+      { label: this.lang.t('stats.design'), value: design, color: 'blue' as const },
+      { label: this.lang.t('stats.finishing'), value: finishing, color: 'teal' as const },
+      { label: this.lang.t('stats.finished'), value: finished, color: 'emerald' as const },
+      { label: this.lang.t('stats.exited'), value: exited, color: 'rose' as const },
     ];
   });
 
@@ -306,18 +318,20 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.intakeType === type) {
       this.intakeType = '';
       this.clearPlySelection();
+      this.plyScanLink = '';
       return;
     }
     this.intakeType = type;
     if (type === 'impression') {
       this.clearPlySelection();
+      this.plyScanLink = '';
     }
   }
 
   intakeLabel(c: { intakeType?: string; plyScanUrl?: string }): string {
-    if (c.intakeType === 'scan' || c.plyScanUrl) return 'سكان';
-    if (c.intakeType === 'impression') return 'امبرشن';
-    return 'غير محدد';
+    if (c.intakeType === 'scan' || c.plyScanUrl) return this.lang.t('intake.scan');
+    if (c.intakeType === 'impression') return this.lang.t('intake.impression');
+    return this.lang.t('intake.unknown');
   }
 
   intakeBadgeClass(c: { intakeType?: string; plyScanUrl?: string }): string {
@@ -327,10 +341,10 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   entrySourceLabel(c: { entrySource?: string }): string {
-    if (c.entrySource === 'secretary') return 'سكرتارية';
-    if (c.entrySource === 'print') return 'طباعة';
-    if (c.entrySource === 'doctor') return 'من الدكتور';
-    return 'مصدر غير معروف';
+    if (c.entrySource === 'secretary') return this.lang.t('entrySource.secretary');
+    if (c.entrySource === 'print') return this.lang.t('entrySource.print');
+    if (c.entrySource === 'doctor') return this.lang.t('entrySource.doctor');
+    return this.lang.t('entrySource.unknown');
   }
 
   entrySourceBadgeClass(c: { entrySource?: string }): string {
@@ -406,21 +420,25 @@ export class Secretary implements OnInit, OnDestroy {
   }
   /** ملف مسح .ply اختياري عند الإنشاء/التعديل */
   selectedPlyFile: File | null = null;
+  /** External scan URL alternative to file upload */
+  plyScanLink = '';
   /** اسم ملف PLY المحفوظ مسبقاً (وضع التعديل) */
   existingPlyFileName: string | null = null;
 
-  /** Work Type chip options */
-  readonly workTypeOptions = [
+  /** Work Type chip options — loaded from lab materials catalog */
+  workTypeOptions: string[] = [
     'Zircon', 'German Zircon', 'Emax', 'Pmma Cad',
     'Peek', 'Titanium', 'Try in', 'Mokup',
     'Night Guard', 'Wax', 'Ring'
   ];
-  readonly caseTypeOptions = [
-    { value: 'New', label: 'جديد' },
-    { value: 'Modification', label: 'تعديل' },
-    { value: 'Redo', label: 'اعادة' },
-    { value: 'Empty', label: 'غير معروف' }
-  ];
+  get caseTypeOptions() {
+    return [
+      { value: 'New', label: this.lang.t('caseType.new') },
+      { value: 'Modification', label: this.lang.t('caseType.modification') },
+      { value: 'Redo', label: this.lang.t('caseType.redo') },
+      { value: 'Empty', label: this.lang.t('caseType.empty') },
+    ];
+  }
 
   getCaseTypeFromWorkType(wt: string): 'New' | 'Modification' | 'Redo' | 'Empty' {
     if (!wt) return 'New';
@@ -433,17 +451,19 @@ export class Secretary implements OnInit, OnDestroy {
 
   formatWorkTypeForDisplay(wt: string): string {
     if (!wt) return '';
-    if (wt === 'Empty') return 'غير معروف';
-    if (wt === 'Modification') return 'تعديل';
-    if (wt === 'Redo' || wt === 'Remake') return 'اعادة';
-    
+    if (wt === 'Empty') return this.lang.t('caseType.empty');
+    if (wt === 'Modification') return this.lang.t('caseType.modification');
+    if (wt === 'Redo' || wt === 'Remake') return this.lang.t('caseType.redo');
+
+    const modPrefix = `${this.lang.t('caseType.modification')} - `;
+    const redoPrefix = `${this.lang.t('caseType.redo')} - `;
     let display = wt;
     if (display.startsWith('Modification - ')) {
-      display = display.replace('Modification - ', 'تعديل - ');
+      display = display.replace('Modification - ', modPrefix);
     } else if (display.startsWith('Redo - ')) {
-      display = display.replace('Redo - ', 'اعادة - ');
+      display = display.replace('Redo - ', redoPrefix);
     } else if (display.startsWith('Remake - ')) {
-      display = display.replace('Remake - ', 'اعادة - ');
+      display = display.replace('Remake - ', redoPrefix);
     }
     return display;
   }
@@ -461,6 +481,35 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   selectedWorkTypes = new Set<string>();
+  toothAssignments: ToothAssignment[] = [];
+  toothLinkMode: 'connected' | 'separate' = 'separate';
+  activeToothMaterial = '';
+
+  get chartMaterials(): string[] {
+    return [...this.selectedWorkTypes].filter((wt) => wt !== 'Remake' && wt !== 'Empty');
+  }
+
+  onToothAssignmentsChange(list: ToothAssignment[]): void {
+    this.toothAssignments = list || [];
+    const counts = countByMaterial(this.toothAssignments);
+    for (const [mat, n] of Object.entries(counts)) {
+      if (this.selectedWorkTypes.has(mat)) this.workTypeQuantities[mat] = n;
+    }
+    for (const wt of this.selectedWorkTypes) {
+      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
+        this.workTypeQuantities[wt] = 1;
+      }
+    }
+    this.updateWorkTypeString();
+  }
+
+  onActiveToothMaterialChange(mat: string): void {
+    this.activeToothMaterial = mat;
+  }
+
+  onToothLinkModeChange(mode: 'connected' | 'separate'): void {
+    this.toothLinkMode = mode;
+  }
   workTypeQuantities: Record<string, number> = {};
   workTypeError = '';
   nightGuardType: 'Soft' | 'Hard' | '' = '';
@@ -492,7 +541,7 @@ export class Secretary implements OnInit, OnDestroy {
         } 
       }
     } else {
-      this.passwordError = 'كلمة المرور غير صحيحة!';
+      this.passwordError = this.lang.t('secretary.err.password');
     }
   }
 
@@ -529,9 +578,9 @@ export class Secretary implements OnInit, OnDestroy {
     );
 
     if (isSingleWord) {
-      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
+      this.patientWarning = this.lang.t('secretary.err.patientBinary');
     } else if (exists) {
-      this.patientWarning = 'تنبيه: يوجد مريض بنفس الاسم لنفس الدكتور.';
+      this.patientWarning = this.lang.t('secretary.warn.duplicatePatient');
     } else {
       this.patientWarning = '';
     }
@@ -557,6 +606,10 @@ export class Secretary implements OnInit, OnDestroy {
       if (type === 'Night Guard') {
         this.nightGuardType = '';
       }
+      this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
+      if (this.activeToothMaterial === type) {
+        this.activeToothMaterial = this.chartMaterials[0] || '';
+      }
     } else {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
@@ -564,6 +617,8 @@ export class Secretary implements OnInit, OnDestroy {
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
+        this.toothAssignments = [];
+        this.activeToothMaterial = '';
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
@@ -572,6 +627,7 @@ export class Secretary implements OnInit, OnDestroy {
         if (type === 'Night Guard') {
           this.nightGuardType = 'Soft';
         }
+        if (!this.activeToothMaterial) this.activeToothMaterial = type;
       }
     }
     this.updateWorkTypeString();
@@ -658,6 +714,12 @@ export class Secretary implements OnInit, OnDestroy {
     this.reloadCasesFromBackend();
     this.connectRealtimeUpdates();
     this.loadAccountDoctors();
+    this.labConfig.workTypeLabels().subscribe((labels) => {
+      if (labels?.length) this.workTypeOptions = labels;
+    });
+    this.labConfig.loadPublicBranding().subscribe((b) => {
+      this.brandTitle = (b.labName || 'Lab').split(/\s+/)[0] || 'Lab';
+    });
   }
 
   ngOnDestroy(): void {
@@ -719,7 +781,7 @@ export class Secretary implements OnInit, OnDestroy {
       },
       error: () => {
         this.casesLoading.set(false);
-        if (!silent) this.flash('تعذر تحميل الحالات من الخادم');
+        if (!silent) this.flash(this.lang.t('secretary.toast.loadFail'));
       },
     });
   }
@@ -733,7 +795,7 @@ export class Secretary implements OnInit, OnDestroy {
   goToOverdueCase(caseId: string): void {
     const target = this.sharedCases.cases().find((c) => c.id === caseId);
     if (!target) {
-      this.flash('الحالة غير موجودة');
+      this.flash(this.lang.t('secretary.toast.notFound'));
       return;
     }
 
@@ -773,18 +835,22 @@ export class Secretary implements OnInit, OnDestroy {
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
     this.workTypeQuantities = {};
+    this.toothAssignments = [];
+    this.activeToothMaterial = '';
+    this.toothLinkMode = 'separate';
     this.workTypeError = '';
     this.nightGuardType = '';
     this.patientWarning = '';
     this.intakeType = '';
     this.existingPlyFileName = null;
+    this.plyScanLink = '';
     this.clearPlySelection();
     this.dialogOpen.set(true);
     this.menuOpenId.set(null);
   }
 
   openEdit(c: any): void {
-    if (c.status === 'exited') {
+    if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('edit', c);
       return;
     }
@@ -795,6 +861,9 @@ export class Secretary implements OnInit, OnDestroy {
     this.dialogMode.set('edit');
     this.editingId = c.id;
     this.existingPlyFileName = c.plyFileName || null;
+    this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))
+      ? String(c.plyScanUrl)
+      : '';
     this.clearPlySelection();
     this.intakeType = c.intakeType === 'scan' || c.plyScanUrl ? 'scan' : c.intakeType === 'impression' ? 'impression' : '';
     const delivery = String(c.deliveryDate || '');
@@ -871,7 +940,10 @@ export class Secretary implements OnInit, OnDestroy {
     
     // Trigger warnings immediately on edit open
     this.onPatientInputChange();
-    
+    this.toothAssignments = Array.isArray(c.teeth) ? ([...c.teeth] as ToothAssignment[]) : [];
+    this.activeToothMaterial = this.chartMaterials[0] || '';
+    this.toothLinkMode = 'separate';
+
     this.dialogOpen.set(true);
     this.menuOpenId.set(null);
   }
@@ -879,6 +951,7 @@ export class Secretary implements OnInit, OnDestroy {
   closeDialog(): void {
     this.dialogOpen.set(false);
     this.existingPlyFileName = null;
+    this.plyScanLink = '';
     this.clearPlySelection();
   }
 
@@ -890,19 +963,41 @@ export class Secretary implements OnInit, OnDestroy {
       return;
     }
     const name = file.name.toLowerCase();
-    if (!/\.(ply|stl|obj)$/i.test(name)) {
-      this.flash('يُسمح فقط بملفات .ply أو .stl أو .obj');
+    if (!/\.(ply|stl|obj|rar|zip)$/i.test(name)) {
+      this.flash(this.lang.t('secretary.toast.fileType'));
       input.value = '';
       this.selectedPlyFile = null;
       return;
     }
     this.selectedPlyFile = file;
+    this.plyScanLink = '';
+  }
+
+  onPlyLinkChange(): void {
+    if (this.plyScanLink.trim()) this.clearPlySelection();
   }
 
   clearPlySelection(): void {
     this.selectedPlyFile = null;
     const el = document.getElementById('secretaryPlyInput') as HTMLInputElement | null;
     if (el) el.value = '';
+  }
+
+  private isValidScanLink(raw: string): boolean {
+    const url = String(raw || '').trim();
+    if (!url || url.length > 2000) return false;
+    try {
+      const u = new URL(url);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+    } catch {
+      return false;
+    }
+  }
+
+  private attachScanAfterSave(caseId: string, ply: File | null, link: string) {
+    if (ply) return this.caseApi.uploadCasePly(caseId, ply);
+    if (link) return this.caseApi.setCasePlyLink(caseId, link);
+    return null;
   }
 
   save(): void {
@@ -914,30 +1009,34 @@ export class Secretary implements OnInit, OnDestroy {
     const isStudentCase = existing?.requesterType === 'student';
 
     if (!d.doctor.trim()) {
-      this.flash('يرجى تعبئة اسم الطبيب');
+      this.flash(this.lang.t('secretary.toast.needDoctor'));
       return;
     }
     if (!d.patient?.trim()) {
-      this.flash('يرجى إدخال اسم المريض');
+      this.flash(this.lang.t('secretary.toast.needPatient'));
       return;
     }
     const patientParts = d.patient.trim().split(/\s+/).filter((p: string) => p);
     if (patientParts.length < 2) {
-      this.patientWarning = 'اسم المريض إجباري ثنائي (مثال: محمد أحمد).';
-      this.flash('اسم المريض يجب أن يكون ثنائيًا على الأقل');
+      this.patientWarning = this.lang.t('secretary.err.patientBinary');
+      this.flash(this.lang.t('secretary.toast.patientBinary'));
       return;
     }
     if (!this.intakeType) {
-      this.flash('اختَر امبرشن أو سكان');
+      this.flash(this.lang.t('secretary.toast.needIntake'));
+      return;
+    }
+    if (this.intakeType === 'scan' && this.plyScanLink.trim() && !this.isValidScanLink(this.plyScanLink)) {
+      this.flash(this.lang.t('secretary.toast.badLink'));
       return;
     }
     if (d.caseType !== 'Empty' && this.selectedWorkTypes.size === 0) {
-      this.workTypeError = 'يرجى اختيار نوع عمل واحد على الأقل';
-      this.flash('يرجى اختيار نوع العمل');
+      this.workTypeError = this.lang.t('secretary.err.needWorkType');
+      this.flash(this.lang.t('secretary.toast.needWorkType'));
       return;
     }
     if (isStudentCase && (!Number.isFinite(Number(d.studentPrice)) || Number(d.studentPrice) <= 0)) {
-      this.flash('يرجى إدخال سعر حالة الطالب بشكل صحيح');
+      this.flash(this.lang.t('secretary.toast.needStudentPrice'));
       return;
     }
 
@@ -979,6 +1078,7 @@ export class Secretary implements OnInit, OnDestroy {
       exitedAt: d.exitedAt || undefined,
       intakeType: this.intakeType === 'scan' || this.intakeType === 'impression' ? this.intakeType : undefined,
       entrySource: 'secretary' as const,
+      teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
 
     const plyPreserveMeta =
@@ -997,6 +1097,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.dialogMode() === 'create') {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+      const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
       const printDraft = {
         doctor: docName,
         patient: patientName,
@@ -1014,6 +1115,7 @@ export class Secretary implements OnInit, OnDestroy {
               ? Number(d.quantity)
               : 1,
         date: d.date,
+        teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
       };
 
       this.caseApi
@@ -1025,8 +1127,9 @@ export class Secretary implements OnInit, OnDestroy {
             const print$ = this.http.post(`${this.apiBase}/print/job`, {
               printData: buildPrintData(printDraft, caseNumber),
             });
-            if (ply && caseId) {
-              return this.caseApi.uploadCasePly(caseId, ply).pipe(
+            const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+            if (attach$) {
+              return attach$.pipe(
                 switchMap(() => print$),
                 catchError(() => print$)
               );
@@ -1037,13 +1140,13 @@ export class Secretary implements OnInit, OnDestroy {
         .subscribe({
           next: () => {
             this.saveInProgress.set(false);
-            this.flash('تم حفظ الحالة وإرسالها للطباعة');
+            this.flash(this.lang.t('secretary.toast.savedPrint'));
             this.closeDialog();
             this.reloadCasesFromBackend();
           },
           error: (err: unknown) => {
             this.saveInProgress.set(false);
-            this.flash(this.formatCaseApiError(err) || 'فشل الحفظ أو الطباعة');
+            this.flash(this.formatCaseApiError(err) || this.lang.t('secretary.toast.saveFail'));
           },
         });
       return;
@@ -1052,26 +1155,28 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.editingId) {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
+      const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
       this.caseApi
         .updateCase(this.editingId, buildCreateCasePayload(formPayload, plyPreserveMeta))
         .subscribe({
         next: () => {
           const done = () => {
             this.saveInProgress.set(false);
-            this.flash('تم حفظ التعديلات');
+            this.flash(this.lang.t('secretary.toast.savedEdit'));
             this.closeDialog();
             this.reloadCasesFromBackend();
           };
-          if (ply) {
-            this.caseApi.uploadCasePly(this.editingId!, ply).subscribe({
+          const attach$ = this.attachScanAfterSave(this.editingId!, ply, plyLink);
+          if (attach$) {
+            attach$.subscribe({
               next: () => done(),
               error: (err: unknown) => {
                 this.saveInProgress.set(false);
                 const detail = this.formatCaseApiError(err);
                 this.flash(
                   detail
-                    ? `تم حفظ بيانات الحالة، لكن فشل رفع PLY: ${detail}`
-                    : 'تم حفظ التعديلات لكن تعذر رفع/استبدال ملف PLY'
+                    ? this.lang.t('secretary.toast.savedButScanFailDetail').replace('{detail}', detail)
+                    : this.lang.t('secretary.toast.savedButScanFail')
                 );
                 this.closeDialog();
                 this.reloadCasesFromBackend();
@@ -1097,28 +1202,11 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   private formatCaseApiError(err: unknown): string {
-    if (err instanceof HttpErrorResponse) {
-      const body = err.error as Record<string, unknown> | undefined;
-      const msg = body?.['message'];
-      const detail = body?.['error'];
-      if (typeof msg === 'string' && typeof detail === 'string' && detail.trim()) {
-        return `${msg}: ${detail}`;
-      }
-      if (msg && typeof msg === 'string') return msg;
-      const errs = body?.['errors'];
-      if (Array.isArray(errs) && errs[0]?.msg) return String(errs[0].msg);
-      if (err.status === 403) {
-        if (typeof msg === 'string' && /attach scans|PLY/i.test(msg)) {
-          return 'لا يمكن إرفاق مسح لهذه الحالة إلا من السكرتير الذي أنشأها.';
-        }
-        return 'لا يمكنك تعديل أو حذف حالة لم تنشئها.';
-      }
-    }
-    return 'تعذر الحفظ — تحقق من البيانات والاتصال بالخادم';
+    return formatCaseWorkflowError(err, this.lang.t('secretary.toast.saveGeneric'));
   }
 
   confirmDelete(c: any): void {
-    if (c.status === 'exited') {
+    if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('delete', c);
       return;
     }
@@ -1126,11 +1214,11 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   proceedWithDelete(c: any): void {
-    const ok = confirm(`هل تريد حذف الحالة ${c.caseNumber}؟`);
+    const ok = confirm(this.lang.t('secretary.confirmDelete').replace('{n}', c.caseNumber));
     if (!ok) return;
     this.caseApi.deleteCase(c.id).subscribe({
       next: () => {
-        this.flash('تم حذف الحالة');
+        this.flash(this.lang.t('secretary.toast.deleted'));
         this.reloadCasesFromBackend();
       },
       error: (err: unknown) => {
@@ -1140,16 +1228,21 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   confirmExit(c: any): void {
-    if (c.status === 'exited') {
-      this.flash('هذه الحالة خارجة بالفعل');
+    if (c.status === 'exited' || c.currentStage === 'exited') {
+      this.flash(this.lang.t('secretary.toast.alreadyExited'));
       return;
     }
-    const ok = confirm(`هل تريد إخراج الحالة ${c.caseNumber} نهائيًا؟`);
+    const stage = String(c.currentStage || c.status || '');
+    if (stage !== 'completed' && c.status !== 'completed') {
+      this.flash(this.lang.t('secretary.toast.exitOnlyFinished'));
+      return;
+    }
+    const ok = confirm(this.lang.t('secretary.confirmExit').replace('{n}', c.caseNumber));
     if (!ok) return;
 
     this.caseApi.exitCase(c.id).subscribe({
       next: () => {
-        this.flash('تم إخراج الحالة بنجاح');
+        this.flash(this.lang.t('secretary.toast.exited'));
         this.reloadCasesFromBackend();
       },
       error: (err: unknown) => {
@@ -1186,7 +1279,18 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   getCasePhase(caseId: string): { label: string; status: string; color: string } {
-    return this.svc.getCasePhase(caseId);
+    const phase = this.svc.getCasePhase(caseId);
+    const phaseKeyMap: Record<string, string> = {
+      pending: 'phase.pending',
+      design: 'phase.design',
+      khart: 'phase.khart',
+      revision: 'phase.revision',
+      finishing: 'phase.finishing',
+      finished: 'phase.finished',
+      exited: 'phase.exited',
+    };
+    const key = phaseKeyMap[phase.color] || 'phase.pending';
+    return { ...phase, label: this.lang.t(key) };
   }
 
   private searchScore(
@@ -1358,10 +1462,11 @@ export class Secretary implements OnInit, OnDestroy {
     priority?: string;
     intakeType?: 'impression' | 'scan';
     receivedDate?: string;
+    teeth?: Array<{ fdi: string; material: string; groupId: string }>;
   }): void {
     const caseNumber = String(c.caseNumber || '').trim();
     if (!caseNumber) {
-      this.flash('لا يوجد رقم كيس لهذه الحالة');
+      this.flash(this.lang.t('secretary.toast.noBagId'));
       return;
     }
 
@@ -1378,6 +1483,7 @@ export class Secretary implements OnInit, OnDestroy {
       date: c.receivedDate,
       urgent: c.priority === 'emergency',
       intakeType: c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : undefined,
+      teeth: Array.isArray(c.teeth) && c.teeth.length ? c.teeth : undefined,
     };
 
     this.http
@@ -1385,8 +1491,8 @@ export class Secretary implements OnInit, OnDestroy {
         printData: buildPrintData(printDraft, caseNumber),
       })
       .subscribe({
-        next: () => this.flash('تم إرسال إعادة الطباعة بنفس رقم الكيس'),
-        error: () => this.flash('فشل إعادة الطباعة — تحقق من اتصال الطابعة/الـ Agent'),
+        next: () => this.flash(this.lang.t('secretary.toast.reprintOk')),
+        error: () => this.flash(this.lang.t('secretary.toast.reprintFail')),
       });
   }
 }

@@ -1,4 +1,4 @@
-<div class="finisher" dir="rtl">
+<div class="finisher" [attr.dir]="lang.dir()">
 
   <!-- Toast -->
   @if (toast) {
@@ -8,6 +8,7 @@
   <!-- Top bar -->
   <header class="topbar">
     <div class="topbar-left">
+      <app-overflow-menu></app-overflow-menu>
       <div class="avatar" aria-label="Elegance Precision Labs Logo">
         <div class="elegance-logo-container">
           <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">
@@ -34,7 +35,7 @@
     </div>
 
     <div class="topbar-right notifications-anchor">
-      <button type="button" class="icon-btn" aria-label="تغيير المظهر" (click)="themeService.toggleTheme()" title="تغيير المظهر">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t">
         <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
@@ -50,12 +51,12 @@
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
         </svg>
       </button>
-      <button type="button" class="icon-btn" aria-label="تسجيل الخروج" (click)="logout()" title="تسجيل الخروج">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.logout' | t" (click)="logout()" [attr.title]="'common.logout' | t">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
         </svg>
       </button>
-      <button type="button" class="icon-btn" aria-label="الإشعارات" (click)="toggleNotifications($event)">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.notifications' | t" (click)="toggleNotifications($event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5" />
           <path stroke-linecap="round" d="M12 21a2 2 0 0 0 2-2H10a2 2 0 0 0 2 2z" />
@@ -63,8 +64,8 @@
       </button>
       @if (notificationsOpen) {
         <div class="notifications-panel" (click)="$event.stopPropagation()">
-          <p class="notifications-title">الإشعارات</p>
-          <p class="notifications-empty">لا توجد إشعارات جديدة</p>
+          <p class="notifications-title">{{ 'common.notifications' | t }}</p>
+          <p class="notifications-empty">{{ 'common.notificationsEmpty' | t }}</p>
         </div>
       }
     </div>
@@ -74,10 +75,10 @@
     <!-- Page Header -->
     <div class="page-header">
       <div class="page-header-text">
-        <h1>قسم الفينيش</h1>
-        <p>الحالات الجاهزة من الديزاين وإنهاؤها للمحاسبة</p>
+        <h1>{{ 'finishing.pageTitle' | t }}</h1>
+        <p>{{ 'finishing.subtitle' | t }}</p>
       </div>
-      <div class="list-total-badge">{{ queueCases.length }} حالة</div>
+      <div class="list-total-badge">{{ queueCases.length }} {{ 'common.caseWord' | t }}</div>
     </div>
 
     <!-- Search -->
@@ -92,14 +93,14 @@
         <input
           type="search"
           class="search-input"
-          placeholder="ابحث برقم الحالة أو اسم الطبيب أو المريض..."
+          [placeholder]="'finishing.searchPlaceholder' | t"
           [(ngModel)]="searchTerm"
         />
       </div>
     </div>
 
     <!-- Case List -->
-    <section class="case-list" aria-label="قائمة الحالات">
+    <section class="case-list" [attr.aria-label]="'finishing.listAria' | t">
       @for (c of queueCases; track c.id) {
         <article class="case-card">
           <div class="case-main">
@@ -109,11 +110,11 @@
               <app-case-barcode [value]="c.caseNumber"></app-case-barcode>
               <div class="doctor">{{ c.doctor }}</div>
               @if (c.requesterType === 'student') {
-                <span class="requester-badge requester-badge--student">طالب</span>
+                <span class="requester-badge requester-badge--student">{{ 'common.student' | t }}</span>
               } @else {
-                <span class="requester-badge">دكتور</span>
+                <span class="requester-badge">{{ 'common.doctor' | t }}</span>
               }
-              <div class="patient">المريض: {{ c.patient }}</div>
+              <div class="patient">{{ 'common.patientColon' | t }} {{ c.patient }}</div>
             </div>
 
             <!-- Work Details -->
@@ -121,15 +122,43 @@
               <div class="work-type">{{ c.workType }}</div>
               <div class="work-detail">{{ c.workDetail }}</div>
               <div class="case-spec">
-                <span class="spec-item">Color: {{ c.color }}</span>
+                @if (c.color) {
+                  <span class="spec-item">Color: {{ c.color }}</span>
+                }
+                @if (c.branch || c.clinic) {
+                  <span class="spec-item">{{ 'common.branchColon' | t }} {{ c.branch || c.clinic }}</span>
+                }
                 <span class="spec-item">Qty: {{ c.quantity }}</span>
+                @if (c.intakeType === 'scan' || c.plyScanUrl) {
+                  <span class="spec-item intake-scan">{{ 'common.scan' | t }}</span>
+                } @else if (c.intakeType === 'impression') {
+                  <span class="spec-item intake-impression">{{ 'common.impression' | t }}</span>
+                }
               </div>
+              @if (c.plyScanUrl) {
+                <a
+                  class="ply-download-btn"
+                  [href]="c.plyScanUrl"
+                  [attr.download]="c.plyFileName || 'scan'"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  (click)="$event.stopPropagation()"
+                  [attr.title]="'scan.download' | t"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  {{ 'scan.download' | t }}{{ c.plyFileName ? ' — ' + c.plyFileName : '' }}
+                </a>
+              }
             </div>
 
             <!-- Dates -->
             <div class="case-meta">
               <div class="date-block">
-                <span class="date-label">تاريخ الاستلام</span>
+                <span class="date-label">{{ 'finishing.receivedDate' | t }}</span>
                 <span class="date-value">{{ formatDateValue(c.receivedDate).date }}</span>
                 @if (formatDateValue(c.receivedDate).time) {
                   <span class="time-value">{{ formatDateValue(c.receivedDate).time }}</span>
@@ -137,7 +166,7 @@
               </div>
               @if (c.deliveryDate) {
                 <div class="date-block">
-                  <span class="date-label">تاريخ التسليم</span>
+                  <span class="date-label">{{ 'finishing.deliveryDate' | t }}</span>
                   <span class="date-value">{{ formatDateValue(c.deliveryDate).date }}</span>
                   @if (formatDateValue(c.deliveryDate).time) {
                     <span class="time-value">{{ formatDateValue(c.deliveryDate).time }}</span>
@@ -147,7 +176,7 @@
             </div>
 
             <!-- Status badge -->
-            <span class="case-phase-badge finishing">تحت الفينيش</span>
+            <span class="case-phase-badge finishing">{{ 'finishing.underFinishing' | t }}</span>
           </div>
 
           <!-- Exit Button -->
@@ -155,8 +184,8 @@
             <button
               type="button"
               class="btn-exit"
-              aria-label="إخراج الحالة"
-              title="إخراج الحالة"
+              [attr.aria-label]="'finishing.exitTitle' | t"
+              [attr.title]="'finishing.exitTitle' | t"
               [disabled]="exitingId === c.id"
               (click)="requestExit(c); $event.stopPropagation()"
             >
@@ -165,12 +194,12 @@
                   <circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10" stroke-linecap="round"/>
                 </svg>
               }
-              إخراج
+              {{ 'finishing.exit' | t }}
             </button>
           </div>
         </article>
       } @empty {
-        <p class="empty-list">لا توجد حالات منتهية.</p>
+        <p class="empty-list">{{ 'finishing.empty' | t }}</p>
       }
     </section>
   </main>
@@ -184,19 +213,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
         </div>
-        <h2 class="modal-title">تأكيد إخراج الحالة</h2>
+        <h2 class="modal-title">{{ 'finishing.confirmTitle' | t }}</h2>
         <p class="modal-desc">
-          هل أنت متأكد من إخراج حالة
+          {{ 'finishing.confirmBody' | t }}
           <strong>{{ exitConfirmCase.patient }}</strong>
-          رقم <strong>{{ exitConfirmCase.caseNumber }}</strong>؟
+          {{ 'finishing.confirmNumber' | t }} <strong>{{ exitConfirmCase.caseNumber }}</strong>?
         </p>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelExit()">إلغاء</button>
+          <button type="button" class="btn-secondary" (click)="cancelExit()">{{ 'common.cancel' | t }}</button>
           <button type="button" class="btn-confirm-exit" [disabled]="exitingId === exitConfirmCase.id" (click)="confirmExit()">
             @if (exitingId === exitConfirmCase.id) {
-              جارٍ الإخراج...
+              {{ 'finishing.exiting' | t }}
             } @else {
-              نعم، إخراج الحالة
+              {{ 'finishing.confirmYes' | t }}
             }
           </button>
         </div>

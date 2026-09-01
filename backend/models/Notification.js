@@ -14,6 +14,8 @@ const notificationSchema = new mongoose.Schema(
         'case_exited',
         'patient_update',
         'patient_removed',
+        'low_stock',
+        'finance_alert',
       ],
       required: true,
       index: true,

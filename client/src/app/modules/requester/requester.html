@@ -1,4 +1,4 @@
-<div class="requester-page" dir="rtl">
+<div class="requester-page" [attr.dir]="lang.dir()">
   @if (toast(); as message) {
     <div class="toast" role="status">{{ message }}</div>
   }
@@ -6,6 +6,7 @@
   <!-- Header -->
   <header class="topbar">
     <div class="topbar-left">
+      <app-overflow-menu></app-overflow-menu>
       <div class="avatar">
         <div class="elegance-logo-container">
           <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">
@@ -32,7 +33,7 @@
     </div>
 
     <div class="topbar-right">
-      <button type="button" class="icon-btn" (click)="themeService.toggleTheme()" title="تغيير المظهر">
+      <button type="button" class="icon-btn" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t">
         <svg *ngIf="!themeService.isDarkMode()" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
@@ -60,13 +61,13 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
         </svg>
       </div>
-      <h1 class="welcome-title">طباعة الريكويستات</h1>
-      <p class="welcome-subtitle">اضغط على الزر لإضافة ريكويست جديد وطباعته</p>
+      <h1 class="welcome-title">{{ 'requester.welcomeTitle' | t }}</h1>
+      <p class="welcome-subtitle">{{ 'requester.welcomeSub' | t }}</p>
       <button id="openRequestBtn" type="button" class="btn-request" (click)="openDialog()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
         </svg>
-        إضافة ريكويست
+        {{ 'requester.addRequest' | t }}
       </button>
     </div>
   </main>
@@ -75,13 +76,13 @@
   @if (dialogOpen()) {
     <div class="modal-backdrop" role="presentation" (click)="closeDialog()">
       <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-        <h2 class="modal-title">إضافة ريكويست جديد</h2>
+        <h2 class="modal-title">{{ 'requester.addRequestNew' | t }}</h2>
         <form class="case-form" (ngSubmit)="save()">
 
 
           <!-- Doctor -->
           <label class="form-field">
-            <span>اسم الطبيب <abbr title="مطلوب">*</abbr></span>
+            <span>{{ 'form.doctorName' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
             <div class="autocomplete-container">
               <input
                 type="text"
@@ -93,7 +94,7 @@
                 (keydown)="onDoctorInputKeydown($event)"
                 required
                 autocomplete="off"
-                placeholder="اسم الطبيب"
+                [placeholder]="'form.doctorName' | t"
               />
               @if (showDoctorSuggestions() && filteredDoctors.length > 0) {
                 <ul class="autocomplete-dropdown">
@@ -110,19 +111,19 @@
 
           <!-- Patient -->
           <label class="form-field">
-            <span>اسم المريض <abbr title="مطلوب">*</abbr></span>
-            <input type="text" name="patient" [(ngModel)]="formDraft.patient" placeholder="الاسم كما في السجل" required autocomplete="off" />
+            <span>{{ 'form.patientName' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
+            <input type="text" name="patient" [(ngModel)]="formDraft.patient" [placeholder]="'form.patientPlaceholderSimple' | t" required autocomplete="off" />
           </label>
 
           <!-- Branch -->
           <label class="form-field">
-            <span>الفرع <abbr title="مطلوب">*</abbr></span>
-            <input type="text" name="branch" [(ngModel)]="formDraft.branch" placeholder="اسم الفرع" required autocomplete="off" />
+            <span>{{ 'common.branch' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
+            <input type="text" name="branch" [(ngModel)]="formDraft.branch" [placeholder]="'form.branchName' | t" required autocomplete="off" />
           </label>
 
           <!-- Case Type -->
           <label class="form-field">
-            <span>نوع الحالة <abbr title="مطلوب">*</abbr></span>
+            <span>{{ 'form.caseType' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
             <select name="caseType" [(ngModel)]="formDraft.caseType" (ngModelChange)="onCaseTypeChange()">
               @for (opt of caseTypeOptions; track opt.value) {
                 <option [value]="opt.value">{{ opt.label }}</option>
@@ -133,7 +134,7 @@
           <!-- Work Type chips (hidden when غير معروف) -->
           @if (formDraft.caseType !== 'Empty') {
             <div class="form-field">
-              <span>نوع العمل <abbr title="مطلوب">*</abbr></span>
+              <span>{{ 'form.workType' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
               <div class="work-type-chips" [class.has-error]="workTypeError">
                 @for (wt of workTypeOptions; track wt) {
                   <button
@@ -159,7 +160,7 @@
 
               @if (isWorkTypeSelected('Night Guard')) {
                 <div class="night-guard-sub-container">
-                  <span class="night-guard-sub-title">نوع الـ Night Guard:</span>
+                  <span class="night-guard-sub-title">{{ 'form.nightGuardType' | t }}</span>
                   <div class="night-guard-options">
                     <button type="button" class="ng-sub-chip" [class.selected]="nightGuardType === 'Soft'" (click)="setNightGuardType('Soft')">
                       <span class="ng-sub-chip-check">
@@ -187,14 +188,14 @@
 
               @if (hasWorkTypesWithQuantity) {
                 <div class="wt-quantities-container">
-                  <div class="wt-quantities-title">العدد لكل نوع:</div>
+                  <div class="wt-quantities-title">{{ 'form.qtyPerType' | t }}</div>
                   <div style="display:flex;flex-direction:column;gap:8px;">
                     @for (wt of selectedWorkTypes; track wt) {
                       @if (wt !== 'Remake' && wt !== 'Empty') {
                         <div class="wt-quantity-row">
                           <span class="wt-quantity-name">{{ wt }}</span>
                           <div style="display:flex;align-items:center;gap:8px;">
-                            <span class="wt-quantity-label">الكمية:</span>
+                            <span class="wt-quantity-label">{{ 'form.qtyLabel' | t }}</span>
                             <input
                               type="number" min="1" class="wt-quantity-input"
                               [(ngModel)]="workTypeQuantities[wt]"
@@ -214,25 +215,25 @@
           <!-- Color -->
           <label class="form-field">
             @if (isColorOptional) {
-              <span>اللون <span class="label-optional">(اختياري)</span></span>
+              <span>{{ 'form.color' | t }} <span class="label-optional">({{ 'common.optional' | t }})</span></span>
             } @else {
-              <span>اللون <abbr title="مطلوب">*</abbr></span>
+              <span>{{ 'form.color' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
             }
             <input type="text" name="color" [(ngModel)]="formDraft.color"
-                   [placeholder]="isColorOptional ? 'اختياري' : 'مثال: A2'"
+                   [placeholder]="isColorOptional ? ('common.optional' | t) : ('form.colorExample' | t)"
                    autocomplete="off" />
           </label>
 
           <!-- Work Detail -->
           <label class="form-field">
-            <span>تفاصيل إضافية <span class="label-optional">(اختياري)</span></span>
+            <span>{{ 'form.extraDetails' | t }} <span class="label-optional">({{ 'common.optional' | t }})</span></span>
             <input type="text" name="workDetail" [(ngModel)]="formDraft.workDetail" autocomplete="off" />
           </label>
 
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeDialog()">إلغاء</button>
+            <button type="button" class="btn-secondary" (click)="closeDialog()">{{ 'common.cancel' | t }}</button>
             <button type="submit" class="btn-primary">
-              طباعة الريكويست
+              {{ 'requester.printRequest' | t }}
             </button>
           </div>
         </form>

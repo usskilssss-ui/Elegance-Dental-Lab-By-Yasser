@@ -1,0 +1,180 @@
+.app-menu-anchor {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  overflow: visible;
+  z-index: 60;
+}
+
+.app-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-secondary, #eef1f6);
+  color: var(--muted, var(--text-secondary, #64748b));
+  cursor: pointer;
+  padding: 0;
+}
+
+.app-menu-btn:hover {
+  background: var(--border-primary, #e2e8f0);
+  color: var(--primary, var(--accent-primary, #2563eb));
+}
+
+.app-menu-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  /* Prefer opening toward the center of the screen so RTL/LTR never clips */
+  left: 0;
+  right: auto;
+  z-index: 5000;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border, var(--border-primary, #e2e8f0));
+  background: var(--card, var(--bg-card, #fff));
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  animation: app-menu-in 0.14s ease;
+  text-align: left;
+  direction: ltr;
+  overflow: visible;
+  white-space: normal;
+  box-sizing: border-box;
+}
+
+/* When Arabic/RTL, open panel leftward so text is not clipped by the screen edge */
+.app-menu-panel.app-menu-panel--rtl,
+:host-context([dir='rtl']) .app-menu-panel,
+:host-context(html[dir='rtl']) .app-menu-panel,
+:host-context(body[dir='rtl']) .app-menu-panel,
+[dir='rtl'] .app-menu-panel {
+  left: auto;
+  right: 0;
+}
+
+.app-menu-section {
+  margin: 4px 8px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #94a3b8);
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+}
+
+.app-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #0f172a);
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  direction: ltr;
+  white-space: normal;
+  overflow: visible;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.app-menu-item > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-menu-item.app-menu-lang {
+  justify-content: space-between;
+}
+
+.app-menu-item:hover,
+.app-menu-item:focus-visible {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent-blue, #1d4ed8);
+  outline: none;
+}
+
+.app-menu-item.active {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+
+.app-menu-check {
+  font-size: 13px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.app-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border, var(--border-primary, #e2e8f0));
+}
+
+@keyframes app-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:host-context(body.dark-theme) .app-menu-btn,
+.dark-theme .app-menu-btn {
+  background: var(--bg-secondary, #1e293b);
+  color: var(--text-secondary, #cbd5e1);
+}
+
+:host-context(body.dark-theme) .app-menu-panel,
+.dark-theme .app-menu-panel {
+  background: var(--bg-card, #0f172a);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+:host-context(body.dark-theme) .app-menu-item,
+.dark-theme .app-menu-item {
+  color: var(--text-primary, #f8fafc);
+}
+
+:host-context(body.dark-theme) .app-menu-item:hover,
+:host-context(body.dark-theme) .app-menu-item:focus-visible,
+.dark-theme .app-menu-item:hover,
+.dark-theme .app-menu-item:focus-visible {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+:host-context(body.dark-theme) .app-menu-item.active,
+.dark-theme .app-menu-item.active {
+  background: rgba(45, 212, 191, 0.16);
+  color: #5eead4;
+}
+
+@media (max-width: 640px) {
+  .app-menu-panel {
+    min-width: 220px;
+  }
+}

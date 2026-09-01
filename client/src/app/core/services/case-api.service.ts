@@ -42,6 +42,28 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/material-stats`);
   }
 
+  /** Doctor portal: read-only حسابات summary for exited billable cases */
+  getDoctorAccountSummary(filters?: {
+    doctor?: string;
+    year?: number;
+    month?: number;
+  }): Observable<any> {
+    const params: string[] = [];
+    if (filters?.doctor) params.push(`doctor=${encodeURIComponent(filters.doctor)}`);
+    if (filters?.year) params.push(`year=${filters.year}`);
+    if (filters?.month) params.push(`month=${filters.month}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    return this.http.get(`${this.apiUrl}/doctor-account-summary${query}`);
+  }
+
+  /** Doctor portal: live material exit counts for this doctor */
+  getDoctorExitedMaterials(filters?: { doctor?: string }): Observable<any> {
+    const params: string[] = [];
+    if (filters?.doctor) params.push(`doctor=${encodeURIComponent(filters.doctor)}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    return this.http.get(`${this.apiUrl}/doctor-exited-materials${query}`);
+  }
+
   // Get case by ID
   getCaseById(id: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/${id}`);
@@ -99,11 +121,19 @@ export class CaseApiService {
     return this.http.post(`${this.apiUrl}/${id}/upload-image`, form);
   }
 
-  /** رفع مسح ثلاثي الأبعاد .ply / .stl / .obj */
+  /** رفع مسح ثلاثي الأبعاد أو أرشيف (.ply / .stl / .obj / .rar / .zip) */
   uploadCasePly(id: string, file: File): Observable<any> {
     const form = new FormData();
     form.append('ply', file);
     return this.http.post(`${this.apiUrl}/${id}/upload-ply`, form);
+  }
+
+  /** حفظ لينك سكان خارجي بدل رفع ملف */
+  setCasePlyLink(id: string, url: string, fileName?: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}/ply-link`, {
+      url: String(url || '').trim(),
+      fileName: fileName || undefined,
+    });
   }
 
   // Complete case

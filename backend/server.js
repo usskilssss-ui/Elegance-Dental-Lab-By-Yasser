@@ -25,6 +25,8 @@ const printRoutes = require('./routes/printRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const monthArchiveRoutes = require('./routes/monthArchiveRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const materialRoutes = require('./routes/materialRoutes');
+const financeRoutes = require('./routes/financeRoutes');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -127,6 +129,8 @@ app.use('/api/print', printRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/month-archive', monthArchiveRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/materials', materialRoutes);
+app.use('/api/finance', financeRoutes);
 
 // Static files with proper CORS headers
 // Prefer UPLOAD_DIR (Railway Volume). Default local ./uploads is wiped on redeploy.
@@ -181,6 +185,19 @@ const startServer = async () => {
       await PrintJob.ensurePrintJobTtlIndex();
     }
 
+    // Seed lab materials + load workflow config from AppSettings
+    try {
+      const { ensureDefaultMaterials, getOrCreateLabSettings } = require('./services/labConfigService');
+      const { setWorkflowConfig } = require('./services/caseWorkflowService');
+      const seeded = await ensureDefaultMaterials();
+      if (seeded.created) console.log(`[lab-config] seeded ${seeded.created} default materials`);
+      const lab = await getOrCreateLabSettings();
+      setWorkflowConfig(lab.workflow);
+      console.log('[lab-config] branding:', lab.branding?.labName || lab.whatsapp?.labName || 'Elegance');
+    } catch (e) {
+      console.warn('[lab-config] init skipped:', e.message);
+    }
+
     // Start server
     server.listen(PORT, () => {
       console.log(`
@@ -199,9 +216,14 @@ const startServer = async () => {
         reloadWhatsAppConfig()
           .then((cfg) => {
             if (cfg?.enabled && cfg.provider === 'waweb') {
+              console.log('[wa-web] boot: starting WhatsApp Web session…');
               const { startWhatsAppWeb } = require('./services/waWebService');
-              return startWhatsAppWeb();
+              return startWhatsAppWeb().then((st) => {
+                console.log('[wa-web] boot status:', st?.status, st?.connected ? 'connected' : '');
+                return st;
+              });
             }
+            console.log('[wa-web] boot: skipped (enabled=', !!cfg?.enabled, 'provider=', cfg?.provider || 'none', ')');
             return null;
           })
           .catch((e) => console.warn('[wa-web] boot start skipped:', e.message));

@@ -32,6 +32,17 @@ const dentalCaseSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    /** Uploaded 3D scan file path (e.g. /uploads/cases/xxx.ply) — durable, not only in notes meta */
+    plyScanPath: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    plyFileName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     /** Clinic referring doctor (indexed) — mirrors notes meta.doctor for fast list filters */
     referringDoctor: {
       type: String,
@@ -90,6 +101,28 @@ const dentalCaseSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    /** Snapshot of sell amount used for profit (usually = salaryAmount at exit). */
+    revenueAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** Frozen bill lines + prices at exit (immutable history). */
+    billSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    /** Material COGS snapshot at exit (from inventory avg cost × qty). */
+    materialCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** revenueAmount − materialCost at exit. */
+    caseProfit: {
+      type: Number,
+      default: 0,
     },
     paymentStatus: {
       type: String,

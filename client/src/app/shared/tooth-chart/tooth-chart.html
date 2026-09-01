@@ -1,0 +1,119 @@
+<div class="tc-wrap" dir="ltr">
+  <div class="tc-toolbar">
+    <div class="tc-materials" *ngIf="materials.length">
+      <span class="tc-label">اختر الخامة ثم اضغط على السن:</span>
+      <button
+        type="button"
+        class="tc-mat-btn"
+        *ngFor="let m of materials"
+        [class.active]="activeMaterial === m"
+        [style.--mat-color]="colorFor(m)"
+        (click)="setActiveMaterial(m)"
+      >
+        {{ m }}
+      </button>
+    </div>
+    <p class="tc-hint" *ngIf="!activeMaterial && materials.length">اختَر خامة من الأزرار فوق عشان تلوّن الأسنان</p>
+    <p class="tc-hint warn" *ngIf="!materials.length">اختَر نوع العمل (Zircon / Emax…) الأول</p>
+
+    <div class="tc-modes" *ngIf="materials.length">
+      <button type="button" class="tc-mode" [class.active]="linkMode === 'separate'" (click)="setLinkMode('separate')">
+        منفصل
+      </button>
+      <button type="button" class="tc-mode" [class.active]="linkMode === 'connected'" (click)="setLinkMode('connected')">
+        متصل (جسر)
+      </button>
+      <button type="button" class="tc-clear" (click)="clearAll()" *ngIf="assignments.length">مسح الكل</button>
+    </div>
+    <p class="tc-hint" *ngIf="materials.length && linkMode === 'separate'">
+      وضع منفصل: كل ضغطة = سن لوحده (حتى لو جنب بعض)
+    </p>
+    <p class="tc-hint" *ngIf="materials.length && linkMode === 'connected'">
+      وضع متصل: السن بيرتبط بالمجاور. لو ضغطت 14 بعدين 16 بعدين 15 هيبقوا جسر واحد.
+    </p>
+  </div>
+
+  <div class="tc-chart">
+    <div class="tc-side"><span>R</span><span>L</span></div>
+
+    <!-- Upper arch -->
+    <div class="tc-arch">
+      <div class="tc-quad">
+        <ng-container *ngFor="let fdi of upperRight; let i = index">
+          <button
+            type="button"
+            class="tc-tooth"
+            [class.selected]="!!getFor(fdi)"
+            [class.bridged-next]="bridgedWithNext(fdi, upperRight[i + 1])"
+            [style.background]="getFor(fdi) ? colorFor(getFor(fdi)!.material) : null"
+            [attr.title]="fdi + (getFor(fdi) ? ' — ' + getFor(fdi)!.material : '')"
+            (click)="onToothClick(fdi)"
+          >
+            {{ fdi }}
+          </button>
+        </ng-container>
+      </div>
+      <div class="tc-midline"></div>
+      <div class="tc-quad">
+        <ng-container *ngFor="let fdi of upperLeft; let i = index">
+          <button
+            type="button"
+            class="tc-tooth"
+            [class.selected]="!!getFor(fdi)"
+            [class.bridged-next]="bridgedWithNext(fdi, upperLeft[i + 1])"
+            [style.background]="getFor(fdi) ? colorFor(getFor(fdi)!.material) : null"
+            [attr.title]="fdi + (getFor(fdi) ? ' — ' + getFor(fdi)!.material : '')"
+            (click)="onToothClick(fdi)"
+          >
+            {{ fdi }}
+          </button>
+        </ng-container>
+      </div>
+    </div>
+
+    <!-- Lower arch -->
+    <div class="tc-arch lower">
+      <div class="tc-quad">
+        <ng-container *ngFor="let fdi of lowerRight; let i = index">
+          <button
+            type="button"
+            class="tc-tooth"
+            [class.selected]="!!getFor(fdi)"
+            [class.bridged-next]="bridgedWithNext(fdi, lowerRight[i + 1])"
+            [style.background]="getFor(fdi) ? colorFor(getFor(fdi)!.material) : null"
+            [attr.title]="fdi + (getFor(fdi) ? ' — ' + getFor(fdi)!.material : '')"
+            (click)="onToothClick(fdi)"
+          >
+            {{ fdi }}
+          </button>
+        </ng-container>
+      </div>
+      <div class="tc-midline"></div>
+      <div class="tc-quad">
+        <ng-container *ngFor="let fdi of lowerLeft; let i = index">
+          <button
+            type="button"
+            class="tc-tooth"
+            [class.selected]="!!getFor(fdi)"
+            [class.bridged-next]="bridgedWithNext(fdi, lowerLeft[i + 1])"
+            [style.background]="getFor(fdi) ? colorFor(getFor(fdi)!.material) : null"
+            [attr.title]="fdi + (getFor(fdi) ? ' — ' + getFor(fdi)!.material : '')"
+            (click)="onToothClick(fdi)"
+          >
+            {{ fdi }}
+          </button>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+
+  <div class="tc-legend" *ngIf="legendItems().length">
+    <div class="tc-leg-item" *ngFor="let item of legendItems()">
+      <span class="tc-swatch" [style.background]="item.color"></span>
+      <span>{{ item.material }}</span>
+      <strong *ngIf="item.count">×{{ item.count }}</strong>
+    </div>
+  </div>
+
+  <p class="tc-summary" *ngIf="assignments.length" dir="rtl">{{ summaryText() }}</p>
+</div>

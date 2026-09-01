@@ -1,0 +1,130 @@
+<div class="doctor-accounts-page" [attr.dir]="lang.dir()">
+  <header class="da-topbar">
+    <button type="button" class="da-back-btn" (click)="backToDashboard()" [attr.aria-label]="'doctorPages.backAria' | t">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+      <span>{{ 'common.back' | t }}</span>
+    </button>
+
+    <div class="da-brand">
+      <span class="da-brand-dot"></span>
+      <span class="da-brand-title">Elegance</span>
+      <span class="da-brand-dot"></span>
+    </div>
+
+    <div class="da-top-actions">
+      <app-overflow-menu></app-overflow-menu>
+      <button
+        type="button"
+        class="da-icon-btn"
+        [attr.aria-label]="'common.theme' | t"
+        [attr.title]="'common.theme' | t"
+        (click)="themeService.toggleTheme()"
+      >
+        <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg *ngIf="themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="da-main">
+    <section class="da-hero">
+      <p class="da-eyebrow">{{ 'doctorPages.accounts.eyebrow' | t }}</p>
+      <h1>{{ pageTitle() }}</h1>
+      <p class="da-lead">
+        {{ 'doctorPages.accounts.lead' | t }}
+        @if (isAdminView()) {
+          <span class="da-admin-pill">{{ 'doctorPages.adminView' | t }}</span>
+        }
+      </p>
+    </section>
+
+    @if (loading()) {
+      <p class="da-status">{{ 'doctorPages.accounts.loading' | t }}</p>
+    } @else if (error()) {
+      <p class="da-status da-status--err">{{ error() }}</p>
+    } @else if (summary(); as s) {
+      <section class="da-totals" [attr.aria-label]="'doctorPages.accounts.summaryAria' | t">
+        <article class="da-total-card da-total-card--hero">
+          <span class="da-total-label">{{ 'doctorPages.accounts.totalDue' | t }}</span>
+          <strong class="da-total-value">{{ formatMoney(s.totalDue) }}</strong>
+          <span class="da-total-meta">{{ billableMeta(s.caseCount) }}</span>
+        </article>
+        <article class="da-total-card">
+          <span class="da-total-label">{{ 'doctorPages.accounts.due' | t }}</span>
+          <strong class="da-total-value">{{ formatMoney(s.totalDue) }}</strong>
+        </article>
+        <article class="da-total-card da-total-card--paid">
+          <span class="da-total-label">{{ 'doctorPages.accounts.paid' | t }}</span>
+          <strong class="da-total-value">{{ formatMoney(s.totalPaid) }}</strong>
+        </article>
+        <article class="da-total-card da-total-card--remain">
+          <span class="da-total-label">{{ 'doctorPages.accounts.remaining' | t }}</span>
+          <strong class="da-total-value">{{ formatMoney(s.remaining) }}</strong>
+        </article>
+      </section>
+
+      <section class="da-cases" [attr.aria-label]="'doctorPages.accounts.casesAria' | t">
+        <div class="da-cases-head">
+          <h2>{{ 'doctorPages.accounts.casesTitle' | t }}</h2>
+          <p>{{ 'doctorPages.accounts.casesHint' | t }}</p>
+        </div>
+
+        @if (!s.cases?.length) {
+          <p class="da-status">{{ 'doctorPages.accounts.empty' | t }}</p>
+        } @else {
+          <ul class="da-case-list">
+            @for (row of s.cases; track row.id) {
+              <li class="da-case-card">
+                <div class="da-case-main">
+                  <div class="da-case-top">
+                    <span class="da-case-num">{{ row.caseNumber }}</span>
+                    <span class="da-case-pay" [class.is-paid]="row.paymentStatus === 'paid'">
+                      {{ row.paymentStatus === 'paid' ? ('doctorPages.accounts.paid' | t) : ('doctorPages.accounts.unpaid' | t) }}
+                    </span>
+                  </div>
+                  <p class="da-case-patient">{{ row.patientName }}</p>
+                  <p class="da-case-type">{{ row.caseType }}</p>
+                  <div class="da-case-pricing">
+                    @if (row.lines?.length) {
+                      @for (line of row.lines; track line.label + line.quantity) {
+                        <div class="da-price-line">
+                          <span>{{ line.label }}</span>
+                          <span>{{ line.quantity }} × {{ formatMoney(line.unitPrice) }}</span>
+                        </div>
+                      }
+                    } @else {
+                      <div class="da-price-line">
+                        <span>{{ 'doctorPages.accounts.qtyUnit' | t }}</span>
+                        <span>{{ row.quantity || 1 }} × {{ formatMoney(row.unitPrice || row.amount) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="da-case-side">
+                  <span class="da-case-amount-label">{{ 'doctorPages.accounts.total' | t }}</span>
+                  <span class="da-case-amount">{{ formatMoney(row.amount) }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <p class="da-footnote">{{ 'doctorPages.accounts.footnote' | t }}</p>
+    }
+  </main>
+</div>

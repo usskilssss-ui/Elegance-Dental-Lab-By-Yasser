@@ -650,9 +650,11 @@ async function generatePdf(html, outputPath) {
   await page.setContent(html, { waitUntil: 'load' });
   await page.pdf({
     path: outputPath,
-    format: 'A5',
+    width: '150mm',
+    height: '200mm',
     printBackground: true,
-    margin: { top: '10mm', right: '12mm', bottom: '10mm', left: '12mm' },
+    preferCSSPageSize: true,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' },
   });
   await browser.close();
   fs.unlink(tempHtmlPath, () => {});
@@ -690,6 +692,127 @@ async function buildPrintHtml(c) {
   const workTypeDisplay = c.workType || '—';
   const quantity = c.caseType === 'Empty' ? 0 : (c.quantity || 0);
   const caseNumber = String(c.caseNumber || '').trim();
+  const teeth = Array.isArray(c.teeth) ? c.teeth : [];
+
+  /** Short codes readable on B&W printers (no color reliance). */
+  const MATERIAL_CODE = {
+    Zircon: 'Zr',
+    'German Zircon': 'GZ',
+    Emax: 'Em',
+    Peek: 'Pk',
+    Titanium: 'Ti',
+    'Pmma Cad': 'Pm',
+    'Try in': 'Tr',
+    Mokup: 'Mk',
+    Mockup: 'Mk',
+    'Night Guard': 'NG',
+    Wax: 'Wx',
+    Ring: 'Rg',
+  };
+  const codeFor = (mat) => {
+    if (MATERIAL_CODE[mat]) return MATERIAL_CODE[mat];
+    const s = String(mat || '').trim();
+    if (!s) return '?';
+    return s.slice(0, 2);
+  };
+
+  const byFdi = {};
+  for (const t of teeth) {
+    if (t && t.fdi) byFdi[String(t.fdi)] = t;
+  }
+  // FDI order; Palmer display number = last digit (8‥1 | 1‥8)
+  const UPPER_R = ['18', '17', '16', '15', '14', '13', '12', '11'];
+  const UPPER_L = ['21', '22', '23', '24', '25', '26', '27', '28'];
+  const LOWER_R = ['48', '47', '46', '45', '44', '43', '42', '41'];
+  const LOWER_L = ['31', '32', '33', '34', '35', '36', '37', '38'];
+  const palmerOf = (fdi) => String(fdi).slice(-1);
+
+  /** Consecutive teeth with same groupId+material → one rectangle (bridge). */
+  const segmentQuad = (fdiList) => {
+    const segs = [];
+    let i = 0;
+    while (i < fdiList.length) {
+      const fdi = fdiList[i];
+      const t = byFdi[fdi];
+      if (!t) {
+        segs.push({ fdis: [fdi], selected: false });
+        i += 1;
+        continue;
+      }
+      if (!t.groupId) {
+        segs.push({ fdis: [fdi], selected: true, material: t.material });
+        i += 1;
+        continue;
+      }
+      const fdis = [fdi];
+      let j = i + 1;
+      while (j < fdiList.length) {
+        const n = byFdi[fdiList[j]];
+        if (n && n.groupId === t.groupId && n.material === t.material) {
+          fdis.push(fdiList[j]);
+          j += 1;
+        } else break;
+      }
+      segs.push({ fdis, selected: true, material: t.material });
+      i = j;
+    }
+    return segs;
+  };
+
+  const renderSegLabels = (segs) =>
+    segs
+      .map((seg) => {
+        const span = `grid-column: span ${seg.fdis.length}`;
+        if (!seg.selected) return `<span class="seg-lab" style="${span}"></span>`;
+        return `<span class="seg-lab on" style="${span}">${escapeHtml(codeFor(seg.material))}</span>`;
+      })
+      .join('');
+
+  const renderSegNums = (segs) =>
+    segs
+      .map((seg) => {
+        const span = `grid-column: span ${seg.fdis.length}`;
+        const nums = seg.fdis.map((f) => `<span class="pn">${escapeHtml(palmerOf(f))}</span>`).join('');
+        if (!seg.selected) {
+          return `<span class="seg-box empty" style="${span}">${nums}</span>`;
+        }
+        const title = escapeHtml(`${seg.fdis.join(',')} — ${seg.material}`);
+        return `<span class="seg-box selected" style="${span}" title="${title}">${nums}</span>`;
+      })
+      .join('');
+
+  /** Classic Palmer arch: abbr above (upper) or below (lower) group rectangles. */
+  const renderArch = (rightList, leftList, labelPos) => {
+    const rSegs = segmentQuad(rightList);
+    const lSegs = segmentQuad(leftList);
+    const rLabels = renderSegLabels(rSegs);
+    const lLabels = renderSegLabels(lSegs);
+    const rNums = renderSegNums(rSegs);
+    const lNums = renderSegNums(lSegs);
+    // Upper: labels row then numbers; lower: numbers then labels
+    const rQuad =
+      labelPos === 'above'
+        ? `${rLabels}${rNums}`
+        : `${rNums}${rLabels}`;
+    const lQuad =
+      labelPos === 'above'
+        ? `${lLabels}${lNums}`
+        : `${lNums}${lLabels}`;
+    return `<div class="palmer-arch ${labelPos === 'above' ? 'upper' : 'lower'}">
+      <span class="rl">R</span>
+      <div class="quad">${rQuad}</div>
+      <span class="mid-line"></span>
+      <div class="quad">${lQuad}</div>
+      <span class="rl">L</span>
+    </div>`;
+  };
+
+  const legendMats = [...new Set(teeth.map((t) => t.material).filter(Boolean))];
+  const legendHtml = legendMats.length
+    ? `<div class="teeth-legend">${legendMats
+        .map((m) => `<span class="leg"><b>${escapeHtml(codeFor(m))}</b>=${escapeHtml(m)}</span>`)
+        .join('<span class="leg-sep">·</span>')}</div>`
+    : '';
 
   let barcodeBlock = '';
   if (caseNumber) {
@@ -713,7 +836,8 @@ async function buildPrintHtml(c) {
   <meta charset="UTF-8">
   <title>ريكويست</title>
   <style>
-    @page { size: A5; margin: 10mm 12mm 10mm 12mm; }
+    /* Lab request paper: 15cm × 20cm (width × height) */
+    @page { size: 150mm 200mm; margin: 7mm 8mm; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -721,56 +845,106 @@ async function buildPrintHtml(c) {
       background: #fff;
       color: #000;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.4;
       direction: rtl;
-      padding-top: 40px;
+      min-height: 186mm;
+      display: flex;
+      flex-direction: column;
+      /* نزل المحتوى شوية من فوق الورقة */
+      padding-top: 10mm;
     }
     .barcode-block {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      margin: 0 auto 18px; padding: 8px 0 4px;
+      margin: 0 auto 10px; padding: 0;
     }
     .barcode-img {
-      width: 220px; height: 56px; object-fit: contain;
+      width: 210px; height: 48px; object-fit: contain;
       image-rendering: pixelated;
     }
     .barcode-code-text {
-      margin-top: 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;
+      margin-top: 4px; font-size: 13px; font-weight: 800; letter-spacing: 0.4px;
       direction: ltr; unicode-bidi: isolate;
     }
-    .barcode-hint { font-size: 10px; color: #333; margin-top: 2px; }
-    .section { margin-bottom: 18px; }
+    .barcode-hint { font-size: 9px; color: #333; margin-top: 1px; }
+    .section { margin-bottom: 10px; }
+    /* نزل قسم تفاصيل العمل شوية تحت بيانات الطبيب */
+    .section-work { margin-top: 8mm; }
     .section-title {
-      font-size: 15px; font-weight: 700; color: #000;
-      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 8px;
+      font-size: 14px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 5px;
     }
     .row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 7px 0; border-bottom: 1.5px solid #000; font-size: 14px;
+      padding: 5px 0; border-bottom: 1.5px solid #000; font-size: 14px;
     }
     .row:last-child { border-bottom: none; }
     .label { color: #000; font-weight: bold; }
     .value { font-weight: 700; color: #000; text-align: left; direction: ltr; }
-    .teeth-section { margin-top: 20px; margin-bottom: 16px; }
+    /* نزل مخطط الأسنان شوية كمان تحت تفاصيل العمل */
+    .teeth-section {
+      margin-top: 16mm;
+      margin-bottom: 0;
+    }
     .teeth-title {
-      font-size: 15px; font-weight: 700; color: #000;
-      border-right: 4px solid #000; padding-right: 10px; margin-bottom: 10px;
+      font-size: 14px; font-weight: 700; color: #000;
+      border-right: 3px solid #000; padding-right: 8px; margin-bottom: 6px;
     }
     .teeth-chart { width: 100%; direction: ltr; }
-    .teeth-chart .side-labels {
-      display: flex; justify-content: space-between; padding: 0 4%;
-      margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #000;
+    .palmer-arch {
+      display: flex; align-items: stretch; gap: 3px; width: 100%;
+      margin: 4px 0;
     }
-    .teeth-row { display: flex; width: 100%; border-bottom: 1.5px solid #000; padding: 6px 0; }
-    .teeth-row:last-child { border-bottom: none; }
-    .teeth-row .tooth { flex: 1; text-align: center; font-size: 14px; font-weight: 700; color: #000; }
-    .teeth-row .tooth.center-r { border-right: 2px solid #000; padding-right: 2px; }
+    .palmer-arch.upper { border-bottom: 1.5px solid #000; padding-bottom: 6px; }
+    .palmer-arch.lower { padding-top: 4px; }
+    .palmer-arch .rl {
+      flex: 0 0 14px; font-size: 13px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .quad {
+      flex: 1 1 0; min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      grid-template-rows: auto auto;
+      column-gap: 2px; row-gap: 2px;
+    }
+    .seg-lab {
+      display: flex; align-items: flex-end; justify-content: center;
+      font-size: 11px; font-weight: 800; line-height: 1; color: #000;
+      min-height: 13px; min-width: 0;
+    }
+    .seg-lab.on { letter-spacing: 0.2px; }
+    .lower .seg-lab { align-items: flex-start; }
+    .seg-box {
+      display: flex; align-items: center; justify-content: space-evenly;
+      min-width: 0; min-height: 26px; padding: 2px 1px;
+      border: 1.5px solid transparent; background: #fff;
+    }
+    .seg-box.empty .pn { opacity: 0.55; }
+    .seg-box.selected {
+      border-color: #000; border-radius: 2px;
+    }
+    .seg-box .pn {
+      flex: 1 1 0; text-align: center;
+      font-size: 14px; font-weight: 700; line-height: 1.1;
+    }
+    .mid-line {
+      flex: 0 0 2px; align-self: stretch; background: #000; margin: 12px 2px 0;
+    }
+    .lower .mid-line { margin: 0 2px 12px; }
+    .teeth-legend {
+      margin-top: 6px; font-size: 11px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      direction: ltr; text-align: center;
+    }
+    .teeth-legend .leg { display: inline; }
+    .teeth-legend .leg-sep { margin: 0 5px; opacity: 0.7; }
     .footer {
-      margin-top: 24px; padding-top: 10px; border-top: 2px solid #000;
+      margin-top: auto; padding-top: 8px; border-top: 1.5px solid #000;
       display: flex; justify-content: space-between; align-items: center;
-      font-size: 11px; color: #000; direction: ltr;
+      font-size: 10px; color: #000; direction: ltr;
     }
-    .footer-lab { font-weight: 700; color: #000; font-size: 12px; }
-    .footer-date { color: #000; font-size: 11px; direction: rtl; }
+    .footer-lab { font-weight: 700; color: #000; font-size: 11px; }
+    .footer-date { color: #000; font-size: 10px; direction: rtl; }
   </style>
 </head>
 <body>
@@ -781,7 +955,7 @@ async function buildPrintHtml(c) {
     <div class="row"><span class="label">المريض</span><span class="value">${escapeHtml(c.patient || '—')}</span></div>
     <div class="row"><span class="label">الفرع</span><span class="value">${escapeHtml(c.branch || '—')}</span></div>
   </div>
-  <div class="section">
+  <div class="section section-work">
     <div class="section-title">تفاصيل العمل</div>
     <div class="row"><span class="label">نوع العمل</span><span class="value">${escapeHtml(workTypeDisplay)}</span></div>
     ${c.workDetail ? `<div class="row"><span class="label">ملاحظات</span><span class="value">${escapeHtml(c.workDetail)}</span></div>` : ''}
@@ -791,19 +965,9 @@ async function buildPrintHtml(c) {
   <div class="teeth-section">
     <div class="teeth-title">مخطط الأسنان</div>
     <div class="teeth-chart">
-      <div class="side-labels"><span>R</span><span>L</span></div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
-      </div>
-      <div class="teeth-row">
-        <span class="tooth">8</span><span class="tooth">7</span><span class="tooth">6</span><span class="tooth">5</span>
-        <span class="tooth">4</span><span class="tooth">3</span><span class="tooth">2</span><span class="tooth center-r">1</span>
-        <span class="tooth">1</span><span class="tooth">2</span><span class="tooth">3</span><span class="tooth">4</span>
-        <span class="tooth">5</span><span class="tooth">6</span><span class="tooth">7</span><span class="tooth">8</span>
-      </div>
+      ${renderArch(UPPER_R, UPPER_L, 'above')}
+      ${renderArch(LOWER_R, LOWER_L, 'below')}
+      ${legendHtml}
     </div>
   </div>
   <div class="footer">

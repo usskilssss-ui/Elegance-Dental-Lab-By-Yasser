@@ -34,6 +34,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 10px;
 }
 
 .topbar-center {
@@ -621,4 +622,34 @@
 @media (max-width: 600px) {
   .topbar { padding: 0.55rem 0.75rem; }
   .dashboard { padding: 0.8rem; }
+}
+
+.ply-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+  max-width: 100%;
+}
+.ply-download-btn:hover {
+  background: #99f6e4;
+  color: #115e59;
+}
+.spec-item.intake-scan {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #99f6e4;
+}
+.spec-item.intake-impression {
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fdba74;
 }

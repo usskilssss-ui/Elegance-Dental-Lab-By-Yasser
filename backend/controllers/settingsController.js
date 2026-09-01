@@ -10,14 +10,127 @@ const {
   stopWhatsAppWeb,
   getPublicStatus,
 } = require('../services/waWebService');
+const {
+  getOrCreateLabSettings,
+  ensureDefaultMaterials,
+  buildDefaultPricesFromMaterials,
+} = require('../services/labConfigService');
+const { setWorkflowConfig } = require('../services/caseWorkflowService');
+const Material = require('../models/Material');
 
 async function getOrCreateSettings() {
-  let doc = await AppSettings.findOne({ key: 'app' });
-  if (!doc) {
-    doc = await AppSettings.create({ key: 'app' });
-  }
-  return doc;
+  return getOrCreateLabSettings();
 }
+
+function publicBrandingFrom(doc) {
+  const branding = doc.branding || {};
+  const labName =
+    branding.labName ||
+    doc.whatsapp?.labName ||
+    'Elegance Dental Lab';
+  return {
+    labName,
+    logoUrl: branding.logoUrl || '',
+    primaryColor: branding.primaryColor || '#2563eb',
+  };
+}
+
+/** Public branding for login / white-label (no auth). */
+exports.getPublicLabSettings = async (_req, res) => {
+  try {
+    const doc = await getOrCreateLabSettings();
+    return res.json({
+      success: true,
+      branding: publicBrandingFrom(doc),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Authenticated: branding + workflow + default prices + materials summary. */
+exports.getLabSettings = async (_req, res) => {
+  try {
+    await ensureDefaultMaterials();
+    const doc = await getOrCreateLabSettings();
+    const materials = await Material.find({ active: true }).sort({ sortOrder: 1 }).lean();
+    const defaultPrices = await buildDefaultPricesFromMaterials();
+    setWorkflowConfig(doc.workflow);
+    return res.json({
+      success: true,
+      branding: publicBrandingFrom(doc),
+      workflow: {
+        enabledStages: doc.workflow?.enabledStages || AppSettings.ALL_STAGES,
+        allowSkipSecretary: doc.workflow?.allowSkipSecretary !== false,
+        allowSkipKhart: doc.workflow?.allowSkipKhart !== false,
+        allStages: AppSettings.ALL_STAGES,
+      },
+      defaultPrices,
+      materials,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.updateLabSettings = async (req, res) => {
+  try {
+    const body = req.body || {};
+    const doc = await getOrCreateLabSettings();
+
+    if (body.branding && typeof body.branding === 'object') {
+      if (!doc.branding) doc.branding = {};
+      if (body.branding.labName !== undefined) {
+        const name = String(body.branding.labName || '').trim();
+        doc.branding.labName = name || doc.branding.labName || 'Elegance Dental Lab';
+        if (doc.whatsapp) doc.whatsapp.labName = doc.branding.labName;
+      }
+      if (body.branding.logoUrl !== undefined) {
+        doc.branding.logoUrl = String(body.branding.logoUrl || '').trim();
+      }
+      if (body.branding.primaryColor !== undefined) {
+        doc.branding.primaryColor = String(body.branding.primaryColor || '').trim() || '#2563eb';
+      }
+    }
+
+    if (body.workflow && typeof body.workflow === 'object') {
+      if (!doc.workflow) doc.workflow = {};
+      if (Array.isArray(body.workflow.enabledStages)) {
+        const allowed = new Set(AppSettings.ALL_STAGES);
+        const stages = body.workflow.enabledStages
+          .map((s) => String(s).toLowerCase())
+          .filter((s) => allowed.has(s));
+        if (!stages.includes('waiting')) stages.unshift('waiting');
+        if (!stages.includes('completed')) stages.push('completed');
+        if (!stages.includes('exited')) stages.push('exited');
+        doc.workflow.enabledStages = AppSettings.ALL_STAGES.filter((s) => stages.includes(s));
+      }
+      if (typeof body.workflow.allowSkipSecretary === 'boolean') {
+        doc.workflow.allowSkipSecretary = body.workflow.allowSkipSecretary;
+      }
+      if (typeof body.workflow.allowSkipKhart === 'boolean') {
+        doc.workflow.allowSkipKhart = body.workflow.allowSkipKhart;
+      }
+    }
+
+    await doc.save();
+    setWorkflowConfig(doc.workflow);
+
+    return res.json({
+      success: true,
+      message: 'تم حفظ إعدادات المعمل',
+      branding: publicBrandingFrom(doc),
+      workflow: {
+        enabledStages: doc.workflow.enabledStages,
+        allowSkipSecretary: doc.workflow.allowSkipSecretary !== false,
+        allowSkipKhart: doc.workflow.allowSkipKhart !== false,
+        allStages: AppSettings.ALL_STAGES,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 exports.getWhatsAppSettings = async (req, res) => {
   try {
@@ -49,6 +162,7 @@ exports.getWhatsAppSettings = async (req, res) => {
         msgDaily:
           wa.msgDaily ||
           '{lab} — ملخص يومي\nعندك {count} حالات جاهزة للاستلام.\n{list}',
+        alertPhones: wa.alertPhones || '',
         hasToken: !!(wa.token && String(wa.token).trim()),
         liveConfigured,
         web: provider === 'waweb' ? getPublicStatus() : undefined,
@@ -82,6 +196,9 @@ exports.updateWhatsAppSettings = async (req, res) => {
     }
     if (body.msgDaily !== undefined) {
       wa.msgDaily = String(body.msgDaily || '').trim() || wa.msgDaily;
+    }
+    if (body.alertPhones !== undefined) {
+      wa.alertPhones = String(body.alertPhones || '').trim();
     }
     if (typeof body.token === 'string' && body.token.trim()) {
       wa.token = body.token.trim();
@@ -126,18 +243,35 @@ exports.testWhatsApp = async (req, res) => {
         message: 'اكتب رقم موبايل للاختبار (مثال: 01xxxxxxxxx)',
       });
     }
-    const custom = String(req.body?.message || '').trim();
-    const text =
-      custom ||
+    const customMessage = String(
+      req.body?.message ?? req.body?.text ?? req.body?.body ?? ''
+    ).trim();
+    const testMessage =
+      customMessage ||
       'Elegance Dental Lab\n✅ تجربة إشعار واتساب من السيستم — لو وصلك الرسالة يبقى الإعداد تمام.';
-    const result = await sendWhatsAppText(phone, text);
-    if (!result.ok) {
+    const result = await sendWhatsAppText(phone, testMessage);
+    if (!result || result.skipped || !result.ok) {
       return res.status(400).json({
         success: false,
-        message: result.error || 'فشل إرسال رسالة الاختبار',
+        message:
+          result?.error ||
+          (result?.skipped
+            ? 'تم تخطي الإرسال — واتساب مش جاهز/متصل'
+            : 'فشل إرسال رسالة الاختبار'),
+        detail: {
+          to: result?.to || undefined,
+          jid: result?.jid || undefined,
+          skipped: !!result?.skipped,
+          self: !!result?.self,
+        },
       });
     }
-    return res.json({ success: true, message: 'تم إرسال رسالة الاختبار' });
+    return res.json({
+      success: true,
+      message: 'تم إرسال رسالة الاختبار',
+      to: result.to || undefined,
+      jid: result.jid || undefined,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

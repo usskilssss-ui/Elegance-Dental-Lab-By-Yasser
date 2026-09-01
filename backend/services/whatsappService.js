@@ -66,6 +66,7 @@ function configFromEnv() {
     msgCompleted: DEFAULT_MSG_COMPLETED,
     msgExited: DEFAULT_MSG_EXITED,
     msgDaily: DEFAULT_MSG_DAILY,
+    alertPhones: String(process.env.WHATSAPP_ALERT_PHONES || ''),
   };
 }
 
@@ -106,6 +107,7 @@ async function reloadWhatsAppConfig() {
           DEFAULT_MSG_EXITED
         ),
         msgDaily: String(doc.whatsapp.msgDaily || DEFAULT_MSG_DAILY),
+        alertPhones: String(doc.whatsapp.alertPhones || ''),
       };
       return cachedConfig;
     }
@@ -122,11 +124,20 @@ function getConfig() {
   return cachedConfig;
 }
 
+/**
+ * Normalize to E.164 digits without +.
+ * Egyptian mobiles: 01xxxxxxxxx / 1xxxxxxxxx / 201xxxxxxxxx → 201xxxxxxxxx
+ */
 function normalizePhone(raw) {
   let p = String(raw || '').replace(/\D/g, '');
   if (!p) return '';
   if (p.startsWith('00')) p = p.slice(2);
+  // Local EG: 01xxxxxxxxx (11 digits)
   if (p.startsWith('0') && p.length === 11) p = `20${p.slice(1)}`;
+  // Local EG without leading 0: 1xxxxxxxxx (10 digits, mobile)
+  else if (p.length === 10 && p.startsWith('1')) p = `20${p}`;
+  // Typed as 0201... (13 digits)
+  else if (p.startsWith('020') && p.length === 13) p = p.slice(1);
   return p;
 }
 
@@ -153,10 +164,14 @@ async function sendWhatsAppText(phone, body) {
   if (!cachedConfig) await reloadWhatsAppConfig();
   if (!providerConfigured()) {
     console.log('[whatsapp] skipped (not configured):', String(body).slice(0, 80));
-    return { ok: false, skipped: true };
+    return {
+      ok: false,
+      skipped: true,
+      error: 'واتساب مش مضبوط أو مش متصل حالياً',
+    };
   }
   const to = normalizePhone(phone);
-  if (!to) return { ok: false, error: 'no-phone' };
+  if (!to) return { ok: false, error: 'رقم الموبايل غير صالح' };
 
   const c = getConfig();
   const text = String(body);
@@ -164,7 +179,19 @@ async function sendWhatsAppText(phone, body) {
   try {
     if (c.provider === 'waweb') {
       const { sendWhatsAppWebText } = require('./waWebService');
-      return sendWhatsAppWebText(phone, text);
+      // Always await — surface skipped/errors; pass raw phone (waWeb normalizes too)
+      const result = await sendWhatsAppWebText(phone, text);
+      if (!result?.ok) {
+        console.warn(
+          '[whatsapp] waweb send not ok:',
+          result?.error || result?.skipped || 'failed',
+          'phone=',
+          phone,
+          'normalized=',
+          to
+        );
+      }
+      return result;
     }
 
     if (c.provider === 'meta') {
@@ -186,7 +213,7 @@ async function sendWhatsAppText(phone, body) {
         console.warn('[whatsapp] meta error:', res.status, errText);
         return { ok: false, error: errText };
       }
-      return { ok: true };
+      return { ok: true, to };
     }
 
     if (c.provider === 'ultramsg') {
@@ -209,13 +236,17 @@ async function sendWhatsAppText(phone, body) {
         console.warn('[whatsapp] ultramsg error:', res.status, errText);
         return { ok: false, error: errText };
       }
-      return { ok: true };
+      return { ok: true, to };
     }
   } catch (err) {
     console.warn('[whatsapp] send failed:', err.message);
     return { ok: false, error: err.message };
   }
-  return { ok: false, skipped: true };
+  return {
+    ok: false,
+    skipped: true,
+    error: `مزود واتساب غير معروف (${c.provider || 'none'})`,
+  };
 }
 
 function normalizeDoctorKey(name) {
@@ -240,12 +271,9 @@ async function findDoctorUserByCase(dentalCase) {
   const exact = users.find((u) => normalizeDoctorKey(u.fullName) === key);
   if (exact) return exact;
 
-  // Partial match when names differ slightly (clinic nickname vs account name)
-  const partial = users.find((u) => {
-    const uk = normalizeDoctorKey(u.fullName);
-    return uk && (uk.includes(key) || key.includes(uk));
-  });
-  return partial || null;
+  // No fuzzy/partial name match — prevents messaging the wrong doctor
+  console.warn('[whatsapp] no exact doctor user match for:', doctorName);
+  return null;
 }
 
 function labLabel() {
@@ -297,6 +325,60 @@ async function notifyDoctorCaseStatus(dentalCase, kind) {
   } catch (err) {
     console.warn('[whatsapp] notifyDoctorCaseStatus:', err.message);
   }
+}
+
+/** Send alert to lab admin phones (AppSettings.whatsapp.alertPhones + admin users). */
+async function notifyLabAlert(text) {
+  await reloadWhatsAppConfig();
+  const c = getConfig();
+  if (!c.enabled) return { skipped: true, reason: 'disabled' };
+
+  const phones = new Set();
+  const raw = String(c.alertPhones || '');
+  for (const part of raw.split(/[,;\s]+/)) {
+    const p = String(part || '').trim();
+    if (p) phones.add(p);
+  }
+  const admins = await User.find({ role: 'admin', isActive: true }).select('phone').lean();
+  for (const a of admins) {
+    if (a?.phone) phones.add(String(a.phone).trim());
+  }
+  if (!phones.size) return { skipped: true, reason: 'no-phones' };
+
+  const body = `${labLabel()}\n${text}`;
+  const results = [];
+  for (const phone of phones) {
+    results.push(await sendWhatsAppText(phone, body));
+  }
+  return { ok: true, results };
+}
+
+/** Reminder to a doctor about unpaid balance. */
+async function sendDoctorDebtReminder({ doctorName, phone, unpaidAmount, unpaidCases, labName }) {
+  await reloadWhatsAppConfig();
+  const c = getConfig();
+  if (!c.enabled) return { ok: false, error: 'واتساب غير مفعّل' };
+
+  let to = phone;
+  if (!to) {
+    const fakeCase = { referringDoctor: doctorName };
+    const doctor = await findDoctorUserByCase(fakeCase);
+    to = doctor?.phone;
+  }
+  if (!to) return { ok: false, error: 'لا يوجد رقم واتساب للطبيب' };
+
+  const msg =
+    `${labName || labLabel()}\n` +
+    `تذكير ودي بالحساب\n` +
+    `دكتور: ${doctorName}\n` +
+    `المبلغ المستحق: ${Number(unpaidAmount || 0).toLocaleString('en-EG')} EGP\n` +
+    `عدد الحالات غير المدفوعة: ${Number(unpaidCases || 0)}\n` +
+    `برجاء التواصل مع المعمل للتسوية.`;
+
+  const result = await sendWhatsAppText(to, msg);
+  return result?.ok
+    ? { ok: true, result }
+    : { ok: false, error: result?.error || result?.skipped || 'فشل الإرسال' };
 }
 
 async function sendDailyReadySummaries() {
@@ -377,8 +459,12 @@ function scheduleDailyWhatsAppSummary() {
 module.exports = {
   sendWhatsAppText,
   notifyDoctorCaseStatus,
+  notifyLabAlert,
+  sendDoctorDebtReminder,
   sendDailyReadySummaries,
   scheduleDailyWhatsAppSummary,
   providerConfigured,
   reloadWhatsAppConfig,
+  normalizePhone,
+  findDoctorUserByCase,
 };

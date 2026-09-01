@@ -1,0 +1,90 @@
+<div class="doctor-exited-materials-page" [attr.dir]="lang.dir()">
+  <header class="dem-topbar">
+    <button type="button" class="dem-back-btn" (click)="backToDashboard()" [attr.aria-label]="'doctorPages.backAria' | t">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+      <span>{{ 'common.back' | t }}</span>
+    </button>
+
+    <div class="dem-brand">
+      <span class="dem-brand-dot"></span>
+      <span class="dem-brand-title">Elegance</span>
+      <span class="dem-brand-dot"></span>
+    </div>
+
+    <div class="dem-top-actions">
+      <app-overflow-menu></app-overflow-menu>
+      <button
+        type="button"
+        class="dem-icon-btn"
+        [attr.aria-label]="'common.theme' | t"
+        [attr.title]="'common.theme' | t"
+        (click)="themeService.toggleTheme()"
+      >
+        <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg *ngIf="themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="dem-main">
+    <section class="dem-hero">
+      <p class="dem-eyebrow">{{ 'doctorPages.materials.eyebrow' | t }}</p>
+      <h1>{{ 'doctorPages.materials.title' | t }}</h1>
+      <p class="dem-lead">
+        {{ leadText() }}
+        @if (isAdminView()) {
+          <span class="dem-admin-pill">{{ 'doctorPages.adminView' | t }}</span>
+        }
+      </p>
+    </section>
+
+    @if (loading()) {
+      <p class="dem-status">{{ 'doctorPages.materials.loading' | t }}</p>
+    } @else if (error()) {
+      <div class="dem-status dem-status--err" role="alert">
+        <p>{{ error() }}</p>
+        <button type="button" class="dem-retry-btn" (click)="retry()">{{ 'doctorPages.materials.retry' | t }}</button>
+      </div>
+    } @else if (summary(); as s) {
+      <section class="dem-summary" [attr.aria-label]="'doctorPages.materials.summaryAria' | t">
+        <article class="dem-summary-card dem-summary-card--hero">
+          <span class="dem-summary-label">{{ 'doctorPages.materials.totalUnits' | t }}</span>
+          <strong class="dem-summary-value">{{ formatCount(s.totalUnits) }}</strong>
+          <span class="dem-summary-meta">{{ fromCasesMeta(s.caseCount) }}</span>
+        </article>
+      </section>
+
+      <section class="dem-list-wrap" [attr.aria-label]="'doctorPages.materials.listAria' | t">
+        <div class="dem-list-head">
+          <h2>{{ 'doctorPages.materials.allTitle' | t }}</h2>
+          <p>{{ 'doctorPages.materials.allHint' | t }}</p>
+        </div>
+
+        <ul class="dem-list">
+          @for (row of s.materials; track row.key) {
+            <li class="dem-row" [class.dem-row--zero]="row.count === 0">
+              <span class="dem-row-label">{{ row.label }}</span>
+              <span class="dem-row-count">{{ formatCount(row.count) }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <p class="dem-footnote">{{ 'doctorPages.materials.footnote' | t }}</p>
+    }
+  </main>
+</div>

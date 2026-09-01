@@ -9,12 +9,16 @@ import { CaseApiService } from '../../core/services/case-api.service';
 import { mapApiCaseToDentalCase } from '../../core/mappers/dental-case-api.mapper';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { TPipe } from '../../core/i18n/t.pipe';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
+import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
+import { formatCaseWorkflowError } from '../../core/utils/api-error';
 
 @Component({
   selector: 'app-finishing',
   standalone: true,
-  imports: [CommonModule, FormsModule, CaseBarcodeComponent],
+  imports: [CommonModule, FormsModule, CaseBarcodeComponent, AppOverflowMenuComponent, TPipe],
   templateUrl: './finishing.html',
   styleUrl: './finishing.css',
 })
@@ -25,6 +29,7 @@ export class Finishing implements OnInit, OnDestroy {
   private readonly caseApi = inject(CaseApiService);
   private readonly socketService = inject(SocketService);
   public readonly themeService = inject(ThemeService);
+  public readonly lang = inject(LanguageService);
   private socketSubs: Subscription[] = [];
   private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -98,12 +103,12 @@ export class Finishing implements OnInit, OnDestroy {
     this.caseApi.completeCase(c.id).subscribe({
       next: () => {
         this.exitingId = null;
-        this.showToast('تم إخراج الحالة بنجاح ✅');
+        this.showToast(this.lang.t('finishing.toast.done'));
         this.reloadCasesFromBackend();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.exitingId = null;
-        this.showToast('فشل إخراج الحالة، حاول مرة أخرى');
+        this.showToast(formatCaseWorkflowError(err, this.lang.t('finishing.toast.fail')));
       },
     });
   }
@@ -122,7 +127,7 @@ export class Finishing implements OnInit, OnDestroy {
     if (parts.length >= 4) {
       const datePart = parts.slice(0, 3).join(' ');
       let timePart = parts.slice(3).join(' ');
-      if (timePart && !timePart.includes('م') && !timePart.includes('ص')) {
+      if (timePart && !/[مص]|AM|PM/i.test(timePart)) {
         timePart = this.localTimeTo12Hour(timePart);
       }
       return { date: datePart, time: timePart };
@@ -131,7 +136,7 @@ export class Finishing implements OnInit, OnDestroy {
     if (dateMatch) {
       const datePart = dateMatch[1];
       let timePart = dateMatch[2] ? dateMatch[2].trim() : '';
-      if (timePart && !timePart.includes('م') && !timePart.includes('ص')) {
+      if (timePart && !/[مص]|AM|PM/i.test(timePart)) {
         timePart = this.localTimeTo12Hour(timePart);
       }
       return { date: datePart, time: timePart };
@@ -146,7 +151,7 @@ export class Finishing implements OnInit, OnDestroy {
     let hour = parseInt(parts[0], 10);
     const minute = parts[1];
     if (isNaN(hour)) return timeStr;
-    const ampm = hour >= 12 ? 'م' : 'ص';
+    const ampm = hour >= 12 ? this.lang.t('time.pm') : this.lang.t('time.am');
     hour = hour % 12;
     hour = hour ? hour : 12;
     return `${hour}:${minute} ${ampm}`;

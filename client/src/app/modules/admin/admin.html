@@ -1,51 +1,58 @@
-<div class="shell">
+<div class="shell" [attr.dir]="lang.dir()">
   <div class="sidebar">
     <div class="logo-area">
-      <div class="logo-name">Elegance Core</div>
-      <div class="logo-sub">Precision Labs v2.1</div>
+      <div class="logo-name">{{ labBranding.labName || 'Lab Core' }}</div>
+      <div class="logo-sub">{{ 'admin.logoSub' | t }}</div>
     </div>
     <div class="nav-item" [class.active]="activeNav === 'dashboard'" (click)="setNav('dashboard')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      لوحة التحكم
+      {{ 'admin.nav.dashboard' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'staff'" (click)="setNav('staff')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      الموظفون
+      {{ 'admin.nav.staff' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'doctors'" (click)="setNav('doctors')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      الدكاترة
+      {{ 'admin.nav.doctors' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'financials'" (click)="setNav('financials')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-      المالية
+      {{ 'admin.nav.financials' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'reports'" (click)="setNav('reports')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-      التقارير
+      {{ 'admin.nav.reports' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'archive'" (click)="setNav('archive')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
-      الأرشيف
+      {{ 'admin.nav.archive' | t }}
+    </div>
+    <div class="nav-item" [class.active]="activeNav === 'lab'" (click)="setNav('lab')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      {{ 'admin.nav.lab' | t }}
     </div>
     <div class="nav-item" [class.active]="activeNav === 'whatsapp'" (click)="setNav('whatsapp')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-      واتساب
+      {{ 'admin.nav.whatsapp' | t }}
     </div>
 
     <div class="sidebar-bottom">
       <div class="nav-item" (click)="logout()" role="button" tabindex="0" (keydown.enter)="logout()" (keydown.space)="$event.preventDefault(); logout()">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        تسجيل الخروج
+        {{ 'common.logout' | t }}
       </div>
     </div>
   </div>
 
   <div class="main">
     <div class="topbar">
-      <div class="topbar-right" style="margin-inline-start:auto;">
-        <a routerLink="/secretary/dashboard" class="action-btn topbar-secretary-btn">فتح شاشة السكرتارية</a>
-        <button type="button" (click)="themeService.toggleTheme()" title="تغيير المظهر" style="border:none;background:transparent;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;">
+      <div class="topbar-left">
+        <app-overflow-menu></app-overflow-menu>
+      </div>
+      <div class="topbar-right">
+        <a routerLink="/secretary/dashboard" class="action-btn topbar-secretary-btn">{{ 'admin.openSecretary' | t }}</a>
+        <button type="button" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t" style="border:none;background:transparent;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;">
           <svg *ngIf="!themeService.isDarkMode()" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
@@ -66,7 +73,7 @@
         <div class="admin-pill">
           <div>
             <div class="admin-name">SE Yasser</div>
-            <div class="admin-role">مدير النظام</div>
+            <div class="admin-role">{{ 'admin.role' | t }}</div>
           </div>
           <div class="avatar">SY</div>
         </div>
@@ -78,8 +85,8 @@
       <ng-container *ngIf="activeNav === 'dashboard'">
       <div class="page-header">
         <div>
-          <div class="page-label">نظرة عامة</div>
-          <div class="page-title">لوحة تحكم المدير</div>
+          <div class="page-label">{{ 'admin.dashboard.label' | t }}</div>
+          <div class="page-title">{{ 'admin.dashboard.title' | t }}</div>
         </div>
       </div>
 
@@ -90,14 +97,14 @@
             <span class="stat-label" [style.color]="m.color" style="font-size:13px;font-weight:600;">{{ m.label }}</span>
           </div>
           <div class="stat-val" [style.color]="m.color" style="font-size:2.25rem;font-weight:800;">{{ m.qty }}</div>
-          <div class="stat-sub">وحدة خارجة</div>
+          <div class="stat-sub">{{ 'admin.dashboard.exitedUnit' | t }}</div>
         </div>
         <div class="stat-card elegance-dash-panel">
           <div class="elegance-dash-mark">E</div>
           <div class="elegance-dash-copy">
             <div class="elegance-dash-kicker">Elegance Core</div>
             <div class="elegance-dash-title">Precision Labs</div>
-            <div class="elegance-dash-sub">لوحة تشغيل المعمل — متابعة المواد الخارجة لحظة بلحظة</div>
+            <div class="elegance-dash-sub">{{ 'admin.dashboard.eleganceSub' | t }}</div>
           </div>
         </div>
       </div>
@@ -114,10 +121,10 @@
                   <path d="M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <span class="stat-label" style="font-size:13px;font-weight:600;color:#6366f1;">إجمالي الزيركونيا</span>
+              <span class="stat-label" style="font-size:13px;font-weight:600;color:#6366f1;">{{ 'admin.dashboard.totalZirconia' | t }}</span>
             </div>
             <div class="stat-val" style="font-size:3rem;font-weight:800;color:#6366f1;">{{ zirconCount }}</div>
-            <div class="stat-sub">جميع الوحدات الخارجة للزيركون بأنواعه</div>
+            <div class="stat-sub">{{ 'admin.dashboard.totalZirconiaSub' | t }}</div>
           </div>
           
           <div style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #e2e8f0; padding-top:12px; margin-top:auto;">
@@ -151,7 +158,7 @@
             <span class="stat-label" style="font-size:13px;font-weight:600;color:#0ea5e9;">Emax</span>
           </div>
           <div class="stat-val" style="font-size:3rem;font-weight:800;color:#0ea5e9;">{{ emaxCount }}</div>
-          <div class="stat-sub">وحدة Emax خارجة (غير إعادة)</div>
+          <div class="stat-sub">{{ 'admin.dashboard.emaxSub' | t }}</div>
         </div>
       </div>
 
@@ -167,10 +174,10 @@
                   <path d="M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <span class="stat-label" style="font-size:13px;font-weight:600;color:#f59e0b;">إجمالي زيركون - د. الجندي</span>
+              <span class="stat-label" style="font-size:13px;font-weight:600;color:#f59e0b;">{{ 'admin.dashboard.jundiZircon' | t }}</span>
             </div>
             <div class="stat-val" style="font-size:3rem;font-weight:800;color:#f59e0b;">{{ jundiZirconCount }}</div>
-            <div class="stat-sub">جميع الوحدات الخارجة للزيركون بأنواعه للجندي</div>
+            <div class="stat-sub">{{ 'admin.dashboard.jundiZirconSub' | t }}</div>
           </div>
           
           <div style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #e2e8f0; padding-top:12px; margin-top:auto;">
@@ -201,10 +208,10 @@
                 <path d="M8 12h8M12 8v8"/>
               </svg>
             </div>
-            <span class="stat-label" style="font-size:13px;font-weight:600;color:#8b5cf6;">Emax - د. الجندي</span>
+            <span class="stat-label" style="font-size:13px;font-weight:600;color:#8b5cf6;">{{ 'admin.dashboard.jundiEmax' | t }}</span>
           </div>
           <div class="stat-val" style="font-size:3rem;font-weight:800;color:#8b5cf6;">{{ jundiEmaxCount }}</div>
-          <div class="stat-sub">وحدة Emax خارجة للجندي (غير إعادة/تعديل)</div>
+          <div class="stat-sub">{{ 'admin.dashboard.jundiEmaxSub' | t }}</div>
         </div>
       </div>
 
@@ -214,12 +221,12 @@
       <ng-container *ngIf="activeNav === 'staff'">
       <div class="page-header">
         <div>
-          <div class="page-label">إدارة الموظفين</div>
-          <div class="page-title">أعضاء الفريق</div>
+          <div class="page-label">{{ 'admin.staff.label' | t }}</div>
+          <div class="page-title">{{ 'admin.staff.title' | t }}</div>
         </div>
         <button type="button" class="export-btn" (click)="openAddStaffModal()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          إضافة موظف جديد
+          {{ 'admin.staff.addNew' | t }}
         </button>
       </div>
 
@@ -235,7 +242,7 @@
           spellcheck="false"
           data-lpignore="true"
           data-1p-ignore="true"
-          placeholder="ابحث بالاسم أو رقم الهاتف..."
+          [attr.placeholder]="'admin.staff.searchPh' | t"
           [(ngModel)]="searchTerm"
         />
       </div>
@@ -253,28 +260,28 @@
               <small>{{ staff.email }}</small><br>
               <small>{{ staff.phone }}</small>
             </div>
-            <p class="staff-joined">تاريخ الانضمام: {{ staff.joinDate }}</p>
+            <p class="staff-joined">{{ 'common.joined' | t }}: {{ staff.joinDate }}</p>
           </div>
           <div class="staff-actions">
-            <button type="button" class="staff-btn edit-btn" (click)="openEditStaffModal(staff)" title="تعديل">
+            <button type="button" class="staff-btn edit-btn" (click)="openEditStaffModal(staff)" [attr.title]="'common.edit' | t">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
             <button
               type="button"
               class="staff-btn"
-              [title]="staff.status === 'active' ? 'تحويل إلى غير نشط' : 'تحويل إلى نشط'"
+              [attr.title]="staff.status === 'active' ? ('common.makeInactive' | t) : ('common.makeActive' | t)"
               (click)="toggleStaffActive(staff)"
             >
-              {{ staff.status === 'active' ? 'إيقاف' : 'تفعيل' }}
+              {{ staff.status === 'active' ? ('common.deactivate' | t) : ('common.activate' | t) }}
             </button>
             <button
               type="button"
               class="staff-btn"
               style="color:#dc2626;border-color:#fecaca;background:#fff5f5;"
-              title="حذف (تعطيل)"
+              [attr.title]="'admin.staff.deleteDisable' | t"
               (click)="deleteStaff(staff)"
             >
-              حذف
+              {{ 'common.delete' | t }}
             </button>
           </div>
         </div>
@@ -284,38 +291,38 @@
       <div class="modal-overlay" *ngIf="showStaffModal" (click)="closeStaffModal()">
         <div class="modal-content" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h2>{{ isEditMode ? 'تعديل موظف' : 'إضافة موظف' }}</h2>
+            <h2>{{ isEditMode ? ('admin.staff.editTitle' | t) : ('admin.staff.addTitle' | t) }}</h2>
             <button type="button" class="modal-close-btn" (click)="closeStaffModal()">
               <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <form class="modal-body" autocomplete="off" (submit)="$event.preventDefault()">
             <p class="staff-form-hint" style="font-size:12px;color:#64748b;margin:0 0 12px;">
-              الحقول بعلامة <strong>*</strong> مطلوبة. الهاتف اختياري (يُستخدم رقم افتراضي للنظام إن تُرك فارغاً).
+              {{ 'admin.staff.formHint' | t }}
             </p>
             <div class="form-group">
-              <label>الاسم الكامل <abbr title="مطلوب">*</abbr></label>
-              <input type="text" name="staffFullName" [(ngModel)]="currentStaff.name" placeholder="الاسم كما سيظهر في النظام" required />
+              <label>{{ 'common.fullName' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
+              <input type="text" name="staffFullName" [(ngModel)]="currentStaff.name" [attr.placeholder]="'admin.staff.namePh' | t" required />
             </div>
             <div class="form-group">
-              <label>البريد الإلكتروني <abbr title="مطلوب">*</abbr></label>
+              <label>{{ 'login.email' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
               <input
                 type="email"
                 name="staffWorkEmail"
                 autocomplete="off"
                 [(ngModel)]="currentStaff.email"
-                placeholder="مثال: user@mylab.com"
+                [attr.placeholder]="'admin.staff.emailPh' | t"
                 [attr.readonly]="isEditMode ? '' : null"
                 [required]="!isEditMode"
               />
             </div>
             <div class="form-group">
               <label>
-                كلمة المرور
+                {{ 'login.password' | t }}
                 @if (isEditMode) {
-                  <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري — اتركه فارغاً للإبقاء على الحالي)</span>
+                  <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.staff.passwordOptional' | t }}</span>
                 } @else {
-                  <abbr title="مطلوب">*</abbr>
+                  <abbr [attr.title]="'common.required' | t">*</abbr>
                 }
               </label>
               <div style="display:flex;gap:8px;align-items:center;">
@@ -324,7 +331,7 @@
                   autocomplete="new-password"
                   [type]="showStaffPassword ? 'text' : 'password'"
                   [(ngModel)]="currentStaff.password"
-                  placeholder="6 أحرف على الأقل"
+                  [attr.placeholder]="'admin.staff.passwordMin' | t"
                   [required]="!isEditMode"
                   [attr.minlength]="isEditMode ? null : 6"
                 />
@@ -334,40 +341,40 @@
                   style="padding:8px 10px;min-width:64px;"
                   (click)="showStaffPassword = !showStaffPassword"
                 >
-                  {{ showStaffPassword ? 'إخفاء' : 'إظهار' }}
+                  {{ showStaffPassword ? ('common.hide' | t) : ('common.show' | t) }}
                 </button>
               </div>
             </div>
             <div class="form-group">
-              <label>رقم الهاتف <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري)</span></label>
+              <label>{{ 'common.phone' | t }} <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.staff.phoneOptional' | t }}</span></label>
               <input type="tel" name="staffPhone" autocomplete="off" [(ngModel)]="currentStaff.phone" placeholder="05xxxxxxxx" />
             </div>
             <div class="form-group">
-              <label>المنصب / الدور <abbr title="مطلوب">*</abbr></label>
+              <label>{{ 'admin.staff.role' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
               <select name="staffPosition" [(ngModel)]="currentStaff.position" required>
-                <option value="" disabled>اختر المنصب</option>
+                <option value="" disabled>{{ 'admin.staff.chooseRole' | t }}</option>
                 <option *ngFor="let pos of positions">{{ pos }}</option>
               </select>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>الحالة <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري)</span></label>
+                <label>{{ 'common.status' | t }} <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.staff.statusOptional' | t }}</span></label>
                 <select name="staffStatus" [(ngModel)]="currentStaff.status">
-                  <option value="active">نشط</option>
-                  <option value="inactive">غير نشط</option>
+                  <option value="active">{{ 'common.active' | t }}</option>
+                  <option value="inactive">{{ 'common.inactive' | t }}</option>
                 </select>
               </div>
               <div class="form-group">
-                <label>تاريخ الانضمام <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري — للعرض)</span></label>
+                <label>{{ 'common.joined' | t }} <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.staff.joinOptional' | t }}</span></label>
                 <input type="date" name="staffJoinDate" [(ngModel)]="currentStaff.joinDate" />
               </div>
             </div>
           </form>
           <p *ngIf="staffModalError" style="margin:0 16px 12px;color:#dc2626;font-size:13px;">{{ staffModalError }}</p>
           <div class="modal-footer">
-            <button type="button" class="btn-cancel" (click)="closeStaffModal()" [disabled]="staffSaving">إلغاء</button>
+            <button type="button" class="btn-cancel" (click)="closeStaffModal()" [disabled]="staffSaving">{{ 'common.cancel' | t }}</button>
             <button type="button" class="btn-save" (click)="saveStaff()" [disabled]="staffSaving">
-              {{ staffSaving ? 'جاري الحفظ…' : (isEditMode ? 'تحديث الموظف' : 'إضافة موظف') }}
+              {{ staffSaving ? ('common.saving' | t) : (isEditMode ? ('admin.staff.update' | t) : ('admin.staff.add' | t)) }}
             </button>
           </div>
         </div>
@@ -378,22 +385,22 @@
       <ng-container *ngIf="activeNav === 'doctors'">
       <div class="page-header">
         <div>
-          <div class="page-label">إدارة حسابات الدكاترة</div>
-          <div class="page-title">الدكاترة</div>
+          <div class="page-label">{{ 'admin.doctors.label' | t }}</div>
+          <div class="page-title">{{ 'admin.doctors.title' | t }}</div>
         </div>
         <button type="button" class="export-btn" (click)="openAddDoctorModal()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          إضافة حساب دكتور
+          {{ 'admin.doctors.addAccount' | t }}
         </button>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;grid-template-columns:repeat(auto-fit,minmax(180px,240px));">
         <div class="stat-card" style="border-top:4px solid #0f766e;">
           <div class="stat-top">
-            <span class="stat-label" style="font-size:13px;font-weight:600;color:#0f766e;">عدد حسابات الدكاترة</span>
+            <span class="stat-label" style="font-size:13px;font-weight:600;color:#0f766e;">{{ 'admin.doctors.countLabel' | t }}</span>
           </div>
           <div class="stat-val" style="font-size:2.5rem;font-weight:800;color:#0f766e;">{{ doctorAccountsCount }}</div>
-          <div class="stat-sub">إجمالي الأكونتات المسجّلة</div>
+          <div class="stat-sub">{{ 'admin.doctors.countSub' | t }}</div>
         </div>
       </div>
 
@@ -405,7 +412,7 @@
           type="search"
           name="doctorDirectoryFilter"
           autocomplete="off"
-          placeholder="ابحث بالاسم أو الإيميل..."
+          [attr.placeholder]="'admin.doctors.searchPh' | t"
           [(ngModel)]="doctorSearchTerm"
         />
       </div>
@@ -416,7 +423,7 @@
           *ngFor="let doc of filteredDoctors"
           role="button"
           tabindex="0"
-          title="فتح صفحة حساب الدكتور"
+          [attr.title]="'admin.doctors.openAccount' | t"
           (click)="openDoctorAccountPage(doc)"
           (keydown.enter)="openDoctorAccountPage(doc)"
           (keydown.space)="$event.preventDefault(); openDoctorAccountPage(doc)"
@@ -427,35 +434,35 @@
           </div>
           <div class="staff-body">
             <h3 class="staff-name">{{ doc.name }}</h3>
-            <p class="staff-position">دكتور</p>
+            <p class="staff-position">{{ 'admin.doctors.roleDoctor' | t }}</p>
             <div class="staff-contact">
               <small>{{ doc.email }}</small><br>
               <small>{{ doc.phone }}</small>
               <br *ngIf="doc.loginPasswordVisible">
-              <small *ngIf="doc.loginPasswordVisible" style="color:#0f766e;">كلمة المرور: {{ doc.loginPasswordVisible }}</small>
+              <small *ngIf="doc.loginPasswordVisible" style="color:#0f766e;">{{ 'admin.doctors.passwordPrefix' | t }} {{ doc.loginPasswordVisible }}</small>
             </div>
-            <p class="staff-joined">تاريخ الانضمام: {{ doc.joinDate }}</p>
+            <p class="staff-joined">{{ 'common.joined' | t }}: {{ doc.joinDate }}</p>
           </div>
           <div class="staff-actions" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
-            <button type="button" class="staff-btn edit-btn" (click)="openEditDoctorModal(doc)" title="تعديل">
+            <button type="button" class="staff-btn edit-btn" (click)="openEditDoctorModal(doc)" [attr.title]="'common.edit' | t">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
             <button
               type="button"
               class="staff-btn"
-              [title]="doc.status === 'active' ? 'تحويل إلى غير نشط' : 'تحويل إلى نشط'"
+              [attr.title]="doc.status === 'active' ? ('common.makeInactive' | t) : ('common.makeActive' | t)"
               (click)="toggleDoctorActive(doc)"
             >
-              {{ doc.status === 'active' ? 'إيقاف' : 'تفعيل' }}
+              {{ doc.status === 'active' ? ('common.deactivate' | t) : ('common.activate' | t) }}
             </button>
             <button
               type="button"
               class="staff-btn"
               style="color:#dc2626;border-color:#fecaca;background:#fff5f5;"
-              title="حذف"
+              [attr.title]="'common.delete' | t"
               (click)="deleteDoctor(doc)"
             >
-              حذف
+              {{ 'common.delete' | t }}
             </button>
           </div>
         </div>
@@ -464,38 +471,38 @@
       <div class="modal-overlay" *ngIf="showDoctorModal" (click)="closeDoctorModal()">
         <div class="modal-content" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h2>{{ isDoctorEditMode ? 'تعديل حساب دكتور' : 'إضافة حساب دكتور' }}</h2>
+            <h2>{{ isDoctorEditMode ? ('admin.doctors.editTitle' | t) : ('admin.doctors.addTitle' | t) }}</h2>
             <button type="button" class="modal-close-btn" (click)="closeDoctorModal()">
               <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <form class="modal-body" autocomplete="off" (submit)="$event.preventDefault()">
             <p class="staff-form-hint" style="font-size:12px;color:#64748b;margin:0 0 12px;">
-              الاسم هنا هو اللي هيظهر في الطباعة ولوحة التتبع (مثال: موسى).
+              {{ 'admin.doctors.formHint' | t }}
             </p>
             <div class="form-group">
-              <label>اسم الدكتور <abbr title="مطلوب">*</abbr></label>
-              <input type="text" name="doctorFullName" [(ngModel)]="currentDoctor.name" placeholder="مثال: موسى" required />
+              <label>{{ 'admin.doctors.nameLabel' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
+              <input type="text" name="doctorFullName" [(ngModel)]="currentDoctor.name" [attr.placeholder]="'admin.doctors.namePh' | t" required />
             </div>
             <div class="form-group">
-              <label>البريد الإلكتروني <abbr title="مطلوب">*</abbr></label>
+              <label>{{ 'login.email' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
               <input
                 type="email"
                 name="doctorWorkEmail"
                 autocomplete="off"
                 [(ngModel)]="currentDoctor.email"
-                placeholder="مثال: doctor@clinic.com"
+                [attr.placeholder]="'admin.doctors.emailPh' | t"
                 [attr.readonly]="isDoctorEditMode ? '' : null"
                 [required]="!isDoctorEditMode"
               />
             </div>
             <div class="form-group">
               <label>
-                كلمة المرور
+                {{ 'login.password' | t }}
                 @if (isDoctorEditMode) {
-                  <span style="font-weight:500;color:#64748b;font-size:12px;">(ظاهرة للأدمن — غيّرها لحفظ كلمة جديدة)</span>
+                  <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.doctors.passwordVisibleHint' | t }}</span>
                 } @else {
-                  <abbr title="مطلوب">*</abbr>
+                  <abbr [attr.title]="'common.required' | t">*</abbr>
                 }
               </label>
               <div style="display:flex;gap:8px;align-items:center;">
@@ -504,7 +511,7 @@
                   autocomplete="new-password"
                   [type]="showDoctorPassword ? 'text' : 'password'"
                   [(ngModel)]="currentDoctor.password"
-                  placeholder="6 أحرف على الأقل"
+                  [attr.placeholder]="'admin.staff.passwordMin' | t"
                   [required]="!isDoctorEditMode"
                   [attr.minlength]="isDoctorEditMode ? null : 6"
                 />
@@ -514,23 +521,23 @@
                   style="padding:8px 10px;min-width:64px;"
                   (click)="showDoctorPassword = !showDoctorPassword"
                 >
-                  {{ showDoctorPassword ? 'إخفاء' : 'إظهار' }}
+                  {{ showDoctorPassword ? ('common.hide' | t) : ('common.show' | t) }}
                 </button>
               </div>
               <p *ngIf="isDoctorEditMode && currentDoctor.loginPasswordVisible" style="margin:8px 0 0;font-size:12px;color:#0f766e;">
-                المحفوظة حالياً: {{ currentDoctor.loginPasswordVisible }}
+                {{ 'admin.doctors.passwordSaved' | t }} {{ currentDoctor.loginPasswordVisible }}
               </p>
             </div>
             <div class="form-group">
-              <label>رقم الهاتف <span style="font-weight:500;color:#64748b;font-size:12px;">(اختياري)</span></label>
+              <label>{{ 'common.phone' | t }} <span style="font-weight:500;color:#64748b;font-size:12px;">{{ 'admin.staff.phoneOptional' | t }}</span></label>
               <input type="tel" name="doctorPhone" autocomplete="off" [(ngModel)]="currentDoctor.phone" placeholder="05xxxxxxxx" />
             </div>
           </form>
           <p *ngIf="doctorModalError" style="margin:0 16px 12px;color:#dc2626;font-size:13px;">{{ doctorModalError }}</p>
           <div class="modal-footer">
-            <button type="button" class="btn-cancel" (click)="closeDoctorModal()" [disabled]="doctorSaving">إلغاء</button>
+            <button type="button" class="btn-cancel" (click)="closeDoctorModal()" [disabled]="doctorSaving">{{ 'common.cancel' | t }}</button>
             <button type="button" class="btn-save" (click)="saveDoctor()" [disabled]="doctorSaving">
-              {{ doctorSaving ? 'جاري الحفظ…' : (isDoctorEditMode ? 'تحديث الحساب' : 'إضافة الحساب') }}
+              {{ doctorSaving ? ('common.saving' | t) : (isDoctorEditMode ? ('admin.doctors.update' | t) : ('admin.doctors.add' | t)) }}
             </button>
           </div>
         </div>
@@ -541,148 +548,43 @@
       <ng-container *ngIf="activeNav === 'financials'">
         <div class="page-header">
           <div>
-            <div class="page-label">نظرة مالية</div>
-            <div class="page-title">المالية</div>
-          </div>
-          <div class="financial-summary">
-            <span class="summary-pill">إجمالي المبلغ: {{ totalFinancialAmount | number:'1.0-0' }} EGP</span>
-            <span class="summary-pill">عدد الأطباء: {{ reportDoctors.length }}</span>
-            <button class="export-btn" (click)="exportFinancialYearReport()">تصدير تقرير السنة CSV</button>
+            <div class="page-label">{{ 'admin.financials.label' | t }}</div>
+            <div class="page-title">{{ 'admin.financials.title' | t }}</div>
           </div>
         </div>
 
-        <div class="financial-controls">
+        <div class="financial-controls" style="margin-bottom:12px;">
           <div class="control-card">
-            <label>السنة</label>
-            <select [ngModel]="financialYearFilter" (ngModelChange)="onFinancialYearChange($event)">
-              <option value="">كل السنوات</option>
-              <option *ngFor="let year of financialYears" [value]="year">{{ year }}</option>
+            <label>{{ 'common.year' | t }}</label>
+            <select [(ngModel)]="financePanelYear" (ngModelChange)="onFinancePanelYearChange($event)">
+              <option *ngFor="let year of (financialYears.length ? financialYears : [financePanelYear])" [ngValue]="year">{{ year }}</option>
             </select>
           </div>
           <div class="control-card">
-            <label>الشهر</label>
-            <select [(ngModel)]="financialMonthFilter" [disabled]="!financialYearFilter">
-              <option value="">كل الشهور</option>
-              <option *ngFor="let month of financialMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
+            <label>{{ 'common.month' | t }}</label>
+            <select [(ngModel)]="financePanelMonth">
+              <option *ngFor="let month of [1,2,3,4,5,6,7,8,9,10,11,12]" [ngValue]="month">{{ monthName(month) }}</option>
             </select>
           </div>
-          <div class="control-card">
-            <label>بحث عن طبيب</label>
-            <input type="text" [(ngModel)]="financialDoctorSearch" placeholder="اكتب اسم الطبيب..." />
-          </div>
         </div>
 
-        <div class="finance-year-list" *ngIf="groupedFinancialSummary.length; else noFinanceData">
-          <div class="finance-year-card" *ngFor="let yearGroup of groupedFinancialSummary">
-            <div class="finance-year-head">
-              <div class="finance-year-title">{{ yearGroup.year }}</div>
-              <div class="finance-year-meta">
-                <span>الحالات المدفوعة: {{ yearGroup.paidCases }}</span>
-                <span>المبلغ المدفوع: {{ yearGroup.paidAmount | number:'1.0-0' }} EGP</span>
-              </div>
-            </div>
-
-            <div class="finance-month-card" *ngFor="let monthGroup of yearGroup.months">
-              <div class="finance-month-head">
-                <strong>{{ monthGroup.monthLabel }}</strong>
-                <span>
-                  مدفوع {{ monthGroup.paidCases }}/{{ monthGroup.cases }} -
-                  {{ monthGroup.paidTotal | number:'1.0-0' }} EGP
-                </span>
-              </div>
-
-              <div class="report-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>الطبيب</th>
-                      <th>الحالات المدفوعة</th>
-                      <th>المبلغ المدفوع</th>
-                      <th>إجمالي الحالات</th>
-                      <th>إجمالي المبلغ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let doctor of monthGroup.byDoctor">
-                      <td>
-                        <button class="doctor-link-btn" (click)="openDoctorDetails(doctor.doctorName)">
-                          {{ doctor.doctorName }}
-                        </button>
-                      </td>
-                      <td>{{ doctor.paidCases }}</td>
-                      <td>{{ doctor.paidAmount | number:'1.0-0' }} EGP</td>
-                      <td>{{ doctor.cases }}</td>
-                      <td>{{ doctor.totalSalary | number:'1.0-0' }} EGP</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ng-template #noFinanceData>
-          <div class="finance-empty">لا توجد بيانات مالية مطابقة للفلاتر المحددة.</div>
-        </ng-template>
-
-        <div class="modal-overlay" *ngIf="showDoctorDetailsModal" (click)="closeDoctorDetails()">
-          <div class="modal-content doctor-modal-content" (click)="$event.stopPropagation()">
-            <div class="modal-header">
-              <h2>{{ selectedDoctorName }} - السجل</h2>
-              <button class="modal-close-btn" (click)="closeDoctorDetails()">
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div class="modal-body doctor-modal-body">
-              <div class="doctor-stats">
-                <span class="summary-pill">الحالات: {{ selectedDoctorTotals.cases }}</span>
-                <span class="summary-pill">الحالات المدفوعة: {{ selectedDoctorTotals.paidCases }}</span>
-                <span class="summary-pill">المبلغ المدفوع: {{ selectedDoctorTotals.paidAmount | number:'1.0-0' }} EGP</span>
-                <span class="summary-pill">إجمالي المبلغ: {{ selectedDoctorTotals.totalAmount | number:'1.0-0' }} EGP</span>
-              </div>
-
-              <div class="report-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>المريض</th>
-                      <th>النوع</th>
-                      <th>تاريخ الاستلام</th>
-                      <th>تاريخ الخروج</th>
-                      <th>المرحلة</th>
-                      <th>الأجر</th>
-                      <th>الدفع</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let record of selectedDoctorRecords">
-                      <td>{{ record.patientName }}</td>
-                      <td>{{ translateCaseType(record.caseType) }}</td>
-                      <td>{{ record.receivedDate }}</td>
-                      <td>{{ record.exitedDate }}</td>
-                      <td>{{ record.stage }}</td>
-                      <td>{{ record.salary | number:'1.0-0' }} EGP</td>
-                      <td>{{ record.paid ? 'مدفوع' : 'غير مدفوع' }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+        <app-finance-panel
+          [year]="financePanelYear"
+          [month]="financePanelMonth">
+        </app-finance-panel>
       </ng-container>
 
       <!-- REPORTS VIEW -->
       <ng-container *ngIf="activeNav === 'reports'">
         <div class="page-header">
           <div>
-            <div class="page-label">التقارير</div>
-            <div class="page-title" *ngIf="!reportDoctorFilter">تقارير حسابات الأطباء</div>
-            <div class="page-title" *ngIf="reportDoctorFilter">تفاصيل حساب: {{ reportDoctorFilter }}</div>
+            <div class="page-label">{{ 'admin.reports.label' | t }}</div>
+            <div class="page-title" *ngIf="!reportDoctorFilter">{{ 'admin.reports.title' | t }}</div>
+            <div class="page-title" *ngIf="reportDoctorFilter">{{ 'admin.reports.accountDetails' | t }}: {{ reportDoctorFilter }}</div>
           </div>
           <div *ngIf="reportDoctorFilter">
             <button class="export-btn" (click)="reportDoctorFilter = ''" style="background-color: #4b5563;">
-              ← رجوع للأطباء
+              {{ 'admin.reports.backDoctors' | t }}
             </button>
           </div>
         </div>
@@ -690,41 +592,41 @@
         <!-- أزرار التصفية والتحكم -->
         <div class="report-controls student-report-controls">
           <div class="control-card" *ngIf="!reportDoctorFilter">
-            <label>السنة</label>
+            <label>{{ 'common.year' | t }}</label>
             <select [ngModel]="reportYearFilter" (ngModelChange)="onReportYearChange($event)">
-              <option value="">كل السنوات</option>
+              <option value="">{{ 'common.allYears' | t }}</option>
               <option *ngFor="let year of reportYears" [value]="year">{{ year }}</option>
             </select>
           </div>
           <div class="control-card" *ngIf="!reportDoctorFilter">
-            <label>الشهر</label>
+            <label>{{ 'common.month' | t }}</label>
             <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
-              <option value="">كل الشهور</option>
+              <option value="">{{ 'common.allMonths' | t }}</option>
               <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
             </select>
           </div>
           <div class="control-card" *ngIf="!reportDoctorFilter">
-            <label>بحث</label>
+            <label>{{ 'common.search' | t }}</label>
             <input
               type="text"
               [(ngModel)]="reportSearch"
-              placeholder="ابحث باسم الطبيب..."
+              [attr.placeholder]="'admin.reports.searchDoctorPh' | t"
             />
           </div>
           <div class="control-card" *ngIf="reportDoctorFilter">
-            <label>بحث عن مريض</label>
+            <label>{{ 'admin.reports.searchPatient' | t }}</label>
             <input
               type="text"
               [(ngModel)]="reportSearch"
-              placeholder="ابحث باسم المريض أو رقم الحالة..."
+              [attr.placeholder]="'admin.reports.searchPatientPh' | t"
             />
           </div>
           <div class="control-card" *ngIf="reportDoctorFilter">
-            <label>حالة الدفع</label>
+            <label>{{ 'admin.reports.paymentStatus' | t }}</label>
             <select [(ngModel)]="paymentFilter">
-              <option value="all">كل الحالات</option>
-              <option value="paid">مدفوع</option>
-              <option value="unpaid">غير مدفوع</option>
+              <option value="all">{{ 'admin.reports.allCases' | t }}</option>
+              <option value="paid">{{ 'admin.reports.paid' | t }}</option>
+              <option value="unpaid">{{ 'admin.reports.unpaid' | t }}</option>
             </select>
           </div>
         </div>
@@ -738,34 +640,34 @@
           <!-- عداد إجمالي فواتير كل الأطباء -->
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
             <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;padding:20px 24px;box-shadow:0 4px 20px rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.3);">
-              <div style="font-size:13px;color:#93c5fd;margin-bottom:8px;font-weight:600;">إجمالي فواتير الأطباء</div>
+              <div style="font-size:13px;color:#93c5fd;margin-bottom:8px;font-weight:600;">{{ 'admin.reports.totalBills' | t }}</div>
               <div style="font-size:24px;font-weight:800;color:#fff;">
                 {{ allDoctorsTotalDue | number:'1.0-0' }}
                 <span style="font-size:14px;font-weight:400;color:#93c5fd;">EGP</span>
               </div>
             </div>
             <div style="background:linear-gradient(135deg,#064e3b,#065f46);border-radius:16px;padding:20px 24px;box-shadow:0 4px 20px rgba(16,185,129,0.25);border:1px solid rgba(16,185,129,0.3);">
-              <div style="font-size:13px;color:#6ee7b7;margin-bottom:8px;font-weight:600;">إجمالي المبلغ المدفوع</div>
+              <div style="font-size:13px;color:#6ee7b7;margin-bottom:8px;font-weight:600;">{{ 'admin.reports.totalPaid' | t }}</div>
               <div style="font-size:24px;font-weight:800;color:#fff;">
                 {{ allDoctorsTotalPaid | number:'1.0-0' }}
                 <span style="font-size:14px;font-weight:400;color:#6ee7b7;">EGP</span>
               </div>
             </div>
             <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);border-radius:16px;padding:20px 24px;box-shadow:0 4px 20px rgba(239,68,68,0.25);border:1px solid rgba(239,68,68,0.3);">
-              <div style="font-size:13px;color:#fca5a5;margin-bottom:8px;font-weight:600;">إجمالي المبالغ المستحقة</div>
+              <div style="font-size:13px;color:#fca5a5;margin-bottom:8px;font-weight:600;">{{ 'admin.reports.totalDue' | t }}</div>
               <div style="font-size:24px;font-weight:800;color:#fff;">
                 {{ allDoctorsTotalRemaining | number:'1.0-0' }}
                 <span style="font-size:14px;font-weight:400;color:#fca5a5;">EGP</span>
               </div>
             </div>
             <div style="background:linear-gradient(135deg,#312e81,#4338ca);border-radius:16px;padding:20px 24px;box-shadow:0 4px 20px rgba(99,102,241,0.25);border:1px solid rgba(99,102,241,0.3);">
-              <div style="font-size:13px;color:#c7d2fe;margin-bottom:8px;font-weight:600;">الأطباء / الحالات</div>
+              <div style="font-size:13px;color:#c7d2fe;margin-bottom:8px;font-weight:600;">{{ 'admin.reports.doctorsCases' | t }}</div>
               <div style="font-size:24px;font-weight:800;color:#fff;">
                 {{ filteredDoctorReportSummaries.length }}
-                <span style="font-size:14px;font-weight:400;color:#c7d2fe;">طبيب</span>
+                <span style="font-size:14px;font-weight:400;color:#c7d2fe;">{{ 'admin.reports.doctorUnit' | t }}</span>
                 &nbsp;/&nbsp;
                 {{ allDoctorsTotalCases | number:'1.0-0' }}
-                <span style="font-size:14px;font-weight:400;color:#c7d2fe;">حالة</span>
+                <span style="font-size:14px;font-weight:400;color:#c7d2fe;">{{ 'common.case' | t }}</span>
               </div>
             </div>
           </div>
@@ -775,12 +677,12 @@
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>اسم الطبيب</th>
-                  <th>عدد الحالات</th>
-                  <th>إجمالي الحساب</th>
-                  <th>المبلغ المدفوع</th>
-                  <th>المبلغ المستحق</th>
-                  <th>التفاصيل</th>
+                  <th>{{ 'admin.reports.doctorName' | t }}</th>
+                  <th>{{ 'admin.reports.casesCount' | t }}</th>
+                  <th>{{ 'admin.reports.accountTotal' | t }}</th>
+                  <th>{{ 'admin.reports.paidAmount' | t }}</th>
+                  <th>{{ 'admin.reports.dueAmount' | t }}</th>
+                  <th>{{ 'common.details' | t }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -797,12 +699,12 @@
                   </td>
                   <td>
                     <button class="finish-btn" style="padding:4px 12px;font-size:12px;" (click)="$event.stopPropagation(); reportDoctorFilter = doc.doctorName">
-                      عرض التفاصيل
+                      {{ 'admin.reports.viewDetails' | t }}
                     </button>
                   </td>
                 </tr>
                 <tr *ngIf="filteredDoctorReportSummaries.length === 0">
-                  <td colspan="7" style="text-align:center;padding:24px;color:#9ca3af;">لا توجد نتائج مطابقة للبحث</td>
+                  <td colspan="7" style="text-align:center;padding:24px;color:#9ca3af;">{{ 'admin.reports.noResults' | t }}</td>
                 </tr>
               </tbody>
             </table>
@@ -814,34 +716,34 @@
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; background:#1e293b; padding:12px 20px; border-radius:12px; border-left:4px solid #10b981;">
             <h3 style="color:#fff; margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
               <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#10b981;"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-              تفاصيل حساب الطبيب: {{ reportDoctorFilter }}
+              {{ 'admin.reports.doctorAccountDetails' | t }}: {{ reportDoctorFilter }}
             </h3>
             <button class="finish-btn" style="background:linear-gradient(135deg,#10b981,#059669); border:none; padding:8px 16px; font-weight:bold; display:flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(16,185,129,0.2);" (click)="printDoctorReceipt()">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/></svg>
-              طباعة وصل
+              {{ 'admin.reports.printReceipt' | t }}
             </button>
           </div>
 
           <!-- كروت ملخص حساب الطبيب المختار -->
           <div class="stats-grid" style="margin-bottom:24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
             <div class="stat-card" style="border-top:4px solid #3b82f6;">
-              <div class="stat-label">إجمالي الحالات الخارجة</div>
+              <div class="stat-label">{{ 'admin.reports.exitedCasesTotal' | t }}</div>
               <div class="stat-value" style="color: #3b82f6;">{{ reportFilteredCases.length }}</div>
             </div>
             <div class="stat-card" style="border-top:4px solid #10b981;">
-              <div class="stat-label">إجمالي الحساب الكلي</div>
+              <div class="stat-label">{{ 'admin.reports.grandTotal' | t }}</div>
               <div class="stat-value" style="color: #10b981;">
                 {{ getDoctorTotalDue(reportDoctorFilter) | number:'1.0-0' }} EGP
               </div>
             </div>
             <div class="stat-card" style="border-top:4px solid #f59e0b;">
-              <div class="stat-label">المبلغ المدفوع</div>
+              <div class="stat-label">{{ 'admin.reports.paidAmount' | t }}</div>
               <div class="stat-value" style="color: #f59e0b;">
                 {{ getDoctorTotalPaid(reportDoctorFilter) | number:'1.0-0' }} EGP
               </div>
             </div>
             <div class="stat-card" style="border-top:4px solid #ef4444;">
-              <div class="stat-label">المبلغ المستحق (المتبقي)</div>
+              <div class="stat-label">{{ 'admin.reports.remainingDue' | t }}</div>
               <div class="stat-value" style="color: #ef4444;">
                 {{ (getDoctorTotalDue(reportDoctorFilter) - getDoctorTotalPaid(reportDoctorFilter)) | number:'1.0-0' }} EGP
               </div>
@@ -849,56 +751,16 @@
           </div>
 
           <!-- تخصيص أسعار الطبيب -->
-          <div class="report-table-card" style="margin-bottom:24px; padding:20px;">
-            <div style="font-weight:700;font-size:16px;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:8px;">
+          <div class="report-table-card report-doctor-prices" style="margin-bottom:24px; padding:20px;">
+            <div class="report-section-title">
               <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#3b82f6;"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              تخصيص أسعار الخامات للطبيب: {{ reportDoctorFilter }}
+              {{ 'admin.reports.customPrices' | t }}: {{ reportDoctorFilter }}
             </div>
             
-            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;margin-bottom:16px;">
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Emax</label>
-                <input type="number" [(ngModel)]="customEmaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">German Zircon</label>
-                <input type="number" [(ngModel)]="customGermanZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Zircon</label>
-                <input type="number" [(ngModel)]="customZirconPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Titanium</label>
-                <input type="number" [(ngModel)]="customTitaniumPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Peek</label>
-                <input type="number" [(ngModel)]="customPeekPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Pmma Cad</label>
-                <input type="number" [(ngModel)]="customPmmaPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Night Guard</label>
-                <input type="number" [(ngModel)]="customNightGuardPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Mokup</label>
-                <input type="number" [(ngModel)]="customMockupPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Wax</label>
-                <input type="number" [(ngModel)]="customWaxPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Ring</label>
-                <input type="number" [(ngModel)]="customRingPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
-              </div>
-              <div class="control-card" style="background:#1e293b;padding:8px 12px;border-radius:8px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:4px;display:block;">Try in</label>
-                <input type="number" [(ngModel)]="customTryInPrice" style="width:100%;background:#0f172a;border:1px solid #334155;color:#fff;padding:6px;border-radius:6px;font-size:14px;" />
+            <div class="doctor-price-grid">
+              <div class="control-card doctor-price-card" *ngFor="let m of labMaterials">
+                <label>{{ m.label }}</label>
+                <input type="number" class="doctor-price-input" [(ngModel)]="customPricesMap[m.key]" />
               </div>
             </div>
 
@@ -910,12 +772,12 @@
                 [disabled]="isPricingSaving"
                 (click)="saveDoctorCustomPrices()"
               >
-                {{ isPricingSaving ? 'جاري الحفظ...' : 'حفظ الأسعار لهذا الطبيب' }}
+                {{ isPricingSaving ? ('common.saving' | t) : ('admin.reports.savePrices' | t) }}
               </button>
               
               <span *ngIf="pricingSaveSuccess" style="color:#10b981;font-size:14px;display:flex;align-items:center;gap:4px;">
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
-                تم حفظ الأسعار وإعادة احتساب الفواتير بنجاح!
+                {{ 'admin.reports.pricesSaved' | t }}
               </span>
               <span *ngIf="pricingSaveError" style="color:#ef4444;font-size:14px;">
                 {{ pricingSaveError }}
@@ -924,32 +786,30 @@
           </div>
 
           <!-- تسجيل وعرض الدفعات المالية المسجلة على الحساب -->
-          <div class="report-table-card" style="margin-bottom:24px; padding:20px;">
-            <div style="font-weight:700;font-size:16px;margin-bottom:16px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div class="report-table-card report-doctor-payments" style="margin-bottom:24px; padding:20px;">
+            <div class="report-section-title">
               <div style="display:flex;align-items:center;gap:8px;">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#10b981;"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                الدفعات المالية المسجلة على الحساب للطبيب: {{ reportDoctorFilter }}
+                {{ 'admin.reports.paymentsTitle' | t }}: {{ reportDoctorFilter }}
               </div>
             </div>
 
             <!-- نموذج إضافة دفعة جديدة -->
-            <div style="display:flex;gap:16px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;background:#0f172a;padding:16px;border-radius:12px;border:1px solid #1e293b;">
-              <div style="flex:1;min-width:150px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:6px;display:block;">قيمة الدفعة (EGP)</label>
+            <div class="payment-entry-row">
+              <div class="payment-entry-field" style="flex:1;min-width:150px;">
+                <label>{{ 'admin.reports.paymentValue' | t }}</label>
                 <input 
                   type="number" 
                   [(ngModel)]="newPaymentAmount" 
-                  placeholder="مثال: 10000" 
-                  style="width:100%;background:#1e293b;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:14px;" 
+                  [attr.placeholder]="'admin.reports.paymentValuePh' | t" 
                 />
               </div>
-              <div style="flex:2;min-width:250px;">
-                <label style="font-size:12px;color:#94a3b8;margin-bottom:6px;display:block;">ملاحظات / رقم الإيصال</label>
+              <div class="payment-entry-field" style="flex:2;min-width:250px;">
+                <label>{{ 'admin.reports.paymentNotes' | t }}</label>
                 <input 
                   type="text" 
                   [(ngModel)]="newPaymentNotes" 
-                  placeholder="ملاحظات اختيارية (مثال: تحويل فودافون كاش، شيك رقم...)" 
-                  style="width:100%;background:#1e293b;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:14px;" 
+                  [attr.placeholder]="'admin.reports.paymentNotesPh' | t" 
                 />
               </div>
               <div>
@@ -961,7 +821,7 @@
                   (click)="addDoctorPaymentOnAccount()"
                 >
                   <svg *ngIf="paymentSaving" width="16" height="16" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity:0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  {{ paymentSaving ? 'جاري الحفظ...' : 'تسجيل الدفعة' }}
+                  {{ paymentSaving ? ('common.saving' | t) : ('admin.reports.registerPayment' | t) }}
                 </button>
               </div>
             </div>
@@ -969,33 +829,33 @@
             <p *ngIf="paymentError" style="color:#ef4444;font-size:14px;margin-bottom:12px;">{{ paymentError }}</p>
 
             <!-- جدول الدفعات السابقة -->
-            <div style="background:#0f172a;border-radius:12px;border:1px solid #1e293b;overflow:hidden;">
-              <table style="width:100%;border-collapse:collapse;text-align:right;">
+            <div class="payments-table-wrap">
+              <table class="payments-table">
                 <thead>
-                  <tr style="background:#1e293b;color:#94a3b8;font-size:12px;">
-                    <th style="padding:12px 16px;">تاريخ الدفعة</th>
-                    <th style="padding:12px 16px;">المبلغ</th>
-                    <th style="padding:12px 16px;">الملاحظات</th>
-                    <th style="padding:12px 16px;text-align:center;">إجراء</th>
+                  <tr>
+                    <th>{{ 'admin.reports.paymentDate' | t }}</th>
+                    <th>{{ 'common.amount' | t }}</th>
+                    <th>{{ 'common.notes' | t }}</th>
+                    <th style="text-align:center;">{{ 'common.action' | t }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let p of getDoctorPaymentsList(reportDoctorFilter)" style="border-bottom:1px solid #1e293b;color:#e2e8f0;font-size:14px;">
-                    <td style="padding:12px 16px;">{{ formatDateEn(p.paymentDate) }}</td>
-                    <td style="padding:12px 16px;font-weight:700;color:#10b981;">{{ p.amount | number:'1.0-0' }} EGP</td>
-                    <td style="padding:12px 16px;color:#94a3b8;">{{ p.notes || '—' }}</td>
-                    <td style="padding:12px 16px;text-align:center;">
+                  <tr *ngFor="let p of getDoctorPaymentsList(reportDoctorFilter)">
+                    <td>{{ formatDateEn(p.paymentDate) }}</td>
+                    <td class="payment-amount">{{ p.amount | number:'1.0-0' }} EGP</td>
+                    <td class="payment-notes">{{ p.notes || '—' }}</td>
+                    <td style="text-align:center;">
                       <button 
                         type="button" 
-                        style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:600;"
+                        class="payment-delete-btn"
                         (click)="deleteDoctorPaymentOnAccount(p._id)"
                       >
-                        حذف
+                        {{ 'common.delete' | t }}
                       </button>
                     </td>
                   </tr>
                   <tr *ngIf="getDoctorPaymentsList(reportDoctorFilter).length === 0">
-                    <td colspan="4" style="padding:20px;text-align:center;color:#64748b;font-size:14px;">لا توجد دفعات مالية مسجلة على الحساب لهذا الطبيب بعد.</td>
+                    <td colspan="4" class="payments-empty">{{ 'admin.reports.noPayments' | t }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1007,18 +867,18 @@
             <table>
               <thead>
                 <tr>
-                  <th>المريض</th>
-                  <th>تاريخ الخروج</th>
-                  <th>نوع العمل (الخامة)</th>
-                  <th>سعر الحالة</th>
-                  <th>المبلغ المدفوع</th>
-                  <th>الإجراء</th>
+                  <th>{{ 'common.patient' | t }}</th>
+                  <th>{{ 'admin.reports.exitDate' | t }}</th>
+                  <th>{{ 'admin.reports.workMaterial' | t }}</th>
+                  <th>{{ 'admin.reports.casePrice' | t }}</th>
+                  <th>{{ 'admin.reports.paidAmount' | t }}</th>
+                  <th>{{ 'common.action' | t }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let c of reportFilteredCases; trackBy: trackByCaseId" class="clickable-row" (click)="openReportCaseDetails(c)">
                   <td>{{ c.patientName }}</td>
-                  <td>{{ c.exitedAtDisplay || '\u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631' }}</td>
+                  <td>{{ c.exitedAtDisplay || ('common.unavailable' | t) }}</td>
                   <td>{{ translateCaseType(c.caseType) }}</td>
                   <td>
                     <span style="font-weight:600;color:#10b981">{{ calculateCaseCost(c) | number:'1.0-0' }} EGP</span>
@@ -1043,23 +903,23 @@
                       [disabled]="!canConfirmPayment(c)"
                       (click)="$event.stopPropagation(); confirmPayment(c)"
                     >
-                      تأكيد الدفع
+                      {{ 'admin.reports.confirmPay' | t }}
                     </button>
                     <div class="paid-action-wrap" *ngIf="c.paid">
-                      <span class="salary-paid-label">مدفوع</span>
+                      <span class="salary-paid-label">{{ 'admin.reports.paid' | t }}</span>
                       <button
                         type="button"
                         class="edit-paid-btn"
                         [disabled]="!canEditPaidSalary(c)"
                         (click)="$event.stopPropagation(); editPaidSalary(c)"
                       >
-                        {{ isSalarySaving(c) ? 'جاري الحفظ...' : 'تعديل' }}
+                        {{ isSalarySaving(c) ? ('common.saving' | t) : ('common.edit' | t) }}
                       </button>
                     </div>
                   </td>
                 </tr>
                 <tr *ngIf="reportFilteredCases.length === 0">
-                  <td colspan="6" style="text-align:center;padding:24px;color:#9ca3af;">لا توجد حالات مطابقة للبحث لهذا الطبيب</td>
+                  <td colspan="6" style="text-align:center;padding:24px;color:#9ca3af;">{{ 'admin.reports.noCases' | t }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1069,28 +929,91 @@
         <div class="modal-overlay" *ngIf="selectedReportCase" (click)="closeReportCaseDetails()">
           <div class="modal-content" (click)="$event.stopPropagation()">
             <div class="modal-header">
-              <h2>تفاصيل تقرير الحالة</h2>
+              <h2>{{ 'admin.reports.caseReportTitle' | t }}</h2>
               <button class="modal-close-btn" (click)="closeReportCaseDetails()">
                 <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div class="modal-body">
               <div class="detail-section">
-                <div class="detail-section-title">ملخص الحالة</div>
-                <div class="patient-detail-row"><span>رقم الحالة</span><strong>{{ selectedReportCase.caseNumber }}</strong></div>
-                <div class="patient-detail-row"><span>المريض</span><strong>{{ selectedReportCase.patientName }}</strong></div>
-                <div class="patient-detail-row"><span>الطبيب</span><strong>{{ selectedReportCase.doctorName || selectedReportCase.assignedTo || 'غير محدد' }}</strong></div>
-                <div class="patient-detail-row"><span>المرحلة</span><strong>{{ selectedReportCase.currentStage }}</strong></div>
-                <div class="patient-detail-row"><span>تاريخ الاستلام</span><strong>{{ selectedReportCase.receivedDateDisplay || 'غير متوفر' }}</strong></div>
+                <div class="detail-section-title">{{ 'admin.reports.caseSummary' | t }}</div>
+                <div class="patient-detail-row"><span>{{ 'admin.reports.caseNumber' | t }}</span><strong>{{ selectedReportCase.caseNumber }}</strong></div>
+                <div class="patient-detail-row"><span>{{ 'common.patient' | t }}</span><strong>{{ selectedReportCase.patientName }}</strong></div>
+                <div class="patient-detail-row"><span>{{ 'common.doctor' | t }}</span><strong>{{ selectedReportCase.doctorName || selectedReportCase.assignedTo || ('common.unknown' | t) }}</strong></div>
+                <div class="patient-detail-row"><span>{{ 'common.stage' | t }}</span><strong>{{ selectedReportCase.currentStage }}</strong></div>
+                <div class="patient-detail-row"><span>{{ 'admin.reports.receivedDate' | t }}</span><strong>{{ selectedReportCase.receivedDateDisplay || ('common.unavailable' | t) }}</strong></div>
               </div>
 
               <div class="detail-section">
-                <div class="detail-section-title">تفاصيل السكرتارية</div>
-                <div class="patient-detail-row"><span>اسم السكرتير</span><strong>{{ selectedReportCase.secretaryName || selectedReportCase.enteredBy || 'غير معروف' }}</strong></div>
-                <div class="patient-detail-row"><span>الملاحظات</span><strong>{{ selectedReportCase.secretaryInstructions || 'السكرتيرة لم تضف تفاصيل بعد' }}</strong></div>
+                <div class="detail-section-title">{{ 'admin.reports.secretaryDetails' | t }}</div>
+                <div class="patient-detail-row"><span>{{ 'admin.reports.secretaryName' | t }}</span><strong>{{ selectedReportCase.secretaryName || selectedReportCase.enteredBy || ('common.unknownPerson' | t) }}</strong></div>
+                <div class="patient-detail-row"><span>{{ 'common.notes' | t }}</span><strong>{{ selectedReportCase.secretaryInstructions || ('admin.reports.noSecretaryNotes' | t) }}</strong></div>
               </div>
             </div>
           </div>
+        </div>
+      </ng-container>
+
+      <!-- MATERIALS & PRICES -->
+      <ng-container *ngIf="activeNav === 'lab'">
+        <div class="page-header">
+          <div>
+            <div class="page-label">{{ 'admin.lab.label' | t }}</div>
+            <div class="page-title">{{ 'admin.lab.title' | t }}</div>
+          </div>
+        </div>
+
+        <div class="report-table-card lab-materials-card" style="padding:20px;max-width:1100px;">
+          <p class="lab-materials-hint">
+            {{ 'admin.lab.hint' | t }}
+          </p>
+
+          <div class="financial-controls" style="margin-bottom:12px;align-items:flex-end;">
+            <div class="control-card" style="flex:2;">
+              <label>{{ 'admin.lab.name' | t }}</label>
+              <input type="text" [(ngModel)]="matDraft.label" [attr.placeholder]="'admin.lab.namePh' | t" />
+            </div>
+            <div class="control-card" style="flex:1;">
+              <label>{{ 'admin.lab.defaultPrice' | t }}</label>
+              <input type="number" [(ngModel)]="matDraft.defaultPrice" min="0" />
+            </div>
+            <button type="button" class="export-btn" (click)="addMaterial()" [disabled]="matSaving">
+              {{ matSaving ? ('admin.lab.working' | t) : ('admin.lab.add' | t) }}
+            </button>
+          </div>
+          <p *ngIf="matMsg" class="lab-materials-msg" [class.err]="matMsgError">{{ matMsg }}</p>
+          <p *ngIf="labMsg" class="lab-materials-msg err">{{ labMsg }}</p>
+
+          <div class="table-wrap" style="overflow:auto;" *ngIf="labMaterials.length">
+            <table class="staff-table lab-materials-table" style="width:100%;min-width:560px;">
+              <thead>
+                <tr>
+                  <th>{{ 'admin.lab.material' | t }}</th>
+                  <th>{{ 'admin.lab.defaultPriceCol' | t }}</th>
+                  <th>{{ 'admin.lab.visibleOrders' | t }}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let m of labMaterials">
+                  <td>
+                    <input type="text" class="lab-mat-input" [(ngModel)]="m.label" />
+                  </td>
+                  <td>
+                    <input type="number" class="lab-mat-input lab-mat-price" [(ngModel)]="m.defaultPrice" min="0" />
+                  </td>
+                  <td>
+                    <input type="checkbox" [(ngModel)]="m.active" [attr.title]="'common.active' | t" />
+                  </td>
+                  <td style="white-space:nowrap;">
+                    <button type="button" class="export-btn" style="padding:6px 12px;font-size:13px;" (click)="saveMaterialRow(m)" [disabled]="matSaving">{{ 'admin.lab.savePrice' | t }}</button>
+                    <button type="button" class="finish-btn" style="padding:6px 12px;font-size:13px;" (click)="removeMaterial(m)" [disabled]="matSaving">{{ 'common.delete' | t }}</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p *ngIf="!labMaterials.length && !labMsg" class="lab-materials-msg">{{ 'admin.lab.empty' | t }}</p>
         </div>
       </ng-container>
 
@@ -1098,57 +1021,62 @@
       <ng-container *ngIf="activeNav === 'whatsapp'">
         <div class="page-header">
           <div>
-            <div class="page-label">إشعارات الدكاترة</div>
-            <div class="page-title">إعدادات واتساب</div>
+            <div class="page-label">{{ 'admin.whatsapp.label' | t }}</div>
+            <div class="page-title">{{ 'admin.whatsapp.title' | t }}</div>
           </div>
           <span
             class="staff-status-badge"
             [class]="waLiveConfigured ? 'active' : 'inactive'"
             style="align-self:center;"
           >
-            {{ waLiveConfigured ? 'متصل وجاهز' : 'غير مفعّل' }}
+            {{ waLiveConfigured ? ('admin.wa.connectedReady' | t) : ('admin.wa.disabled' | t) }}
           </span>
         </div>
 
         <div class="report-table-card" style="padding:20px;max-width:720px;">
           <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;line-height:1.6;">
-            <strong style="color:#e2e8f0;">WhatsApp Web (مجاني):</strong>
-            اختَر المزود → فعّل → احفظ → اضغط «ربط واتساب» وامسح QR من واتساب المعمل
-            (الأجهزة المرتبطة). يرسل فقط عند انتهاء الحالة.<br>
-            <strong style="color:#e2e8f0;">Meta / UltraMsg:</strong>
-            مدفوعين/رسميين — يحتاجون Token. تأكد إن رقم الموبايل مكتوب في حساب كل دكتور.
+            <strong style="color:#e2e8f0;">{{ 'admin.wa.introFree' | t }}</strong>
+            {{ 'admin.wa.introFreeBody' | t }}<br>
+            <strong style="color:#e2e8f0;">{{ 'admin.wa.introPaid' | t }}</strong>
+            {{ 'admin.wa.introPaidBody' | t }}
           </p>
 
           <label class="remember-row" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;color:#e2e8f0;">
             <input type="checkbox" [(ngModel)]="waEnabled" />
-            <span>تفعيل إرسال واتساب</span>
+            <span>{{ 'admin.wa.enable' | t }}</span>
           </label>
 
           <div class="financial-controls" style="margin-bottom:12px;">
             <div class="control-card" style="flex:1;">
-              <label>المزوّد</label>
+              <label>{{ 'admin.wa.provider' | t }}</label>
               <select [(ngModel)]="waProvider" (ngModelChange)="onWaProviderChange()">
-                <option value="waweb">WhatsApp Web (مجاني)</option>
+                <option value="waweb">{{ 'admin.wa.providerFree' | t }}</option>
                 <option value="ultramsg">UltraMsg</option>
                 <option value="meta">Meta Cloud API</option>
               </select>
             </div>
             <div class="control-card" style="flex:1;" *ngIf="waProvider !== 'waweb'">
-              <label>ساعة الملخص اليومي (0–23)</label>
+              <label>{{ 'admin.wa.dailyHour' | t }}</label>
               <input type="number" min="0" max="23" [(ngModel)]="waDailyHour" />
             </div>
           </div>
 
           <div class="control-card" style="margin-bottom:12px;">
-            <label>اسم المعمل في الرسالة</label>
+            <label>{{ 'admin.wa.labName' | t }}</label>
             <input type="text" [(ngModel)]="waLabName" />
           </div>
 
           <div class="control-card" style="margin-bottom:12px;">
-            <label>رسالة الحالة المنتهية</label>
+            <label>{{ 'admin.wa.alertPhones' | t }}</label>
+            <input type="text" [(ngModel)]="waAlertPhones" [attr.placeholder]="'admin.wa.alertPhonesPh' | t" />
+            <small style="color:#94a3b8;">{{ 'admin.wa.alertPhonesHint' | t }}</small>
+          </div>
+
+          <div class="control-card" style="margin-bottom:12px;">
+            <label>{{ 'admin.wa.msgCompleted' | t }}</label>
             <textarea rows="3" [(ngModel)]="waMsgCompleted" style="width:100%;resize:vertical;"></textarea>
             <small style="color:#94a3b8;">
-              المتغيرات:
+              {{ 'admin.wa.variables' | t }}
               {{ '{' }}lab{{ '}' }}
               {{ '{' }}patient{{ '}' }}
               {{ '{' }}workType{{ '}' }}
@@ -1158,12 +1086,12 @@
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
-            <label>رسالة خروج الحالة</label>
+            <label>{{ 'admin.wa.msgExited' | t }}</label>
             <textarea rows="3" [(ngModel)]="waMsgExited" style="width:100%;resize:vertical;"></textarea>
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
-            <label>رسالة الملخص اليومي</label>
+            <label>{{ 'admin.wa.msgDaily' | t }}</label>
             <textarea rows="4" [(ngModel)]="waMsgDaily" style="width:100%;resize:vertical;"></textarea>
           </div>
 
@@ -1173,7 +1101,7 @@
             *ngIf="waProvider === 'waweb'"
           >
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-              <strong style="color:#e2e8f0;">ربط واتساب Web</strong>
+              <strong style="color:#e2e8f0;">{{ 'admin.wa.linkTitle' | t }}</strong>
               <span
                 class="staff-status-badge"
                 [class]="waWebConnected ? 'active' : 'inactive'"
@@ -1182,8 +1110,7 @@
               </span>
             </div>
             <p style="margin:0 0 12px;color:#94a3b8;font-size:13px;line-height:1.5;">
-              افتح واتساب على موبايل المعمل → الأجهزة المرتبطة → ربط جهاز → امسح الكود.
-              الجلسة تتخزن على السيرفر؛ بعد إعادة تشغيل Railway غالباً تفضل متصلة.
+              {{ 'admin.wa.linkHint' | t }}
             </p>
             <div *ngIf="waWebQr" style="text-align:center;margin:12px 0;">
               <img [src]="waWebQr" alt="WhatsApp QR" width="280" height="280" style="background:#fff;border-radius:8px;" />
@@ -1191,22 +1118,22 @@
             <p *ngIf="waWebError" style="margin:0 0 10px;color:#f87171;font-size:13px;">{{ waWebError }}</p>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
               <button type="button" class="export-btn" (click)="startWhatsAppWeb(false)" [disabled]="waWebBusy">
-                {{ waWebBusy ? 'جاري الربط…' : (waWebConnected ? 'تحديث الحالة' : 'ربط واتساب / إظهار QR') }}
+                {{ waWebBusy ? ('admin.wa.linking' | t) : (waWebConnected ? ('admin.wa.refreshStatus' | t) : ('admin.wa.linkQr' | t)) }}
               </button>
               <button type="button" class="finish-btn" (click)="startWhatsAppWeb(true)" [disabled]="waWebBusy" *ngIf="!waWebConnected">
-                QR جديد
+                {{ 'admin.wa.newQr' | t }}
               </button>
               <button type="button" class="finish-btn" (click)="logoutWhatsAppWeb()" [disabled]="waWebBusy" *ngIf="waWebConnected || waWebStatus === 'qr'">
-                فصل الجلسة
+                {{ 'admin.wa.logout' | t }}
               </button>
             </div>
             <p style="margin:10px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;">
-              امسح بسرعة بعد ما يظهر QR. لو الموبايل قال «تعذر ربط الجهاز» اضغط «QR جديد» وجرّب تاني (يفضّل واتساب عادي مش Business لو بيرفض).
+              {{ 'admin.wa.qrTip' | t }}
             </p>
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider === 'ultramsg'">
-            <label>Instance ID (مثال: instance12345 أو 12345)</label>
+            <label>{{ 'admin.wa.instanceId' | t }}</label>
             <input type="text" [(ngModel)]="waInstanceId" placeholder="instanceXXXX" autocomplete="off" />
           </div>
 
@@ -1216,13 +1143,13 @@
           </div>
 
           <div class="control-card" style="margin-bottom:12px;" *ngIf="waProvider !== 'waweb'">
-            <label>Token {{ waHasToken ? '(محفوظ — اكتب جديد فقط لو هتغيره)' : '' }}</label>
-            <input type="password" [(ngModel)]="waToken" placeholder="الصق التوكن هنا" autocomplete="off" />
+            <label>Token {{ waHasToken ? ('admin.wa.tokenSaved' | t) : '' }}</label>
+            <input type="password" [(ngModel)]="waToken" [attr.placeholder]="'admin.wa.tokenPh' | t" autocomplete="off" />
           </div>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
             <button type="button" class="export-btn" (click)="saveWhatsAppSettings()" [disabled]="waSaving">
-              {{ waSaving ? 'جاري الحفظ…' : 'حفظ الإعدادات' }}
+              {{ waSaving ? ('common.saving' | t) : ('admin.wa.saveSettings' | t) }}
             </button>
             <button
               type="button"
@@ -1230,28 +1157,37 @@
               (click)="runWhatsAppDailyNow()"
               *ngIf="waProvider !== 'waweb'"
             >
-              إرسال الملخص اليومي الآن
+              {{ 'admin.wa.sendDailyNow' | t }}
             </button>
           </div>
 
-          <div class="financial-controls" style="flex-direction:column;align-items:stretch;gap:12px;">
-            <div class="control-card">
-              <label>رقم اختبار (مثال: 010xxxxxxxx)</label>
-              <input type="text" [(ngModel)]="waTestPhone" placeholder="رقم موبايلك" />
+          <div class="financial-controls">
+            <div class="control-card" style="flex:1;">
+              <label>{{ 'admin.wa.testPhone' | t }}</label>
+              <input type="text" [(ngModel)]="waTestPhone" [attr.placeholder]="'admin.wa.testPhonePh' | t" />
             </div>
-            <div class="control-card">
-              <label>نص الرسالة التجريبية</label>
+            <div class="control-card" style="flex:2;">
+              <label>{{ 'admin.wa.testMsg' | t }}</label>
               <textarea
-                rows="4"
                 [(ngModel)]="waTestMessage"
-                placeholder="اكتب الرسالة اللي هتتبعت في التجربة"
-                style="width:100%;resize:vertical;min-height:88px;"
+                rows="3"
+                [attr.placeholder]="'admin.wa.testMsgPh' | t"
               ></textarea>
             </div>
-            <button type="button" class="export-btn" style="align-self:flex-start;" (click)="testWhatsApp()">إرسال رسالة تجربة</button>
+            <button type="button" class="export-btn" style="align-self:flex-end;" (click)="testWhatsApp()">{{ 'admin.wa.sendTest' | t }}</button>
           </div>
 
-          <p *ngIf="waMsg" style="margin-top:14px;color:#38bdf8;font-size:14px;">{{ waMsg }}</p>
+          <p
+            style="margin:12px 0 0;padding:12px 14px;border-radius:10px;background:#422006;border:1px solid #b45309;color:#fde68a;font-size:13px;line-height:1.65;"
+          >
+            {{ 'admin.wa.testWarn' | t }}
+            <ng-container *ngIf="waWebLinkedPhone">
+              <br />
+              {{ 'admin.wa.linkedPhone' | t }} <strong dir="ltr" style="color:#fff;">{{ waWebLinkedPhone }}</strong>
+            </ng-container>
+          </p>
+
+          <p *ngIf="waMsg" style="margin-top:14px;color:#38bdf8;font-size:14px;white-space:pre-line;">{{ waMsg }}</p>
         </div>
       </ng-container>
 
@@ -1259,20 +1195,20 @@
       <ng-container *ngIf="activeNav === 'archive'">
         <div class="page-header">
           <div>
-            <div class="page-label">نهاية الشهر</div>
-            <div class="page-title">الأرشيف والإغلاق</div>
+            <div class="page-label">{{ 'admin.archive.label' | t }}</div>
+            <div class="page-title">{{ 'admin.archive.title' | t }}</div>
           </div>
         </div>
 
         <div class="financial-controls">
           <div class="control-card">
-            <label>السنة</label>
+            <label>{{ 'common.year' | t }}</label>
             <select [(ngModel)]="archiveYearFilter">
               <option *ngFor="let year of archiveYears" [value]="year">{{ year }}</option>
             </select>
           </div>
           <div class="control-card">
-            <label>الشهر</label>
+            <label>{{ 'common.month' | t }}</label>
             <select [(ngModel)]="archiveMonthFilter">
               <option *ngFor="let month of archiveMonths" [value]="month">{{ monthName(month) }}</option>
             </select>
@@ -1280,12 +1216,9 @@
         </div>
 
         <section class="financial-assistant-card" style="margin-top:14px;">
-          <h3 class="financial-assistant-title">1) حفظ كل البيانات</h3>
+          <h3 class="financial-assistant-title">{{ 'admin.archive.saveTitle' | t }}</h3>
           <p style="margin:0;color:var(--color-text-secondary);font-size:13px;line-height:1.6;">
-            يحمّل ملف ZIP يفتح على Excel وفيه:
-            كل الحالات الخارجة بتفاصيلها، شيت منفصل لكل دكتور بحالاته الخارجة،
-            ملخص التقارير، لقطة لوحة التحكم، الدفعات، الأسعار، الموظفين، والطباعة.
-            اختَر السنة/الشهر فوق عشان شيتات الدكاترة تكون لنفس الشهر.
+            {{ 'admin.archive.saveBody' | t }}
           </p>
           <button
             type="button"
@@ -1294,19 +1227,19 @@
             (click)="downloadMonthArchive()"
             [disabled]="archiveLoading"
           >
-            {{ archiveLoading ? 'جاري الحفظ...' : 'حفظ / تحميل كل البيانات (ZIP)' }}
+            {{ archiveLoading ? ('admin.archive.saving' | t) : ('admin.archive.downloadZip' | t) }}
           </button>
         </section>
 
         <section class="financial-assistant-card" style="margin-top:14px;">
-          <h3 class="financial-assistant-title">2) تصفير النظام</h3>
+          <h3 class="financial-assistant-title">{{ 'admin.archive.resetTitle' | t }}</h3>
           <p style="margin:0;color:#b42318;font-size:13px;line-height:1.6;">
-            هيتمسح: كل الحالات <strong>الخارجة</strong> + الدفعات + مهام الطباعة المرتبطة.
+            {{ 'admin.archive.resetBody1' | t }}
             <br />
-            هيفضل: الحالات اللي لسه ما خرجتش (لوحة السكرتارية: إجمالي / الجديدة / المنتهية + فلاتر الكل والجديدة والمنتهية) + الموظفين + أسعار الدكاترة.
+            {{ 'admin.archive.resetBody2' | t }}
           </p>
           <div class="control-card">
-            <label>اكتب للتأكيد: {{ archiveYearFilter }}-{{ archiveMonthFilter | number:'2.0-0' }}</label>
+            <label>{{ 'admin.archive.confirmLabel' | t }} {{ archiveYearFilter }}-{{ archiveMonthFilter | number:'2.0-0' }}</label>
             <input type="text" [(ngModel)]="archiveConfirm" [placeholder]="archiveYearFilter + '-' + (archiveMonthFilter | number:'2.0-0')" />
           </div>
           <button
@@ -1316,7 +1249,7 @@
             (click)="closeSelectedMonth()"
             [disabled]="archiveClosing"
           >
-            {{ archiveClosing ? 'جاري التصفير...' : 'تصفير وحذف البيانات الخارجة' }}
+            {{ archiveClosing ? ('admin.archive.resetting' | t) : ('admin.archive.resetBtn' | t) }}
           </button>
           @if (archiveError) {
             <p class="financial-assistant-error">{{ archiveError }}</p>
@@ -1327,18 +1260,18 @@
         </section>
 
         <section class="financial-assistant-card" style="margin-top:14px;" *ngIf="archiveList.length">
-          <h3 class="financial-assistant-title">سجل الشهور</h3>
+          <h3 class="financial-assistant-title">{{ 'admin.archive.history' | t }}</h3>
           <div class="finance-year-list">
             <div class="finance-year-card" *ngFor="let row of archiveList">
               <div class="finance-year-head">
                 <div class="finance-year-title">{{ monthName(row.month) }} {{ row.year }}</div>
-                <span class="summary-pill" *ngIf="row.closedAt">مقفل</span>
-                <span class="summary-pill" *ngIf="!row.closedAt && row.exportedAt">تم التحميل</span>
+                <span class="summary-pill" *ngIf="row.closedAt">{{ 'admin.archive.closed' | t }}</span>
+                <span class="summary-pill" *ngIf="!row.closedAt && row.exportedAt">{{ 'admin.archive.downloaded' | t }}</span>
               </div>
-              <div class="finance-row"><span>حالات الشهر</span><strong>{{ row.summary?.totalCases || 0 }}</strong></div>
-              <div class="finance-row"><span>خارجة محذوفة</span><strong>{{ row.summary?.deletedExitedCases || 0 }}</strong></div>
-              <div class="finance-row"><span>شغّال متبقي</span><strong>{{ row.summary?.activeCasesKept || 0 }}</strong></div>
-              <div class="finance-row"><span>إجمالي مبالغ</span><strong>{{ row.summary?.totalAmount || 0 | number:'1.0-0' }} EGP</strong></div>
+              <div class="finance-row"><span>{{ 'admin.archive.monthCases' | t }}</span><strong>{{ row.summary?.totalCases || 0 }}</strong></div>
+              <div class="finance-row"><span>{{ 'admin.archive.deletedExited' | t }}</span><strong>{{ row.summary?.deletedExitedCases || 0 }}</strong></div>
+              <div class="finance-row"><span>{{ 'admin.archive.activeKept' | t }}</span><strong>{{ row.summary?.activeCasesKept || 0 }}</strong></div>
+              <div class="finance-row"><span>{{ 'admin.archive.totalAmounts' | t }}</span><strong>{{ row.summary?.totalAmount || 0 | number:'1.0-0' }} EGP</strong></div>
             </div>
           </div>
         </section>
@@ -1354,7 +1287,7 @@
     <!-- Header: Logo centered, date top-left -->
     <div style="position:relative; margin-bottom:12px;">
       <div style="font-size:0.78rem; color:#000;">
-        تاريخ الإصدار: {{ currentPrintDate | date:'yyyy-MM-dd HH:mm' }}
+        {{ 'admin.reports.issueDate' | t }}: {{ currentPrintDate | date:'yyyy-MM-dd HH:mm' }}
       </div>
       <div style="text-align:center; margin-top:-18px;">
         <div style="font-size:1.6rem; font-weight:bold; letter-spacing:2px;">Elegance Lab</div>
@@ -1363,32 +1296,32 @@
     </div>
 
     <div style="border-top:2px solid #000; border-bottom:1px dashed #000; padding:4px 0; margin-bottom:10px; text-align:center; font-weight:bold; font-size:0.9rem;">
-      كشف حساب — د. {{ reportDoctorFilter }}
+      {{ 'admin.reports.statementTitle' | t }} {{ reportDoctorFilter }}
     </div>
 
     <!-- Summary Table -->
     <table class="receipt-table" style="margin-bottom:12px;">
       <thead>
         <tr>
-          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">البيان</th>
-          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">القيمة</th>
+          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">{{ 'admin.reports.statement' | t }}</th>
+          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">{{ 'admin.reports.value' | t }}</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td style="text-align:right; padding:4px 2px;">عدد الحالات الخارجة</td>
+          <td style="text-align:right; padding:4px 2px;">{{ 'admin.reports.exitedCount' | t }}</td>
           <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ reportFilteredCases.length }}</td>
         </tr>
         <tr>
-          <td style="text-align:right; padding:4px 2px;">إجمالي الحساب</td>
+          <td style="text-align:right; padding:4px 2px;">{{ 'admin.reports.accountTotal' | t }}</td>
           <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ getDoctorTotalDue(reportDoctorFilter) | number:'1.0-0' }} EGP</td>
         </tr>
         <tr>
-          <td style="text-align:right; padding:4px 2px;">المبلغ المدفوع</td>
+          <td style="text-align:right; padding:4px 2px;">{{ 'admin.reports.paidAmount' | t }}</td>
           <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ getDoctorTotalPaid(reportDoctorFilter) | number:'1.0-0' }} EGP</td>
         </tr>
         <tr style="border-top:1px solid #000;">
-          <td style="text-align:right; padding:4px 2px; font-weight:bold;">المبلغ المستحق (المتبقي)</td>
+          <td style="text-align:right; padding:4px 2px; font-weight:bold;">{{ 'admin.reports.remainingDue' | t }}</td>
           <td style="text-align:left;  padding:4px 2px; font-weight:bold;">{{ (getDoctorTotalDue(reportDoctorFilter) - getDoctorTotalPaid(reportDoctorFilter)) | number:'1.0-0' }} EGP</td>
         </tr>
       </tbody>
@@ -1397,12 +1330,12 @@
     <div style="border-top:1px dashed #000; margin-bottom:8px;"></div>
 
     <!-- Payments Table -->
-    <div style="font-weight:bold; font-size:0.85rem; margin-bottom:4px; text-align:center;">سجل الدفعات</div>
+    <div style="font-weight:bold; font-size:0.85rem; margin-bottom:4px; text-align:center;">{{ 'admin.reports.paymentsLog' | t }}</div>
     <table class="receipt-table" style="margin-bottom:12px;">
       <thead>
         <tr>
-          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">المبلغ</th>
-          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">تاريخ الدفع</th>
+          <th style="text-align:right; padding:4px 2px; border-bottom:1px solid #000;">{{ 'common.amount' | t }}</th>
+          <th style="text-align:left;  padding:4px 2px; border-bottom:1px solid #000;">{{ 'admin.reports.payDate' | t }}</th>
         </tr>
       </thead>
       <tbody>
@@ -1411,7 +1344,7 @@
           <td style="text-align:left;  padding:4px 2px;">{{ formatDateEn(p.paymentDate) }}</td>
         </tr>
         <tr *ngIf="getDoctorPaymentsList(reportDoctorFilter).length === 0">
-          <td colspan="2" style="text-align:center; padding:8px 0; font-style:italic;">لا توجد دفعات مسجلة</td>
+          <td colspan="2" style="text-align:center; padding:8px 0; font-style:italic;">{{ 'admin.reports.noPaymentsShort' | t }}</td>
         </tr>
       </tbody>
     </table>
@@ -1420,14 +1353,14 @@
     <div style="border-top:2px solid #000; padding-top:6px; margin-bottom:10px;">
       <table style="width:100%; border-collapse:collapse;">
         <tr>
-          <td style="font-size:1rem; font-weight:bold; text-align:right; padding:2px;">إجمالي المبلغ المتبقي</td>
+          <td style="font-size:1rem; font-weight:bold; text-align:right; padding:2px;">{{ 'admin.reports.remainingTotal' | t }}</td>
           <td style="font-size:1rem; font-weight:bold; text-align:left;  padding:2px;">{{ (getDoctorTotalDue(reportDoctorFilter) - getDoctorTotalPaid(reportDoctorFilter)) | number:'1.0-0' }} EGP</td>
         </tr>
       </table>
     </div>
 
     <div style="border-top:1px dashed #000; padding-top:8px; text-align:center; font-size:0.8rem;">
-      شكراً لتعاملكم معنا — Elegance Dental Lab
+      {{ 'admin.reports.thanks' | t }}
     </div>
 
   </div>

@@ -2,8 +2,61 @@ const DentalCase = require('../models/DentalCase');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const DoctorPricing = require('../models/DoctorPricing');
+const DoctorPayment = require('../models/DoctorPayment');
 const { validationResult } = require('express-validator');
 const { emitToAll } = require('../services/socketService');
+const {
+  normalizeDoctorKey: normalizeDoctorKeyStrict,
+  doctorKeysMatch,
+  isExcludedWorkCaseType: isExcludedWorkCaseTypeShared,
+  isNonBillableCase,
+  parseNotesMeta: parseNotesMetaShared,
+  calculateCaseCost,
+  calculateCaseCostBreakdown,
+  loadActiveMaterials,
+  materialsToDefaultPrices,
+  findPricingForDoctor,
+} = require('../services/casePricingService');
+const {
+  assertForwardTransition,
+  assertStationTransition,
+  assertCanComplete,
+  assertCanExit,
+  isExitedCase,
+} = require('../services/caseWorkflowService');
+
+/** Validate create payload for quantity / empty / work type rigor */
+function validateCreateCaseBusinessRules({ caseType, notes }) {
+  const ct = String(caseType || '').trim();
+  if (!ct) {
+    return 'نوع العمل مطلوب';
+  }
+
+  const meta = parseNotesMeta(notes || '');
+  const lower = ct.toLowerCase();
+  const isEmpty =
+    lower.includes('empty') ||
+    ct.includes('غير معروف') ||
+    lower === 'empty';
+
+  if (isEmpty) {
+    return null;
+  }
+
+  if (isNonBillableCase(ct, meta)) {
+    // Redo / modification: allow create without positive qty
+    return null;
+  }
+
+  const qty = Number(meta.quantity ?? meta.qty ?? 0);
+  const hasParenQty = /\(\d+\)/.test(ct);
+  if (!hasParenQty && (!Number.isFinite(qty) || qty < 1)) {
+    return 'الكمية يجب أن تكون 1 على الأقل (إلا في حالات الفاضي / الإعادة / التعديل)';
+  }
+
+  return null;
+}
 
 function normalizeDocId(ref) {
   if (ref === undefined || ref === null) return '';
@@ -129,6 +182,11 @@ exports.createCase = async (req, res) => {
     if (req.user?.role === 'doctor') {
       notes = forceDoctorNameInNotes(notes, req.user.fullName);
       requesterType = 'doctor';
+    }
+
+    const businessError = validateCreateCaseBusinessRules({ caseType, notes });
+    if (businessError) {
+      return res.status(400).json({ success: false, message: businessError });
     }
 
     const normalizedRequesterType = requesterType === 'student' ? 'student' : 'doctor';
@@ -300,7 +358,7 @@ exports.getAllCases = async (req, res) => {
         .populate('assignedTo', 'fullName email role')
         .populate('createdBy', 'fullName email role')
         .select(
-          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
+          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor plyScanPath plyFileName currentStage status assignedTo createdBy caseType priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
         )
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -467,19 +525,40 @@ exports.getFinancialReport = async (req, res) => {
       .populate('createdBy', 'fullName role')
       .sort({ createdAt: -1 });
 
+    const pricings = await DoctorPricing.find().lean();
+    const materials = await loadActiveMaterials();
+    const labDefaults = materialsToDefaultPrices(materials);
+
     const rows = cases
       .map((doc) => {
         const notesMeta = parseNotesMeta(doc.notes || '');
+        if (isNonBillableCase(doc.caseType, notesMeta)) return null;
+
         const doctorNameRaw =
           notesMeta.doctor ||
           notesMeta.doctorName ||
+          doc.referringDoctor ||
           (doc.assignedTo && doc.assignedTo.fullName) ||
           'غير محدد';
         const doctorName = String(doctorNameRaw).trim() || 'غير محدد';
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
-        const salaryAmount = Number(doc.salaryAmount || 0);
+        const pricingDoc = findPricingForDoctor(pricings, doctorName);
+        const billedAmount = calculateCaseCost(
+          doc.caseType,
+          notesMeta,
+          pricingDoc?.prices,
+          materials,
+          labDefaults
+        );
+        const storedSalary = Number(doc.salaryAmount || 0);
         const payment = String(doc.paymentStatus || 'unpaid');
+        const salaryAmount =
+          billedAmount > 0
+            ? billedAmount
+            : Number.isFinite(storedSalary)
+              ? storedSalary
+              : 0;
 
         return {
           id: String(doc._id),
@@ -489,14 +568,19 @@ exports.getFinancialReport = async (req, res) => {
           doctorName,
           assignedTo: doc.assignedTo ? String(doc.assignedTo.fullName || '') : null,
           currentStage: String(doc.currentStage || ''),
-          salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
+          salaryAmount,
+          pricedAmount: billedAmount,
+          storedSalaryAmount: Number.isFinite(storedSalary) ? storedSalary : 0,
           paymentStatus: payment === 'paid' ? 'paid' : 'unpaid',
           paidAt: doc.paidAt || null,
           receivedAt: createdAt,
           receivedDateDisplay: createdAt.toISOString(),
-          dueDate: doc.dueDate || null, notes: doc.notes || '', exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+          dueDate: doc.dueDate || null,
+          notes: doc.notes || '',
+          exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
         };
       })
+      .filter(Boolean)
       .filter((row) => {
         const rowDate = new Date(row.receivedAt);
         if (year && Number(year) !== rowDate.getFullYear()) return false;
@@ -536,6 +620,256 @@ exports.getFinancialReport = async (req, res) => {
   }
 };
 
+/**
+ * Read-only account summary for a doctor portal (exited billable cases + pricing).
+ * Doctor: always self (req.user.fullName). Admin: ?doctor= (same name as ?as=).
+ * Optional ?year=&month= filter by case createdAt.
+ */
+exports.getDoctorAccountSummary = async (req, res) => {
+  try {
+    const role = req.user?.role;
+    let doctorName = '';
+
+    if (role === 'doctor') {
+      doctorName = String(req.user.fullName || '').trim();
+    } else if (role === 'admin') {
+      doctorName = String(req.query.doctor || '').trim();
+      if (!doctorName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Query parameter doctor is required for admin',
+        });
+      }
+    } else {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    if (!doctorName) {
+      return res.status(400).json({ success: false, message: 'Doctor name is required' });
+    }
+
+    const year = req.query.year ? Number(req.query.year) : null;
+    const month = req.query.month ? Number(req.query.month) : null;
+
+    const [cases, pricings, payments] = await Promise.all([
+      DentalCase.find({ currentStage: 'exited' })
+        .select(
+          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps'
+        )
+        .sort({ createdAt: -1 })
+        .lean(),
+      DoctorPricing.find().lean(),
+      DoctorPayment.find().lean(),
+    ]);
+
+    const pricingDoc = findPricingForDoctor(pricings, doctorName);
+    const prices = pricingDoc?.prices || null;
+    const materials = await loadActiveMaterials();
+    const labDefaults = materialsToDefaultPrices(materials);
+    const { caseBillAmount, resolveDoctorPaid } = require('../services/doctorBalanceService');
+
+    const billableCases = [];
+    let totalDue = 0;
+    let paidFromCases = 0;
+
+    for (const doc of cases) {
+      const meta = parseNotesMetaShared(doc.notes || '');
+      const caseDoctor = String(
+        doc.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
+
+      if (meta.isRedoCase || meta.isModificationCase) continue;
+      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+
+      const exitedAt = doc.stageTimestamps?.exited
+        ? new Date(doc.stageTimestamps.exited)
+        : doc.updatedAt
+          ? new Date(doc.updatedAt)
+          : doc.createdAt
+            ? new Date(doc.createdAt)
+            : new Date();
+      if (year && Number.isFinite(year) && exitedAt.getFullYear() !== year) continue;
+      if (month && Number.isFinite(month) && exitedAt.getMonth() + 1 !== month) continue;
+
+      const breakdown = calculateCaseCostBreakdown(
+        doc.caseType,
+        meta,
+        prices,
+        materials,
+        labDefaults
+      );
+      const amount = caseBillAmount(doc, breakdown.total);
+      const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
+      const salaryAmount = Number(doc.salaryAmount || 0);
+      if (paymentStatus === 'paid') {
+        paidFromCases += amount;
+      }
+
+      totalDue += amount;
+      billableCases.push({
+        id: String(doc._id),
+        caseNumber: String(doc.caseNumber || ''),
+        patientName: String(doc.patientName || ''),
+        caseType: String(doc.caseType || ''),
+        amount,
+        quantity: breakdown.quantity,
+        unitPrice: breakdown.unitPrice,
+        lines: (doc.billSnapshot && doc.billSnapshot.lines) || breakdown.lines,
+        paymentStatus,
+        salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
+        receivedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
+        exitedAt: exitedAt.toISOString(),
+      });
+    }
+
+    const paidFromPayments = payments
+      .filter((p) => doctorKeysMatch(p.doctorName, doctorName))
+      .filter((p) => {
+        if (!year && !month) return true;
+        const d = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!d) return false;
+        if (year && Number.isFinite(year) && d.getFullYear() !== year) return false;
+        if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
+        return true;
+      })
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const balance = resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        doctorName,
+        doctorKey: normalizeDoctorKeyStrict(doctorName),
+        totalDue: balance.totalDue,
+        totalPaid: balance.totalPaid,
+        remaining: balance.remaining,
+        paidFromCases: balance.paidFromCases,
+        paidFromPayments: balance.paidFromPayments,
+        paidSource: balance.paidSource,
+        caseCount: billableCases.length,
+        cases: billableCases,
+        filters: {
+          year: year && Number.isFinite(year) ? year : null,
+          month: month && Number.isFinite(month) ? month : null,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch doctor account summary',
+      error: error.message,
+    });
+  }
+};
+
+const DOCTOR_MATERIAL_CATALOG = [
+  { key: 'emax', label: 'Emax' },
+  { key: 'regularZircon', label: 'Zircon' },
+  { key: 'germanZircon', label: 'German Zircon' },
+  { key: 'titanium', label: 'Titanium' },
+  { key: 'peek', label: 'Peek' },
+  { key: 'pmma', label: 'Pmma Cad' },
+  { key: 'nightGuard', label: 'Night Guard' },
+  { key: 'mokup', label: 'Mockup' },
+  { key: 'tryIn', label: 'Try in' },
+  { key: 'wax', label: 'Wax' },
+  { key: 'ring', label: 'Ring' },
+];
+
+/**
+ * Live material exit counts for a doctor (exited cases only).
+ * Doctor: always self. Admin: ?doctor= (same name as portal ?as=).
+ * Excludes redo / modification / empty via shared pricing helpers.
+ * Counts derive from live cases so deletes auto-subtract.
+ */
+exports.getDoctorExitedMaterials = async (req, res) => {
+  try {
+    const role = req.user?.role;
+    let doctorName = '';
+
+    if (role === 'doctor') {
+      doctorName = String(req.user.fullName || '').trim();
+    } else if (role === 'admin') {
+      doctorName = String(req.query.doctor || '').trim();
+      if (!doctorName) {
+        return res.status(400).json({
+          success: false,
+          message: 'يلزم تحديد اسم الدكتور (doctor) عند العرض من الأدمن',
+        });
+      }
+    } else {
+      return res.status(403).json({ success: false, message: 'غير مصرح بالوصول' });
+    }
+
+    if (!doctorName) {
+      return res.status(400).json({ success: false, message: 'اسم الدكتور مطلوب' });
+    }
+
+    const cases = await DentalCase.find({ currentStage: 'exited' })
+      .select('caseType notes referringDoctor')
+      .lean();
+
+    const stats = {
+      emax: 0,
+      regularZircon: 0,
+      germanZircon: 0,
+      titanium: 0,
+      peek: 0,
+      pmma: 0,
+      nightGuard: 0,
+      mokup: 0,
+      tryIn: 0,
+      wax: 0,
+      ring: 0,
+    };
+
+    let caseCount = 0;
+
+    for (const doc of cases) {
+      const meta = parseNotesMetaShared(doc.notes || '');
+      const caseDoctor = String(
+        doc.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
+
+      if (meta.isRedoCase || meta.isModificationCase) continue;
+      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+
+      const quantity = Number(meta.quantity ?? 1) || 1;
+      addMaterialUnits(stats, doc.caseType, quantity, { global: true, jundi: false });
+      caseCount += 1;
+    }
+
+    const materials = DOCTOR_MATERIAL_CATALOG.map((item) => ({
+      key: item.key,
+      label: item.label,
+      count: Number(stats[item.key] || 0),
+    }));
+
+    const totalUnits = materials.reduce((sum, row) => sum + row.count, 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        doctorName,
+        doctorKey: normalizeDoctorKeyStrict(doctorName),
+        totalUnits,
+        caseCount,
+        materials,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'تعذر تحميل عدد الماتريال الخارجة',
+      error: error.message,
+    });
+  }
+};
+
 // Get case by ID
 exports.getCaseById = async (req, res) => {
   try {
@@ -568,6 +902,13 @@ exports.claimCase = async (req, res) => {
 
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
+    }
+
+    if (isExitedCase(dentalCase)) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استلام حالة خارجة',
+      });
     }
 
     // Check if already assigned
@@ -700,7 +1041,7 @@ exports.assignCase = async (req, res) => {
   }
 };
 
-// Move case to next stage
+// Move case to next stage (forward-only)
 exports.moveStage = async (req, res) => {
   try {
     const { stage } = req.body;
@@ -718,6 +1059,18 @@ exports.moveStage = async (req, res) => {
     }
 
     const oldStage = dentalCase.currentStage;
+    const transition = assertForwardTransition(oldStage, stage);
+    if (!transition.ok) {
+      return res.status(400).json({ success: false, message: transition.message });
+    }
+    if (transition.same) {
+      return res.status(200).json({
+        success: true,
+        message: 'Case already at this stage',
+        case: dentalCase,
+      });
+    }
+
     dentalCase.currentStage = stage;
 
     // Sync status with stage for key transitions
@@ -728,7 +1081,7 @@ exports.moveStage = async (req, res) => {
     } else if (stage === 'waiting') {
       dentalCase.status = 'waiting';
     } else {
-      // secretary | design | khart | finishing (reopens completed)
+      // secretary | design | khart | finishing
       dentalCase.status = 'in_progress';
     }
 
@@ -886,13 +1239,6 @@ const STATION_TARGET = {
   reception: 'completed',
 };
 
-const STATION_ALLOWED_FROM = {
-  // Any non-exited stage → target station
-  design: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-  finishing: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-  reception: new Set(['waiting', 'secretary', 'design', 'khart', 'finishing', 'completed']),
-};
-
 const STATION_LABEL_AR = {
   reception: 'سكان 1 — منتهية',
   design: 'سكان 2 — ديزاين',
@@ -942,10 +1288,11 @@ exports.scanAtStation = async (req, res) => {
     const oldStage = String(dentalCase.currentStage || 'waiting');
     const targetStage = STATION_TARGET[station];
 
-    if (oldStage === 'exited') {
+    const stationGate = assertStationTransition(station, oldStage, targetStage);
+    if (!stationGate.ok) {
       return res.status(400).json({
         success: false,
-        message: 'الحالة خارجة بالفعل ولا يمكن نقلها',
+        message: stationGate.message,
         case: {
           id: dentalCase._id,
           caseNumber: dentalCase.caseNumber,
@@ -956,7 +1303,7 @@ exports.scanAtStation = async (req, res) => {
     }
 
     // Already at target → acknowledge without error (re-scan OK)
-    if (oldStage === targetStage) {
+    if (stationGate.same || oldStage === targetStage) {
       return res.status(200).json({
         success: true,
         alreadyAtStage: true,
@@ -971,22 +1318,8 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    if (!STATION_ALLOWED_FROM[station].has(oldStage)) {
-      return res.status(400).json({
-        success: false,
-        message: `لا يمكن نقل الحالة من «${oldStage}» إلى محطة ${STATION_LABEL_AR[station]}`,
-        case: {
-          id: dentalCase._id,
-          caseNumber: dentalCase.caseNumber,
-          patientName: dentalCase.patientName,
-          currentStage: oldStage,
-        },
-      });
-    }
-
     dentalCase.currentStage = targetStage;
-    // Keep status in sync with stage — otherwise completed cases stay "منتهية" in the UI
-    // even after سكان 2/3 moves them back to design/finishing.
+    // Keep status in sync with stage
     if (targetStage === 'completed') {
       dentalCase.status = 'completed';
     } else if (targetStage === 'exited') {
@@ -994,7 +1327,6 @@ exports.scanAtStation = async (req, res) => {
     } else if (targetStage === 'waiting') {
       dentalCase.status = 'waiting';
     } else {
-      // secretary | design | khart | finishing (reopens completed)
       dentalCase.status = 'in_progress';
     }
     if (targetStage !== 'waiting') {
@@ -1048,11 +1380,22 @@ exports.scanAtStation = async (req, res) => {
     if (targetStage === 'completed' || targetStage === 'exited') {
       try {
         const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-        notifyDoctorCaseStatus(
-          dentalCase,
-          targetStage === 'exited' ? 'exited' : 'completed'
-        ).catch(() => {});
-      } catch (_) {}
+        const kind = targetStage === 'exited' ? 'exited' : 'completed';
+        notifyDoctorCaseStatus(dentalCase, kind).catch((err) =>
+          console.warn(
+            '[whatsapp] scanAtStation notify failed:',
+            dentalCase?.caseNumber,
+            kind,
+            err?.message || err
+          )
+        );
+      } catch (err) {
+        console.warn(
+          '[whatsapp] scanAtStation notify setup failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        );
+      }
     }
 
     return res.status(200).json({
@@ -1060,11 +1403,19 @@ exports.scanAtStation = async (req, res) => {
       message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
       case: {
         id: dentalCase._id,
+        _id: dentalCase._id,
         caseNumber: dentalCase.caseNumber,
         patientName: dentalCase.patientName,
         currentStage: targetStage,
         previousStage: oldStage,
+        status: dentalCase.status,
         caseType: dentalCase.caseType,
+        notes: dentalCase.notes,
+        referringDoctor: dentalCase.referringDoctor,
+        plyScanPath: dentalCase.plyScanPath,
+        plyFileName: dentalCase.plyFileName,
+        createdAt: dentalCase.createdAt,
+        stageTimestamps: dentalCase.stageTimestamps,
       },
     });
   } catch (error) {
@@ -1084,6 +1435,18 @@ exports.completeCase = async (req, res) => {
 
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
+    }
+
+    const gate = assertCanComplete(dentalCase);
+    if (!gate.ok) {
+      return res.status(400).json({ success: false, message: gate.message });
+    }
+    if (gate.already) {
+      return res.status(200).json({
+        success: true,
+        message: 'Case already completed',
+        case: dentalCase,
+      });
     }
 
     dentalCase.status = 'completed';
@@ -1120,8 +1483,20 @@ exports.completeCase = async (req, res) => {
 
     try {
       const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-      notifyDoctorCaseStatus(dentalCase, 'completed').catch(() => {});
-    } catch (_) {}
+      notifyDoctorCaseStatus(dentalCase, 'completed').catch((err) =>
+        console.warn(
+          '[whatsapp] completeCase notify failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        )
+      );
+    } catch (err) {
+      console.warn(
+        '[whatsapp] completeCase notify setup failed:',
+        dentalCase?.caseNumber,
+        err?.message || err
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -1234,13 +1609,71 @@ exports.exitCase = async (req, res) => {
       return res.status(403).json({ message: 'Only admin or secretary can exit cases' });
     }
 
-    if (dentalCase.status === 'exited') {
-      return res.status(400).json({ message: 'Case is already exited' });
+    const exitGate = assertCanExit(dentalCase);
+    if (!exitGate.ok) {
+      return res.status(400).json({ success: false, message: exitGate.message });
     }
 
     dentalCase.status = 'exited';
     dentalCase.currentStage = 'exited';
     dentalCase.stageTimestamps.exited = new Date();
+
+    // Freeze doctor bill at exit (stop live reprice rewriting history)
+    try {
+      const DoctorPricing = require('../models/DoctorPricing');
+      const {
+        calculateCaseCostBreakdownAsync,
+        findPricingForDoctor,
+        parseNotesMeta,
+      } = require('../services/casePricingService');
+      const meta = parseNotesMeta(dentalCase.notes || '');
+      const doctorName = String(
+        dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
+      ).trim();
+      const pricings = await DoctorPricing.find().lean();
+      const pricingDoc = findPricingForDoctor(pricings, doctorName);
+      const breakdown = await calculateCaseCostBreakdownAsync(
+        dentalCase.caseType,
+        dentalCase.notes,
+        pricingDoc?.prices || null
+      );
+      const liveTotal = Number(breakdown.total) || 0;
+      const stored = Number(dentalCase.salaryAmount) || 0;
+      const revenue = liveTotal > 0 ? liveTotal : stored;
+      dentalCase.salaryAmount = revenue;
+      dentalCase.revenueAmount = revenue;
+      dentalCase.billSnapshot = {
+        doctorName,
+        pricedAt: new Date().toISOString(),
+        quantity: breakdown.quantity || 0,
+        unitPrice: breakdown.unitPrice || 0,
+        total: revenue,
+        lines: breakdown.lines || [],
+        priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+      };
+    } catch (priceErr) {
+      console.warn('[exit] bill snapshot failed:', dentalCase?.caseNumber, priceErr?.message || priceErr);
+      const revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
+      dentalCase.revenueAmount = revenue;
+    }
+
+    const revenue = Math.max(0, Number(dentalCase.revenueAmount || dentalCase.salaryAmount) || 0);
+
+    try {
+      const { consumeCaseMaterials, round2 } = require('../services/inventoryService');
+      const consumeResult = await consumeCaseMaterials(dentalCase, req.user);
+      const cogs =
+        consumeResult && !consumeResult.skipped
+          ? Number(consumeResult.totalCogs) || 0
+          : 0;
+      dentalCase.materialCost = round2(cogs);
+      dentalCase.caseProfit = round2(revenue - cogs);
+    } catch (invErr) {
+      console.warn('[inventory] consume on exit failed:', dentalCase?.caseNumber, invErr?.message || invErr);
+      dentalCase.materialCost = 0;
+      dentalCase.caseProfit = revenue;
+    }
+
     await dentalCase.save();
 
     await AuditLog.create({
@@ -1271,8 +1704,20 @@ exports.exitCase = async (req, res) => {
 
     try {
       const { notifyDoctorCaseStatus } = require('../services/whatsappService');
-      notifyDoctorCaseStatus(dentalCase, 'exited').catch(() => {});
-    } catch (_) {}
+      notifyDoctorCaseStatus(dentalCase, 'exited').catch((err) =>
+        console.warn(
+          '[whatsapp] exitCase notify failed:',
+          dentalCase?.caseNumber,
+          err?.message || err
+        )
+      );
+    } catch (err) {
+      console.warn(
+        '[whatsapp] exitCase notify setup failed:',
+        dentalCase?.caseNumber,
+        err?.message || err
+      );
+    }
 
     return res.status(200).json({
       success: true,
@@ -1302,6 +1747,7 @@ exports.releaseCase = async (req, res) => {
     dentalCase.assignedTo = null;
     dentalCase.assignedAt = null;
     dentalCase.status = 'waiting';
+    dentalCase.currentStage = 'waiting';
 
     await dentalCase.save();
 
@@ -1360,7 +1806,23 @@ exports.updateCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
+    // Exited cases: only admin may edit (financials use dedicated endpoint)
+    if (isExitedCase(dentalCase) && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'لا يمكن تعديل حالة خارجة — راجع الإدارة',
+      });
+    }
 
+    if (req.user.role === 'secretary') {
+      const createdBy = normalizeDocId(dentalCase.createdBy);
+      if (createdBy && createdBy !== String(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'يمكنك تعديل الحالات التي أنشأتها فقط',
+        });
+      }
+    }
 
     if (req.user.role === 'designer') {
       // Allow designer to edit any case; ownership is reassigned automatically on edit.
@@ -1463,8 +1925,26 @@ exports.updateCase = async (req, res) => {
       dentalCase.salaryAmount = parsedSalary;
     }
     if (notes !== undefined) {
+      const prevMeta = parseNotesMeta(dentalCase.notes || '');
+      const prevPlyPath = String(dentalCase.plyScanPath || prevMeta.plyScanPath || '').trim();
+      const prevPlyName = String(dentalCase.plyFileName || prevMeta.plyFileName || '').trim();
+
       dentalCase.notes = sanitizeNotesMetaString(notes);
       dentalCase.referringDoctor = referringDoctorFromNotes(dentalCase.notes);
+
+      // Never drop an uploaded scan when the client rebuilds notes without ply fields
+      if (prevPlyPath) {
+        const nextMeta = parseNotesMeta(dentalCase.notes || '');
+        if (!nextMeta.plyScanPath) {
+          nextMeta.plyScanPath = prevPlyPath;
+          nextMeta.plyFileName = prevPlyName || nextMeta.plyFileName || '';
+          dentalCase.notes = sanitizeNotesMetaString(`__META__\n${JSON.stringify(nextMeta)}`);
+        }
+        if (!dentalCase.plyScanPath) {
+          dentalCase.plyScanPath = prevPlyPath;
+          dentalCase.plyFileName = prevPlyName || dentalCase.plyFileName || '';
+        }
+      }
     }
     if (caseType !== undefined) dentalCase.caseType = caseType;
     if (priority !== undefined) {
@@ -1478,6 +1958,12 @@ exports.updateCase = async (req, res) => {
     if (dueDate !== undefined) dentalCase.dueDate = new Date(dueDate);
 
     if (stageTimestamps !== undefined && typeof stageTimestamps === 'object' && stageTimestamps !== null) {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'تعديل تواريخ المراحل متاح للإدارة فقط',
+        });
+      }
       if (!dentalCase.stageTimestamps) {
         dentalCase.stageTimestamps = {};
       }
@@ -1485,6 +1971,73 @@ exports.updateCase = async (req, res) => {
         dentalCase.stageTimestamps[key] = val ? new Date(String(val)) : null;
       }
       dentalCase.markModified('stageTimestamps');
+    }
+
+    // Exited cases: admin may fully edit; refresh frozen bill when work/price changes
+    if (
+      isExitedCase(dentalCase) &&
+      req.user.role === 'admin' &&
+      (caseType !== undefined || notes !== undefined || salaryAmount !== undefined)
+    ) {
+      try {
+        const DoctorPricing = require('../models/DoctorPricing');
+        const {
+          calculateCaseCostBreakdownAsync,
+          findPricingForDoctor,
+          parseNotesMeta,
+        } = require('../services/casePricingService');
+        const meta = parseNotesMeta(dentalCase.notes || '');
+        const doctorName = String(
+          dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
+        ).trim();
+        const workChanged = caseType !== undefined || notes !== undefined;
+        let revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
+        let breakdown = { quantity: 0, unitPrice: 0, lines: [], total: revenue };
+
+        if (workChanged && dentalCase.requesterType !== 'student') {
+          const pricings = await DoctorPricing.find().lean();
+          const pricingDoc = findPricingForDoctor(pricings, doctorName);
+          breakdown = await calculateCaseCostBreakdownAsync(
+            dentalCase.caseType,
+            dentalCase.notes,
+            pricingDoc?.prices || null
+          );
+          const liveTotal = Number(breakdown.total) || 0;
+          if (liveTotal > 0) {
+            revenue = liveTotal;
+            dentalCase.salaryAmount = revenue;
+          }
+          dentalCase.billSnapshot = {
+            doctorName,
+            pricedAt: new Date().toISOString(),
+            quantity: breakdown.quantity || 0,
+            unitPrice: breakdown.unitPrice || 0,
+            total: revenue,
+            lines: breakdown.lines || [],
+            priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+          };
+        } else {
+          dentalCase.billSnapshot = {
+            ...(dentalCase.billSnapshot && typeof dentalCase.billSnapshot === 'object'
+              ? dentalCase.billSnapshot
+              : {}),
+            doctorName:
+              (dentalCase.billSnapshot && dentalCase.billSnapshot.doctorName) || doctorName,
+            pricedAt: new Date().toISOString(),
+            total: revenue,
+          };
+        }
+        dentalCase.revenueAmount = revenue;
+        dentalCase.markModified('billSnapshot');
+        const cogs = Math.max(0, Number(dentalCase.materialCost) || 0);
+        dentalCase.caseProfit = Math.round((revenue - cogs) * 100) / 100;
+      } catch (priceErr) {
+        console.warn(
+          '[updateCase] exited bill refresh failed:',
+          dentalCase?.caseNumber,
+          priceErr?.message || priceErr
+        );
+      }
     }
 
     await dentalCase.save();
@@ -1577,7 +2130,7 @@ exports.updateCaseFinancials = async (req, res) => {
   }
 };
 
-// Delete case (secretary: only own; admin: any)
+// Delete case (secretary: own + not exited; admin: any)
 exports.deleteCase = async (req, res) => {
   try {
     const dentalCase = await DentalCase.findById(req.params.id);
@@ -1586,11 +2139,32 @@ exports.deleteCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
-
+    const role = req.user?.role;
+    if (role === 'secretary') {
+      const createdBy = normalizeDocId(dentalCase.createdBy);
+      if (createdBy && createdBy !== String(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'يمكنك حذف الحالات التي أنشأتها فقط',
+        });
+      }
+      if (isExitedCase(dentalCase)) {
+        return res.status(403).json({
+          success: false,
+          message: 'لا يمكن للسكرتير حذف حالة خارجة — راجع الإدارة',
+        });
+      }
+    }
 
     const caseId = String(dentalCase._id);
     const caseNumber = dentalCase.caseNumber;
     await DentalCase.findByIdAndDelete(req.params.id);
+
+    try {
+      await Notification.deleteMany({ caseId: dentalCase._id });
+    } catch (cleanupErr) {
+      console.warn('deleteCase notification cleanup failed:', cleanupErr.message);
+    }
 
     emitToAll('case:deleted', {
       caseId,
@@ -1662,7 +2236,7 @@ exports.reopenCase = async (req, res) => {
 exports.uploadCasePly = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No scan file uploaded (.ply / .stl / .obj)' });
+      return res.status(400).json({ message: 'No scan file uploaded (.ply / .stl / .obj / .rar / .zip)' });
     }
 
     const dentalCase = await DentalCase.findById(req.params.id);
@@ -1682,6 +2256,8 @@ exports.uploadCasePly = async (req, res) => {
     meta.plyFileName = String(req.file.originalname || req.file.filename || '').slice(0, 280);
 
     dentalCase.notes = sanitizeNotesMetaString(`${prefix}${JSON.stringify(meta)}`);
+    dentalCase.plyScanPath = meta.plyScanPath;
+    dentalCase.plyFileName = meta.plyFileName;
     await dentalCase.save();
 
     emitCaseUpdated(dentalCase, req.user);
@@ -1696,6 +2272,72 @@ exports.uploadCasePly = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to upload PLY file',
+      error: error.message,
+    });
+  }
+};
+
+/** Attach an external scan URL (Drive / WeTransfer / etc.) instead of uploading a file */
+exports.setCasePlyLink = async (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url ?? req.body?.plyUrl ?? '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ message: 'أدخل لينك السكان' });
+    }
+    if (rawUrl.length > 2000) {
+      return res.status(400).json({ message: 'لينك السكان طويل جدًا' });
+    }
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ message: 'لينك غير صالح' });
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).json({ message: 'اللينك لازم يبدأ بـ http أو https' });
+    }
+    if (!parsed.hostname) {
+      return res.status(400).json({ message: 'لينك غير صالح' });
+    }
+
+    const dentalCase = await DentalCase.findById(req.params.id);
+    if (!dentalCase) {
+      return res.status(404).json({ message: 'Case not found' });
+    }
+
+    const prefix = '__META__\n';
+    const raw = dentalCase.notes || '';
+    let meta = parseNotesMeta(raw);
+    if (!raw.startsWith(prefix) && raw.trim()) {
+      meta = { ...meta, instructions: raw.slice(0, 8000) };
+    }
+    if (!meta || typeof meta !== 'object') meta = {};
+
+    const label =
+      String(req.body?.fileName ?? req.body?.plyFileName ?? '').trim().slice(0, 280) ||
+      parsed.hostname ||
+      'لينك سكان';
+
+    meta.plyScanPath = rawUrl;
+    meta.plyFileName = label;
+
+    dentalCase.notes = sanitizeNotesMetaString(`${prefix}${JSON.stringify(meta)}`);
+    dentalCase.plyScanPath = rawUrl;
+    dentalCase.plyFileName = label;
+    await dentalCase.save();
+
+    emitCaseUpdated(dentalCase, req.user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'تم حفظ لينك السكان',
+      plyUrl: rawUrl,
+      plyFileName: label,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to save scan link',
       error: error.message,
     });
   }
