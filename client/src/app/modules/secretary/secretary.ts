@@ -129,6 +129,11 @@ export class Secretary implements OnInit, OnDestroy {
   brandTitle = 'Elegance';
   private readonly apiBase = environment.apiUrl;
 
+  /** Admin opening secretary workspace: register cases without auto-print. */
+  isAdminUser(): boolean {
+    return this.auth.getSession()?.role === 'admin';
+  }
+
   readonly secretaryMenuItems: AppMenuItem[] = [
     {
       id: 'create-doctor',
@@ -535,7 +540,24 @@ export class Secretary implements OnInit, OnDestroy {
     } else if (display.startsWith('Remake - ')) {
       display = display.replace('Remake - ', redoPrefix);
     }
+
+    // Normalize try-in phase labels for display (legacy → Tryin Before / After Tryin)
+    display = display.replace(/\btry\s*in\s+before\s+/gi, 'Tryin Before ');
+    display = display.replace(/\btray\s*in\s+before\s+/gi, 'Tryin Before ');
+    display = display.replace(/\s+after\s+try\s*in\b/gi, ' After Tryin');
+    display = display.replace(/\s+after\s+tray\s*in\b/gi, ' After Tryin');
+    display = display.replace(/\s+after\s+tary\s*in\b/gi, ' After Tryin');
     return display;
+  }
+
+  /** Hide auto-generated try-in link notes on cards */
+  displayWorkDetail(detail: string | undefined | null): string {
+    return String(detail || '')
+      .replace(/\s*[—\-–]\s*بعد\s*تراي\s*إن\s+CASE-[\w-]+/gi, '')
+      .replace(/\bبعد\s*تراي\s*إن\s+CASE-[\w-]+/gi, '')
+      .replace(/\bمن\s*تراي\s*إن\s+CASE-[\w-]+/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   onCaseTypeChange(): void {
@@ -1438,16 +1460,23 @@ export class Secretary implements OnInit, OnDestroy {
         teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
       };
 
+      const skipPrint = this.isAdminUser();
       this.caseApi
         .createCase(buildCreateCasePayload(formPayload))
         .pipe(
           switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
             const caseNumber = String(res?.case?.caseNumber ?? '');
             const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
+            const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
+            if (skipPrint) {
+              if (attach$) {
+                return attach$.pipe(catchError(() => of(null)));
+              }
+              return of(null);
+            }
             const print$ = this.http.post(`${this.apiBase}/print/job`, {
               printData: buildPrintData(printDraft, caseNumber),
             });
-            const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
             if (attach$) {
               return attach$.pipe(
                 switchMap(() => print$),
@@ -1460,13 +1489,20 @@ export class Secretary implements OnInit, OnDestroy {
         .subscribe({
           next: () => {
             this.saveInProgress.set(false);
-            this.flash(this.lang.t('secretary.toast.savedPrint'));
+            this.flash(
+              skipPrint
+                ? this.lang.t('secretary.toast.savedNoPrint')
+                : this.lang.t('secretary.toast.savedPrint')
+            );
             this.closeDialog();
             this.reloadCasesFromBackend();
           },
           error: (err: unknown) => {
             this.saveInProgress.set(false);
-            this.flash(this.formatCaseApiError(err) || this.lang.t('secretary.toast.saveFail'));
+            this.flash(
+              this.formatCaseApiError(err) ||
+                this.lang.t(skipPrint ? 'secretary.toast.saveGeneric' : 'secretary.toast.saveFail')
+            );
           },
         });
       return;
@@ -1605,10 +1641,8 @@ export class Secretary implements OnInit, OnDestroy {
     }
     const qty = Number(c.quantity) > 0 ? Number(c.quantity) : 1;
     const finalWorkType = formatWorkPartWithQty(buildAfterTryInLabel(material), qty, qty > 1);
-    const detailExtra = this.lang
-      .t('secretary.spawnFinalDetail')
-      .replace('{n}', String(c.caseNumber || ''));
-    const workDetail = [String(c.workDetail || '').trim(), detailExtra].filter(Boolean).join(' — ');
+    // Keep original notes only — do not append "بعد تراي إن CASE-…"
+    const workDetail = String(c.workDetail || '').trim();
 
     const ok = confirm(
       this.lang
@@ -1661,10 +1695,12 @@ export class Secretary implements OnInit, OnDestroy {
       teeth: formPayload.teeth,
     };
 
+    const skipPrint = this.isAdminUser();
     this.caseApi
       .createCase(buildCreateCasePayload(formPayload))
       .pipe(
         switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
+          if (skipPrint) return of(null);
           const caseNumber = String(res?.case?.caseNumber ?? '');
           return this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(printDraft, caseNumber),
@@ -1674,7 +1710,11 @@ export class Secretary implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.spawningFinalId = null;
-          this.flash(this.lang.t('secretary.toast.spawnFinalOk'));
+          this.flash(
+            skipPrint
+              ? this.lang.t('secretary.toast.spawnFinalOkNoPrint')
+              : this.lang.t('secretary.toast.spawnFinalOk')
+          );
           this.activeFilter.set('all');
           this.reloadCasesFromBackend();
         },
