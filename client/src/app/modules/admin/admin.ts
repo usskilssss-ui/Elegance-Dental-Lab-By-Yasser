@@ -606,6 +606,8 @@ export class Admin implements OnInit, OnDestroy {
     this.reportCases.forEach(c => {
       if (String(c.currentStage) !== 'exited') return;
       if (!this.matchesReportPeriod(c)) return;
+      // Try-in-only cases are not billed (also ignore any wrongly stored salary/revenue).
+      if (this.isTryInOnlyCase(c.caseType || '')) return;
 
       const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
       const key = this.doctorGroupKey(name);
@@ -1276,6 +1278,18 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
+  /** Try-in is never billed — even when the label mentions a final material (e.g. "try in before Zircon"). */
+  private isTryInPart(lowerPart: string): boolean {
+    return lowerPart.includes('try in') || lowerPart.includes('tryin');
+  }
+
+  /** True when every caseType part is try-in (compound "Try in + Zircon" is false). */
+  private isTryInOnlyCase(caseType: string): boolean {
+    const parts = (caseType || '').split('+').map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return false;
+    return parts.every((p) => this.isTryInPart(p.toLowerCase()));
+  }
+
   calculateCaseCost(c: AdminCaseRow): number {
     const doctor = c.doctorName || c.assignedTo || 'غير محدد';
     const ct = (c.caseType || '').toLowerCase();
@@ -1352,11 +1366,14 @@ export class Admin implements OnInit, OnDestroy {
 
     for (const part of parts) {
       const lowerPart = part.toLowerCase();
+      // Must skip before zircon matchers — otherwise "try in before Zircon (25)" bills as zircon.
+      if (this.isTryInPart(lowerPart)) continue;
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
       let best: LabMaterial | null = null;
       let bestLen = -1;
       for (const m of materials) {
+        if (m.key === 'tryIn') continue;
         for (const kw of m.matchKeywords || []) {
           const k = String(kw).toLowerCase();
           if (k && lowerPart.includes(k) && k.length > bestLen) {
@@ -1399,7 +1416,10 @@ export class Admin implements OnInit, OnDestroy {
         const match = part.match(/\((\d+)\)/);
         const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
 
-        if (lowerPart.includes('emax')) {
+        // Try-in first — do not count as final material (e.g. "try in before Zircon").
+        if (this.isTryInPart(lowerPart)) {
+          tryInQty += qty;
+        } else if (lowerPart.includes('emax')) {
           emaxQty += qty;
         } else if (lowerPart.includes('german zircon') || lowerPart.includes('german')) {
           germanZirconQty += qty;
@@ -1417,8 +1437,6 @@ export class Admin implements OnInit, OnDestroy {
           waxQty += qty;
         } else if (lowerPart.includes('ring')) {
           ringQty += qty;
-        } else if (lowerPart.includes('try in') || lowerPart.includes('tryin')) {
-          tryInQty += qty;
         }
       }
     }
@@ -1461,7 +1479,9 @@ export class Admin implements OnInit, OnDestroy {
 
       for (const part of parts) {
         const lowerPart = part.toLowerCase();
-        
+        // Try-in must not inflate material unit counters (zircon/emax/…).
+        if (this.isTryInPart(lowerPart)) continue;
+
         const hasInclude = includeKeywords.some(kw => lowerPart.includes(kw));
         const hasExclude = excludeKeywords.some(kw => lowerPart.includes(kw));
         
@@ -1527,6 +1547,9 @@ export class Admin implements OnInit, OnDestroy {
 
       for (const part of parts) {
         const lowerPart = part.toLowerCase();
+        const countingTryIn = includeKeywords.some((kw) => /try\s*in/i.test(String(kw)));
+        // Try-in parts must not inflate zircon/emax counters; still count when querying try-in itself.
+        if (this.isTryInPart(lowerPart) && !countingTryIn) continue;
         const hasInclude = includeKeywords.some(kw => lowerPart.includes(kw));
         const hasExclude = excludeKeywords.some(kw => lowerPart.includes(kw));
         if (hasInclude && !hasExclude) {
