@@ -38,6 +38,14 @@ import {
   supportsTryInPhase,
   type WorkPhase,
 } from '../../core/utils/tryin-phase.util';
+import {
+  formatPartWithKind,
+  inferDropdownCaseType,
+  nextWorkPartKind,
+  normalizeCaseTypeParts,
+  parsePartKind,
+  type WorkPartKind,
+} from '../../core/utils/case-type-parts.util';
 
 function emptyDraft(): CaseDraft {
   const today = new Date();
@@ -516,12 +524,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   getCaseTypeFromWorkType(wt: string): 'New' | 'Modification' | 'Redo' | 'Empty' {
-    if (!wt) return 'New';
-    const normalized = wt.trim();
-    if (normalized === 'Modification' || normalized.startsWith('Modification - ')) return 'Modification';
-    if (normalized === 'Redo' || normalized === 'Remake' || normalized.startsWith('Redo - ') || normalized.startsWith('Remake - ')) return 'Redo';
-    if (normalized === 'Empty') return 'Empty';
-    return 'New';
+    return inferDropdownCaseType(wt);
   }
 
   formatWorkTypeForDisplay(wt: string): string {
@@ -532,14 +535,23 @@ export class Secretary implements OnInit, OnDestroy {
 
     const modPrefix = `${this.lang.t('caseType.modification')} - `;
     const redoPrefix = `${this.lang.t('caseType.redo')} - `;
-    let display = wt;
-    if (display.startsWith('Modification - ')) {
-      display = display.replace('Modification - ', modPrefix);
-    } else if (display.startsWith('Redo - ')) {
-      display = display.replace('Redo - ', redoPrefix);
-    } else if (display.startsWith('Remake - ')) {
-      display = display.replace('Remake - ', redoPrefix);
-    }
+    let display = normalizeCaseTypeParts(wt)
+      .split('+')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((part) => {
+        if (part.startsWith('Modification - ')) {
+          return part.replace('Modification - ', modPrefix);
+        }
+        if (part.startsWith('Redo - ')) {
+          return part.replace('Redo - ', redoPrefix);
+        }
+        if (part.startsWith('Remake - ')) {
+          return part.replace('Remake - ', redoPrefix);
+        }
+        return part;
+      })
+      .join(' + ');
 
     // Normalize try-in phase labels for display (legacy → Tryin Before / After Tryin)
     display = display.replace(/\btry\s*in\s+before\s+/gi, 'Tryin Before ');
@@ -564,15 +576,24 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.formDraft.caseType === 'Empty') {
       this.selectedWorkTypes.clear();
       this.workTypeQuantities = {};
+      this.workTypeKinds = {};
       this.nightGuardType = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
     } else {
+      const kind = this.formDraft.caseType as WorkPartKind;
+      if (kind === 'New' || kind === 'Redo' || kind === 'Modification') {
+        for (const wt of this.selectedWorkTypes) {
+          this.workTypeKinds[wt] = kind;
+        }
+      }
       this.updateWorkTypeString();
     }
   }
 
   selectedWorkTypes = new Set<string>();
+  /** Per-material New / Redo / Modification (enables mixed requests). */
+  workTypeKinds: Record<string, WorkPartKind> = {};
   toothAssignments: ToothAssignment[] = [];
   toothLinkMode: 'connected' | 'separate' = 'separate';
   activeToothMaterial = '';
@@ -699,6 +720,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.selectedWorkTypes.has(type)) {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
+      delete this.workTypeKinds[type];
       if (type === 'Night Guard') {
         this.nightGuardType = '';
       }
@@ -713,6 +735,7 @@ export class Secretary implements OnInit, OnDestroy {
       if (type === 'Empty') {
         this.selectedWorkTypes.clear();
         this.workTypeQuantities = {};
+        this.workTypeKinds = {};
         this.selectedWorkTypes.add('Empty');
         this.workTypeQuantities['Empty'] = 1;
         this.nightGuardType = '';
@@ -722,8 +745,12 @@ export class Secretary implements OnInit, OnDestroy {
       } else {
         this.selectedWorkTypes.delete('Empty');
         delete this.workTypeQuantities['Empty'];
+        delete this.workTypeKinds['Empty'];
         this.selectedWorkTypes.add(type);
         this.workTypeQuantities[type] = 1;
+        const draftKind = this.formDraft.caseType;
+        this.workTypeKinds[type] =
+          draftKind === 'Redo' || draftKind === 'Modification' ? draftKind : 'New';
         if (type === 'Night Guard') {
           this.nightGuardType = 'Soft';
         }
@@ -736,7 +763,39 @@ export class Secretary implements OnInit, OnDestroy {
         }
       }
     }
+    this.syncCaseTypeDropdownFromKinds();
     this.updateWorkTypeString();
+  }
+
+  getWorkTypeKind(wt: string): WorkPartKind {
+    return this.workTypeKinds[wt] || 'New';
+  }
+
+  workTypeKindLabel(wt: string): string {
+    const kind = this.getWorkTypeKind(wt);
+    if (kind === 'Redo') return this.lang.t('caseType.redo');
+    if (kind === 'Modification') return this.lang.t('caseType.modification');
+    return this.lang.t('caseType.new');
+  }
+
+  cycleWorkTypeKind(wt: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!this.selectedWorkTypes.has(wt) || wt === 'Empty') return;
+    this.workTypeKinds[wt] = nextWorkPartKind(this.getWorkTypeKind(wt));
+    this.syncCaseTypeDropdownFromKinds();
+    this.updateWorkTypeString();
+  }
+
+  private syncCaseTypeDropdownFromKinds(): void {
+    if (this.formDraft.caseType === 'Empty') return;
+    const kinds = [...this.selectedWorkTypes]
+      .filter((wt) => wt !== 'Empty')
+      .map((wt) => this.getWorkTypeKind(wt));
+    if (!kinds.length) return;
+    if (kinds.every((k) => k === 'Redo')) this.formDraft.caseType = 'Redo';
+    else if (kinds.every((k) => k === 'Modification')) this.formDraft.caseType = 'Modification';
+    else this.formDraft.caseType = 'New';
   }
 
   /** المادة الوحيدة اللي ينفع عليها فاينل/بروفة */
@@ -795,15 +854,13 @@ export class Secretary implements OnInit, OnDestroy {
         displayName = applyWorkPhaseToName(displayName, this.workPhase);
       }
 
-      parts.push(formatWorkPartWithQty(displayName, q, multi || q > 1));
+      const bare = formatWorkPartWithQty(displayName, q, multi || q > 1);
+      const kind = this.getWorkTypeKind(wt);
+      parts.push(formatPartWithKind(bare, kind));
     }
 
     let finalString = parts.join(' + ');
-    if (this.formDraft.caseType === 'Modification' && finalString) {
-      finalString = 'Modification - ' + finalString;
-    } else if (this.formDraft.caseType === 'Redo' && finalString) {
-      finalString = 'Redo - ' + finalString;
-    } else if ((this.formDraft.caseType === 'Modification' || this.formDraft.caseType === 'Redo') && !finalString) {
+    if (!finalString && (this.formDraft.caseType === 'Modification' || this.formDraft.caseType === 'Redo')) {
       finalString = this.formDraft.caseType;
     }
 
@@ -1213,67 +1270,69 @@ export class Secretary implements OnInit, OnDestroy {
     // Restore selectedWorkTypes from saved string
     this.selectedWorkTypes = new Set<string>();
     this.workTypeQuantities = {};
+    this.workTypeKinds = {};
     this.workTypeError = '';
     this.nightGuardType = '';
     this.workPhase = '';
     this.patientWarning = '';
     if (currentCaseType !== 'Empty' && c.workType) {
-      let wtToParse = c.workType;
-      if (wtToParse.startsWith('Modification - ')) wtToParse = wtToParse.replace('Modification - ', '');
-      else if (wtToParse === 'Modification') wtToParse = '';
-      else if (wtToParse.startsWith('Redo - ')) wtToParse = wtToParse.replace('Redo - ', '');
-      else if (wtToParse === 'Redo' || wtToParse === 'Remake') wtToParse = '';
-
-      if (wtToParse) {
+      const wtToParse = normalizeCaseTypeParts(c.workType);
+      if (wtToParse && !/^(Redo|Modification|Remake)$/i.test(wtToParse)) {
         const parts = wtToParse.split('+').map((s: string) => s.trim()).filter((s: string) => s);
-      for (const p of parts) {
-        const match = p.match(/^(.*?)(?:\s*\((\d+)\))?$/);
-        if (match) {
-          let wtName = match[1].trim();
-          if (wtName === 'Zr') wtName = 'Zircon';
-          if (wtName === 'Zr Ger' || wtName === 'Zr Gre') wtName = 'German Zircon';
-          const qty = match[2] ? parseInt(match[2], 10) : 1;
+        for (const p of parts) {
+          const { kind, bare } = parsePartKind(p);
+          const match = bare.match(/^(.*?)(?:\s*\((\d+)\))?$/);
+          if (match) {
+            let wtName = match[1].trim();
+            if (wtName === 'Zr') wtName = 'Zircon';
+            if (wtName === 'Zr Ger' || wtName === 'Zr Gre') wtName = 'German Zircon';
+            const qty = match[2] ? parseInt(match[2], 10) : 1;
 
-          const parsed = parseMaterialAndPhaseFromPart(wtName);
-          wtName = parsed.material;
-          if (parsed.phase) {
-            this.workPhase = parsed.phase;
+            const parsed = parseMaterialAndPhaseFromPart(wtName);
+            wtName = parsed.material;
+            if (parsed.phase) {
+              this.workPhase = parsed.phase;
+            }
+
+            if (wtName.startsWith('Night Guard') || wtName.startsWith('Night Gard')) {
+              this.selectedWorkTypes.add('Night Guard');
+              this.workTypeQuantities['Night Guard'] = qty;
+              this.workTypeKinds['Night Guard'] = kind;
+              if (wtName.includes('Soft')) {
+                this.nightGuardType = 'Soft';
+              } else if (wtName.includes('Hard')) {
+                this.nightGuardType = 'Hard';
+              } else {
+                this.nightGuardType = 'Soft';
+              }
+            } else if (this.workTypeOptions.includes(wtName) || supportsTryInPhase(wtName)) {
+              const catalog =
+                this.workTypeOptions.find((o) => o.toLowerCase() === wtName.toLowerCase()) || wtName;
+              this.selectedWorkTypes.add(catalog);
+              this.workTypeQuantities[catalog] = qty;
+              this.workTypeKinds[catalog] = kind;
+              if (supportsTryInPhase(catalog) && !this.workPhase) {
+                this.workPhase = 'final';
+              }
+            }
           }
-
-          if (wtName.startsWith('Night Guard') || wtName.startsWith('Night Gard')) {
-            this.selectedWorkTypes.add('Night Guard');
-            this.workTypeQuantities['Night Guard'] = qty;
-            if (wtName.includes('Soft')) {
-              this.nightGuardType = 'Soft';
-            } else if (wtName.includes('Hard')) {
-              this.nightGuardType = 'Hard';
-            } else {
-              this.nightGuardType = 'Soft';
-            }
-          } else if (this.workTypeOptions.includes(wtName) || supportsTryInPhase(wtName)) {
-            // Match catalog label case-insensitively if needed
-            const catalog =
-              this.workTypeOptions.find((o) => o.toLowerCase() === wtName.toLowerCase()) || wtName;
-            this.selectedWorkTypes.add(catalog);
-            this.workTypeQuantities[catalog] = qty;
-            if (supportsTryInPhase(catalog) && !this.workPhase) {
-              this.workPhase = 'final';
-            }
+        }
+        if (this.selectedWorkTypes.size === 1) {
+          const onlyWt = [...this.selectedWorkTypes][0];
+          if (!c.workType.includes('(')) {
+            this.workTypeQuantities[onlyWt] = Number(c.quantity) || 1;
           }
         }
       }
-      if (this.selectedWorkTypes.size === 1) {
-        const onlyWt = [...this.selectedWorkTypes][0];
-        if (!c.workType.includes('(')) {
-          this.workTypeQuantities[onlyWt] = Number(c.quantity) || 1;
-        }
-      }
-        }
+      this.syncCaseTypeDropdownFromKinds();
       if (this.selectedWorkTypes.size > 0) {
         this.updateWorkTypeString();
       } else {
         this.formDraft.workType = c.workType;
       }
+    } else if (currentCaseType === 'Empty') {
+      this.selectedWorkTypes.add('Empty');
+      this.workTypeQuantities['Empty'] = 1;
     }
     
     // Trigger warnings immediately on edit open

@@ -17,6 +17,8 @@ const {
   loadActiveMaterials,
   materialsToDefaultPrices,
   findPricingForDoctor,
+  isExcludedWorkPart,
+  splitNormalizedCaseTypeParts,
 } = require('../services/casePricingService');
 const {
   assertForwardTransition,
@@ -387,18 +389,7 @@ exports.getAllCases = async (req, res) => {
 };
 
 function isExcludedWorkCaseType(caseType) {
-  const ct = String(caseType || '').toLowerCase();
-  return (
-    ct.includes('redo') ||
-    ct.includes('remake') ||
-    ct.includes('modification') ||
-    ct.includes('تعديل') ||
-    ct.includes('اعاده') ||
-    ct.includes('إعادة') ||
-    ct.includes('empty') ||
-    ct.includes('غير معروف') ||
-    ct.includes('unknown')
-  );
+  return isExcludedWorkCaseTypeShared(caseType);
 }
 
 function isJundiDoctorName(name) {
@@ -424,10 +415,7 @@ function normalizeMaterialPartForStats(part) {
 }
 
 function addMaterialUnits(stats, caseType, quantity, targets) {
-  const parts = String(caseType || '')
-    .split('+')
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const parts = splitNormalizedCaseTypeParts(caseType);
   const overallQty = Number(quantity) > 0 ? Number(quantity) : 1;
   const jundiMap = {
     emax: 'jundiEmax',
@@ -438,6 +426,7 @@ function addMaterialUnits(stats, caseType, quantity, targets) {
   };
 
   for (const part of parts) {
+    if (isExcludedWorkPart(part)) continue;
     const lower = normalizeMaterialPartForStats(part);
     const match = part.match(/\((\d+)\)/);
     const qty = match ? parseInt(match[1], 10) : overallQty;
@@ -495,8 +484,7 @@ exports.getExitedMaterialStats = async (req, res) => {
 
     for (const doc of cases) {
       const meta = parseNotesMeta(doc.notes || '');
-      if (meta.isRedoCase || meta.isModificationCase) continue;
-      if (isExcludedWorkCaseType(doc.caseType)) continue;
+      if (isNonBillableCase(doc.caseType, meta)) continue;
 
       const quantity = Number(meta.quantity ?? 1) || 1;
       const doctorName = String(meta.doctor || meta.doctorName || doc.referringDoctor || '').trim();
@@ -696,8 +684,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
       ).trim();
       if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
 
-      if (meta.isRedoCase || meta.isModificationCase) continue;
-      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+      if (isNonBillableCase(doc.caseType, meta)) continue;
 
       const exitedAt = doc.stageTimestamps?.exited
         ? new Date(doc.stageTimestamps.exited)
@@ -852,8 +839,7 @@ exports.getDoctorExitedMaterials = async (req, res) => {
       ).trim();
       if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
 
-      if (meta.isRedoCase || meta.isModificationCase) continue;
-      if (isExcludedWorkCaseTypeShared(doc.caseType)) continue;
+      if (isNonBillableCase(doc.caseType, meta)) continue;
 
       const quantity = Number(meta.quantity ?? 1) || 1;
       addMaterialUnits(stats, doc.caseType, quantity, { global: true, jundi: false });
