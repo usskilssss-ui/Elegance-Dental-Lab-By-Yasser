@@ -25,6 +25,11 @@ import {
 } from '../../core/services/lab-config.service';
 import { FinancePanel } from './finance-panel/finance-panel';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
+import {
+  isExcludedWorkPart,
+  isWholeCaseExcluded,
+  splitNormalizedCaseTypeParts,
+} from '../../core/utils/case-type-parts.util';
 
 export interface StaffMember {
   id: string;
@@ -1206,23 +1211,11 @@ export class Admin implements OnInit, OnDestroy {
     return this.dashboardMetrics.staffEfficiency;
   }
 
-  /** الحالات الخارجة فقط وليست إعادة ولا تعديل ولا فاضي */
+  /** الحالات الخارجة التي فيها جزء قابل للفوترة (مش كلها redo/mod/empty) */
   get exitedNonRedoCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;
-      
-      const ct = (c.caseType || '').toLowerCase();
-      const isExcluded =
-        ct.includes('redo') ||
-        ct.includes('remake') ||
-        ct.includes('modification') ||
-        ct.includes('تعديل') ||
-        ct.includes('اعاده') ||
-        ct.includes('إعادة') ||
-        ct.includes('empty') ||
-        ct.includes('غير معروف') ||
-        ct.includes('unknown');
-      return !isExcluded;
+      return !isWholeCaseExcluded(c.caseType || '');
     });
   }
 
@@ -1268,13 +1261,7 @@ export class Admin implements OnInit, OnDestroy {
       const isJundi = doctor.includes('الجندي') || doctor.includes('jundi') || doctor.includes('gundi');
       if (isJundi) return false;
 
-      const ct = (c.caseType || '').toLowerCase();
-      // Skip redo, remake, modification, unknown (غير معروف)
-      const isExcluded = ct.includes('redo') || ct.includes('remake') ||
-                          ct.includes('modification') || ct.includes('تعديل') ||
-                          ct.includes('اعاده') || ct.includes('إعادة') ||
-                          ct.includes('غير معروف') || ct.includes('unknown');
-      return !isExcluded;
+      return !isWholeCaseExcluded(c.caseType || '');
     });
   }
 
@@ -1285,25 +1272,15 @@ export class Admin implements OnInit, OnDestroy {
 
   /** True when every caseType part is try-in (compound "Try in + Zircon" is false). */
   private isTryInOnlyCase(caseType: string): boolean {
-    const parts = (caseType || '').split('+').map((p) => p.trim()).filter(Boolean);
+    const parts = splitNormalizedCaseTypeParts(caseType || '');
     if (!parts.length) return false;
     return parts.every((p) => this.isTryInPart(p.toLowerCase()));
   }
 
   calculateCaseCost(c: AdminCaseRow): number {
-    const doctor = c.doctorName || c.assignedTo || 'غير محدد';
-    const ct = (c.caseType || '').toLowerCase();
-    const isExcluded =
-      ct.includes('redo') ||
-      ct.includes('remake') ||
-      ct.includes('modification') ||
-      ct.includes('تعديل') ||
-      ct.includes('اعاده') ||
-      ct.includes('إعادة') ||
-      ct.includes('غير معروف') ||
-      ct.includes('unknown');
-    if (isExcluded) return 0;
+    if (isWholeCaseExcluded(c.caseType || '')) return 0;
 
+    const doctor = c.doctorName || c.assignedTo || 'غير محدد';
     const key = this.doctorGroupKey(doctor);
     const custom = this.doctorPricingsMap.get(key) || {};
     const prices: Record<string, number> = { ...this.labDefaultPrices };
@@ -1329,7 +1306,7 @@ export class Admin implements OnInit, OnDestroy {
     }
 
     let total = 0;
-    const parts = (c.caseType || '').split('+').map((p) => p.trim());
+    const parts = splitNormalizedCaseTypeParts(c.caseType || '');
     const meta = this.parseNotesMeta(c.rawNotes || '');
     const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
     const materials =
@@ -1365,6 +1342,7 @@ export class Admin implements OnInit, OnDestroy {
           ] as LabMaterial[]);
 
     for (const part of parts) {
+      if (isExcludedWorkPart(part)) continue;
       const lowerPart = part.toLowerCase();
       // Must skip before zircon matchers — otherwise "try in before Zircon (25)" bills as zircon.
       if (this.isTryInPart(lowerPart)) continue;
@@ -1405,11 +1383,12 @@ export class Admin implements OnInit, OnDestroy {
 
     for (const c of cases) {
       const ct = c.caseType || '';
-      const parts = ct.split('+').map(p => p.trim());
+      const parts = splitNormalizedCaseTypeParts(ct);
       const meta = this.parseNotesMeta(c.rawNotes || '');
       const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
 
       for (const part of parts) {
+        if (isExcludedWorkPart(part)) continue;
         const lowerPart = part.toLowerCase();
         
         // Count quantity: e.g. "Zircon (3)" -> 3, or default to overall case quantity
@@ -1473,11 +1452,12 @@ export class Admin implements OnInit, OnDestroy {
     let total = 0;
     for (const c of this.exitedNonRedoCases) {
       const ct = c.caseType || '';
-      const parts = ct.split('+').map(p => p.trim());
+      const parts = splitNormalizedCaseTypeParts(ct);
       const meta = this.parseNotesMeta(c.rawNotes || '');
       const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
 
       for (const part of parts) {
+        if (isExcludedWorkPart(part)) continue;
         const lowerPart = part.toLowerCase();
         // Try-in must not inflate material unit counters (zircon/emax/…).
         if (this.isTryInPart(lowerPart)) continue;
@@ -1541,11 +1521,12 @@ export class Admin implements OnInit, OnDestroy {
     let total = 0;
     for (const c of cases) {
       const ct = c.caseType || '';
-      const parts = ct.split('+').map(p => p.trim());
+      const parts = splitNormalizedCaseTypeParts(ct);
       const meta = this.parseNotesMeta(c.rawNotes || '');
       const caseOverallQuantity = Number(c.quantity ?? meta['quantity'] ?? 1) || 1;
 
       for (const part of parts) {
+        if (isExcludedWorkPart(part)) continue;
         const lowerPart = part.toLowerCase();
         const countingTryIn = includeKeywords.some((kw) => /try\s*in/i.test(String(kw)));
         // Try-in parts must not inflate zircon/emax counters; still count when querying try-in itself.

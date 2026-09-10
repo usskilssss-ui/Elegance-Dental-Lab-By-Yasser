@@ -4,6 +4,12 @@
 
 const Material = require('../models/Material');
 const DEFAULT_MATERIALS = require('../data/defaultMaterials');
+const {
+  normalizeCaseTypeParts,
+  splitNormalizedCaseTypeParts,
+  isExcludedWorkPart,
+  isWholeCaseExcluded,
+} = require('../utils/caseTypeParts');
 
 const FALLBACK_PRICES = Object.fromEntries(
   DEFAULT_MATERIALS.map((m) => [m.key, Number(m.defaultPrice) || 0])
@@ -60,19 +66,9 @@ function doctorKeysMatch(a, b) {
   return ka === kb || ka.includes(kb) || kb.includes(ka);
 }
 
+/** True when every part is redo/mod/empty/unknown (mixed New+Redo is false). */
 function isExcludedWorkCaseType(caseType) {
-  const ct = String(caseType || '').toLowerCase();
-  return (
-    ct.includes('redo') ||
-    ct.includes('remake') ||
-    ct.includes('modification') ||
-    ct.includes('تعديل') ||
-    ct.includes('اعاده') ||
-    ct.includes('إعادة') ||
-    ct.includes('empty') ||
-    ct.includes('غير معروف') ||
-    ct.includes('unknown')
-  );
+  return isWholeCaseExcluded(caseType);
 }
 
 /** True when case must not count in billing / materials (type or meta flags). */
@@ -82,7 +78,13 @@ function isNonBillableCase(caseType, metaOrNotes) {
     metaOrNotes && typeof metaOrNotes === 'object' && !Array.isArray(metaOrNotes)
       ? metaOrNotes
       : parseNotesMeta(metaOrNotes || '');
-  return !!(meta.isRedoCase || meta.isModificationCase);
+  // Whole-case meta flags only when there is no mixed/new billable encoding.
+  if (meta.isRedoCase || meta.isModificationCase) {
+    const parts = splitNormalizedCaseTypeParts(caseType);
+    const hasBillable = parts.some((p) => !isExcludedWorkPart(p));
+    if (!hasBillable) return true;
+  }
+  return false;
 }
 
 function parseNotesMeta(notes) {
@@ -153,10 +155,7 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materia
       : parseNotesMeta(metaOrNotes || '');
 
   const prices = resolvePrices(customPrices, labDefaults || materialsToDefaultPrices(materials));
-  const parts = String(caseType || '')
-    .split('+')
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const parts = splitNormalizedCaseTypeParts(caseType);
   const caseOverallQuantity = Number(meta.quantity ?? 1) || 1;
 
   let total = 0;
@@ -164,7 +163,10 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materia
   const lines = [];
 
   for (const part of parts) {
+    if (isExcludedWorkPart(part)) continue;
     const lowerPart = part.toLowerCase();
+    // Try-in never bills (including "try in before Zircon").
+    if (lowerPart.includes('try in') || lowerPart.includes('tryin')) continue;
     const match = part.match(/\((\d+)\)/);
     const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
     const resolved = resolvePartUnitPrice(lowerPart, prices, materials);
@@ -230,6 +232,10 @@ module.exports = {
   doctorKeysMatch,
   isExcludedWorkCaseType,
   isNonBillableCase,
+  normalizeCaseTypeParts,
+  splitNormalizedCaseTypeParts,
+  isExcludedWorkPart,
+  isWholeCaseExcluded,
   parseNotesMeta,
   resolvePrices,
   resolvePartUnitPrice,
