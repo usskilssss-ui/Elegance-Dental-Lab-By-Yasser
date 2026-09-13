@@ -2,7 +2,8 @@
  * Unified doctor balance helpers — one money rule for reports / portal / debts.
  *
  * Rule:
- * - totalDue = sum of case bill amounts (prefer exit snapshot, else live price)
+ * - unpaid cases: always use live DoctorPricing (same as Reports) so price edits apply
+ * - paid cases: prefer exit freeze (revenueAmount / salaryAmount) so paid history stays fixed
  * - totalPaid = DoctorPayment ledger if any payments exist for doctor; else sum of cases marked paid
  * - remaining = max(0, totalDue - totalPaid)
  *
@@ -13,10 +14,41 @@ function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+function isCasePaid(doc) {
+  return String(doc?.paymentStatus || 'unpaid') === 'paid';
+}
+
+/**
+ * Bill amount for a case.
+ * Unpaid → live price (Reports-aligned). Paid → frozen snapshot when present.
+ */
 function caseBillAmount(doc, liveBreakdownTotal) {
+  const live = round2(liveBreakdownTotal || 0);
+  if (!isCasePaid(doc) && live > 0) return live;
   const snapshot = Number(doc?.revenueAmount ?? doc?.salaryAmount ?? 0);
   if (Number.isFinite(snapshot) && snapshot > 0) return round2(snapshot);
-  return round2(liveBreakdownTotal || 0);
+  return live;
+}
+
+/**
+ * Prefer frozen bill lines only for paid cases; unpaid always show live unit prices.
+ */
+function caseBillLines(doc, liveBreakdown) {
+  const liveLines = Array.isArray(liveBreakdown?.lines) ? liveBreakdown.lines : [];
+  const liveUnit = Number(liveBreakdown?.unitPrice) || 0;
+  if (
+    isCasePaid(doc) &&
+    doc?.billSnapshot &&
+    Array.isArray(doc.billSnapshot.lines) &&
+    doc.billSnapshot.lines.length
+  ) {
+    return {
+      lines: doc.billSnapshot.lines,
+      unitPrice:
+        doc.billSnapshot.unitPrice != null ? Number(doc.billSnapshot.unitPrice) || liveUnit : liveUnit,
+    };
+  }
+  return { lines: liveLines, unitPrice: liveUnit };
 }
 
 /**
@@ -44,5 +76,6 @@ function resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments }) {
 module.exports = {
   round2,
   caseBillAmount,
+  caseBillLines,
   resolveDoctorPaid,
 };
