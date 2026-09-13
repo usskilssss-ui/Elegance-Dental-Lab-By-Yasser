@@ -671,7 +671,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const prices = pricingDoc?.prices || null;
     const materials = await loadActiveMaterials();
     const labDefaults = materialsToDefaultPrices(materials);
-    const { caseBillAmount, resolveDoctorPaid } = require('../services/doctorBalanceService');
+    const { caseBillAmount, caseBillLines, resolveDoctorPaid } = require('../services/doctorBalanceService');
 
     const billableCases = [];
     let totalDue = 0;
@@ -703,8 +703,9 @@ exports.getDoctorAccountSummary = async (req, res) => {
         materials,
         labDefaults
       );
-      const amount = caseBillAmount(doc, breakdown.total);
       const paymentStatus = String(doc.paymentStatus || 'unpaid') === 'paid' ? 'paid' : 'unpaid';
+      const amount = caseBillAmount(doc, breakdown.total);
+      const { lines, unitPrice } = caseBillLines(doc, breakdown);
       const salaryAmount = Number(doc.salaryAmount || 0);
       if (paymentStatus === 'paid') {
         paidFromCases += amount;
@@ -718,8 +719,8 @@ exports.getDoctorAccountSummary = async (req, res) => {
         caseType: String(doc.caseType || ''),
         amount,
         quantity: breakdown.quantity,
-        unitPrice: breakdown.unitPrice,
-        lines: (doc.billSnapshot && doc.billSnapshot.lines) || breakdown.lines,
+        unitPrice,
+        lines,
         paymentStatus,
         salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
         receivedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
