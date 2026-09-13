@@ -576,6 +576,36 @@
                 <span class="wt-error">{{ workTypeError }}</span>
               }
 
+              @if (showWorkPhaseOptions) {
+                <div class="work-phase-box">
+                  <span class="work-phase-title">{{ 'secretary.workPhaseLabel' | t }}</span>
+                  <div class="intake-checkboxes work-phase-checks">
+                    <label class="intake-check">
+                      <input
+                        type="checkbox"
+                        [checked]="workPhase === 'final'"
+                        (change)="setWorkPhase('final')"
+                      />
+                      <span>{{ 'secretary.workPhaseFinal' | t }}</span>
+                    </label>
+                    <label class="intake-check">
+                      <input
+                        type="checkbox"
+                        [checked]="workPhase === 'prova'"
+                        (change)="setWorkPhase('prova')"
+                      />
+                      <span>{{ 'secretary.workPhaseProva' | t }}</span>
+                    </label>
+                  </div>
+                  @if (workPhasePreviewLabel) {
+                    <p class="form-hint form-hint--tight work-phase-preview">
+                      {{ 'secretary.workPhasePreview' | t }}
+                      <strong dir="ltr">{{ workPhasePreviewLabel }}</strong>
+                    </p>
+                  }
+                </div>
+              }
+
               @if (!hasWorkTypesWithQuantity) {
                 <p class="wt-error" style="color:#94a3b8;margin:8px 0 0;">
                   {{ 'doctor.toothHint' | t }}
@@ -609,22 +639,47 @@
 
               @if (hasWorkTypesWithQuantity) {
                 <div class="wt-quantities-container">
-                  <div class="wt-quantities-title">{{ 'doctor.qtyPerType' | t }}</div>
+                  <div class="wt-quantities-title">{{ 'secretary.qtyPerType' | t }}</div>
+                  <p class="form-hint form-hint--tight">{{ 'secretary.partKindHint' | t }}</p>
                   <div style="display:flex;flex-direction:column;gap:8px;">
                     @for (wt of selectedWorkTypes; track wt) {
                       @if (wt !== 'Remake' && wt !== 'Empty') {
-                        <div class="wt-quantity-row">
+                        <div class="wt-quantity-row wt-quantity-row--split">
                           <span class="wt-quantity-name">{{ wt }}</span>
-                          <div style="display:flex;align-items:center;gap:8px;">
-                            <span class="wt-quantity-label">{{ 'secretary.qtyLabel' | t }}</span>
-                            <input
-                              type="number"
-                              min="1"
-                              class="wt-quantity-input"
-                              [(ngModel)]="workTypeQuantities[wt]"
-                              (ngModelChange)="onWorkTypeQtyChange()"
-                              [ngModelOptions]="{standalone: true}"
-                            />
+                          <div class="wt-quantity-controls wt-kind-qty-grid">
+                            <label class="wt-kind-qty">
+                              <span>{{ 'caseType.new' | t }}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                class="wt-quantity-input"
+                                [ngModel]="getKindQty(wt, 'New')"
+                                (ngModelChange)="setKindQty(wt, 'New', $event)"
+                                [ngModelOptions]="{standalone: true}"
+                              />
+                            </label>
+                            <label class="wt-kind-qty">
+                              <span>{{ 'caseType.redo' | t }}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                class="wt-quantity-input"
+                                [ngModel]="getKindQty(wt, 'Redo')"
+                                (ngModelChange)="setKindQty(wt, 'Redo', $event)"
+                                [ngModelOptions]="{standalone: true}"
+                              />
+                            </label>
+                            <label class="wt-kind-qty">
+                              <span>{{ 'caseType.modification' | t }}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                class="wt-quantity-input"
+                                [ngModel]="getKindQty(wt, 'Modification')"
+                                (ngModelChange)="setKindQty(wt, 'Modification', $event)"
+                                [ngModelOptions]="{standalone: true}"
+                              />
+                            </label>
                           </div>
                         </div>
                       }
