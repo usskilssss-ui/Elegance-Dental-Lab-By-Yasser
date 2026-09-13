@@ -32,7 +32,10 @@ exports.updatePricing = async (req, res) => {
             message: `السعر «${key}» يجب أن يكون رقمًا ≥ 0`,
           });
         }
+        // Store both original + lowercase so Material.key (lowercased by mongoose)
+        // and legacy camelCase DoctorPricing rows both resolve.
         cleanedPrices[key] = n;
+        cleanedPrices[String(key).toLowerCase()] = n;
       }
     }
 

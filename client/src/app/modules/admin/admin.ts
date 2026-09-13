@@ -1361,8 +1361,18 @@ export class Admin implements OnInit, OnDestroy {
         }
       }
       if (!best) continue;
-      const unit = prices[best.key] ?? (Number(best.defaultPrice) || 0);
-      total += qty * unit;
+      const unit =
+        prices[best.key] ??
+        prices[String(best.key).toLowerCase()] ??
+        (() => {
+          const lower = String(best.key).toLowerCase();
+          for (const [k, v] of Object.entries(prices)) {
+            if (String(k).toLowerCase() === lower) return Number(v);
+          }
+          return undefined;
+        })() ??
+        (Number(best.defaultPrice) || 0);
+      total += qty * (Number(unit) || 0);
     }
     return total;
   }
@@ -2743,21 +2753,55 @@ export class Admin implements OnInit, OnDestroy {
     this.pricingSaveSuccess = false;
     this.pricingSaveError = '';
     this.customPricesMap = {};
+    const customLookup = (materialKey: string): number | undefined => {
+      if (custom[materialKey] !== undefined && custom[materialKey] !== null && custom[materialKey] !== '') {
+        return Number(custom[materialKey]);
+      }
+      const lower = materialKey.toLowerCase();
+      if (custom[lower] !== undefined && custom[lower] !== null && custom[lower] !== '') {
+        return Number(custom[lower]);
+      }
+      for (const [k, v] of Object.entries(custom)) {
+        if (String(k).toLowerCase() === lower) return Number(v);
+      }
+      return undefined;
+    };
     for (const m of this.labMaterials) {
       const def = this.labDefaultPrices[m.key] ?? (Number(m.defaultPrice) || 0);
-      this.customPricesMap[m.key] = Number(custom[m.key] ?? def);
+      const fromCustom = customLookup(m.key);
+      this.customPricesMap[m.key] = Number.isFinite(fromCustom as number)
+        ? (fromCustom as number)
+        : def;
+      // Keep camelCase alias for older billing paths
+      if (m.key !== m.key.toLowerCase()) {
+        this.customPricesMap[m.key.toLowerCase()] = this.customPricesMap[m.key];
+      }
     }
-    this.customEmaxPrice = this.customPricesMap['emax'] ?? custom.emax ?? 1000;
-    this.customGermanZirconPrice = this.customPricesMap['germanZircon'] ?? custom.germanZircon ?? 850;
-    this.customZirconPrice = this.customPricesMap['zircon'] ?? custom.zircon ?? 700;
-    this.customTitaniumPrice = this.customPricesMap['titanium'] ?? custom.titanium ?? 2200;
-    this.customPeekPrice = this.customPricesMap['peek'] ?? custom.peek ?? 1700;
-    this.customPmmaPrice = this.customPricesMap['pmma'] ?? custom.pmma ?? 250;
-    this.customNightGuardPrice = this.customPricesMap['nightGuard'] ?? custom.nightGuard ?? 300;
-    this.customMockupPrice = this.customPricesMap['mockup'] ?? custom.mockup ?? 250;
-    this.customWaxPrice = this.customPricesMap['wax'] ?? custom.wax ?? 0;
-    this.customRingPrice = this.customPricesMap['ring'] ?? custom.ring ?? 0;
-    this.customTryInPrice = this.customPricesMap['tryIn'] ?? custom.tryIn ?? 0;
+    this.customEmaxPrice = this.customPricesMap['emax'] ?? customLookup('emax') ?? 1000;
+    this.customGermanZirconPrice =
+      this.customPricesMap['germanZircon'] ??
+      this.customPricesMap['germanzircon'] ??
+      customLookup('germanZircon') ??
+      850;
+    this.customZirconPrice = this.customPricesMap['zircon'] ?? customLookup('zircon') ?? 700;
+    this.customTitaniumPrice = this.customPricesMap['titanium'] ?? customLookup('titanium') ?? 2200;
+    this.customPeekPrice = this.customPricesMap['peek'] ?? customLookup('peek') ?? 1700;
+    this.customPmmaPrice =
+      this.customPricesMap['pmma'] ?? this.customPricesMap['pmmaCad'] ?? customLookup('pmma') ?? 250;
+    this.customNightGuardPrice =
+      this.customPricesMap['nightGuard'] ??
+      this.customPricesMap['nightguard'] ??
+      customLookup('nightGuard') ??
+      300;
+    this.customMockupPrice =
+      this.customPricesMap['mockup'] ??
+      this.customPricesMap['mokup'] ??
+      customLookup('mockup') ??
+      250;
+    this.customWaxPrice = this.customPricesMap['wax'] ?? customLookup('wax') ?? 0;
+    this.customRingPrice = this.customPricesMap['ring'] ?? customLookup('ring') ?? 0;
+    this.customTryInPrice =
+      this.customPricesMap['tryIn'] ?? this.customPricesMap['tryin'] ?? customLookup('tryIn') ?? 0;
   }
 
   saveDoctorCustomPrices(): void {
