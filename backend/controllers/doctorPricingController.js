@@ -1,4 +1,9 @@
 const DoctorPricing = require('../models/DoctorPricing');
+const {
+  doctorKeysMatch,
+  normalizeDoctorKey,
+  repriceUnpaidExitedCasesForDoctor,
+} = require('../services/casePricingService');
 
 exports.getAllPricings = async (req, res) => {
   try {
@@ -31,6 +36,8 @@ exports.updatePricing = async (req, res) => {
       }
     }
 
+    // Upsert canonical row, then sync any name-variant rows so live lookup
+    // never keeps an older germanZircon=850 under "د. فرزات" while UI saved "فرزات".
     let pricing = await DoctorPricing.findOne({ doctorName: normalizedName });
     if (pricing) {
       pricing.prices = { ...pricing.prices, ...cleanedPrices };
@@ -38,11 +45,43 @@ exports.updatePricing = async (req, res) => {
     } else {
       pricing = await DoctorPricing.create({
         doctorName: normalizedName,
-        prices: cleanedPrices
+        prices: cleanedPrices,
       });
     }
 
-    res.status(200).json({ success: true, data: pricing });
+    const all = await DoctorPricing.find();
+    const wantKey = normalizeDoctorKey(normalizedName);
+    for (const row of all) {
+      if (String(row._id) === String(pricing._id)) continue;
+      const same =
+        doctorKeysMatch(row.doctorName, normalizedName) ||
+        (wantKey && normalizeDoctorKey(row.doctorName) === wantKey);
+      if (!same) continue;
+      row.prices = { ...(row.prices || {}), ...cleanedPrices };
+      await row.save();
+    }
+
+    // Actually recalculate unpaid exited bills so Doctor Accounts matches Reports.
+    let recalculated = 0;
+    try {
+      const result = await repriceUnpaidExitedCasesForDoctor(
+        normalizedName,
+        pricing.prices || cleanedPrices
+      );
+      recalculated = Number(result?.updated) || 0;
+    } catch (repriceErr) {
+      console.warn(
+        '[doctor-pricing] reprice unpaid failed:',
+        normalizedName,
+        repriceErr?.message || repriceErr
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: pricing,
+      recalculated,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
