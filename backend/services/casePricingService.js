@@ -201,10 +201,9 @@ function calculateCaseCostBreakdown(caseType, metaOrNotes, customPrices, materia
   for (const part of parts) {
     if (isExcludedWorkPart(part)) continue;
     const lowerPart = part.toLowerCase();
-    // Try-in never bills (including "try in before Zircon").
-    if (lowerPart.includes('try in') || lowerPart.includes('tryin')) continue;
     const match = part.match(/\((\d+)\)/);
     const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
+    // Try-in / "try in before X" bills at tryIn price (not the final material price).
     const resolved = resolvePartUnitPrice(lowerPart, prices, materials);
     if (!resolved) continue;
 

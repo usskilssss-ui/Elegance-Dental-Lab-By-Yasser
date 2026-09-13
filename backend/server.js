@@ -106,7 +106,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Elegance Dental Lab API Backend is running',
     frontend: 'https://dental-system-kappa.vercel.app',
-    billingRevision: 'merge-prices-2026-09-14',
+    billingRevision: 'bill-tryin-2026-09-14',
   });
 });
 
@@ -115,7 +115,7 @@ app.get('/health', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date(),
-    billingRevision: 'merge-prices-2026-09-14',
+    billingRevision: 'bill-tryin-2026-09-14',
   });
 });
 

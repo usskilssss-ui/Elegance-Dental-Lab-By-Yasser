@@ -611,8 +611,6 @@ export class Admin implements OnInit, OnDestroy {
     this.reportCases.forEach(c => {
       if (String(c.currentStage) !== 'exited') return;
       if (!this.matchesReportPeriod(c)) return;
-      // Try-in-only cases are not billed (also ignore any wrongly stored salary/revenue).
-      if (this.isTryInOnlyCase(c.caseType || '')) return;
 
       const name = this.normalizeDoctorName(c.doctorName || c.assignedTo || 'غير محدد');
       const key = this.doctorGroupKey(name);
@@ -1272,16 +1270,9 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
-  /** Try-in is never billed — even when the label mentions a final material (e.g. "try in before Zircon"). */
+  /** Try-in phase labels (including "try in before Zircon") — billed at tryIn unit price. */
   private isTryInPart(lowerPart: string): boolean {
     return lowerPart.includes('try in') || lowerPart.includes('tryin');
-  }
-
-  /** True when every caseType part is try-in (compound "Try in + Zircon" is false). */
-  private isTryInOnlyCase(caseType: string): boolean {
-    const parts = splitNormalizedCaseTypeParts(caseType || '');
-    if (!parts.length) return false;
-    return parts.every((p) => this.isTryInPart(p.toLowerCase()));
   }
 
   calculateCaseCost(c: AdminCaseRow): number {
@@ -1293,7 +1284,10 @@ export class Admin implements OnInit, OnDestroy {
     const prices: Record<string, number> = { ...this.labDefaultPrices };
     for (const [k, v] of Object.entries(custom)) {
       const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) prices[k] = n;
+      if (Number.isFinite(n) && n >= 0) {
+        prices[k] = n;
+        prices[String(k).toLowerCase()] = n;
+      }
     }
     // Legacy fallbacks if materials not loaded yet
     if (!Object.keys(prices).length) {
@@ -1309,8 +1303,19 @@ export class Admin implements OnInit, OnDestroy {
         wax: 0,
         ring: 0,
         tryIn: 0,
+        tryin: 0,
       });
     }
+
+    const priceOf = (materialKey: string, fallback = 0): number => {
+      if (prices[materialKey] !== undefined) return Number(prices[materialKey]) || 0;
+      const lower = String(materialKey).toLowerCase();
+      if (prices[lower] !== undefined) return Number(prices[lower]) || 0;
+      for (const [k, v] of Object.entries(prices)) {
+        if (String(k).toLowerCase() === lower) return Number(v) || 0;
+      }
+      return fallback;
+    };
 
     let total = 0;
     const parts = splitNormalizedCaseTypeParts(c.caseType || '');
@@ -1345,20 +1350,23 @@ export class Admin implements OnInit, OnDestroy {
             },
             { key: 'wax', label: 'Wax', matchKeywords: ['wax'], defaultPrice: 0 },
             { key: 'ring', label: 'Ring', matchKeywords: ['ring'], defaultPrice: 0 },
-            { key: 'tryIn', label: 'Try in', matchKeywords: ['try in', 'tryin'], defaultPrice: 0 },
+            {
+              key: 'tryIn',
+              label: 'Try in',
+              matchKeywords: ['try in before', 'try in', 'tryin', 'tray in before'],
+              defaultPrice: 0,
+            },
           ] as LabMaterial[]);
 
     for (const part of parts) {
       if (isExcludedWorkPart(part)) continue;
       const lowerPart = part.toLowerCase();
-      // Must skip before zircon matchers — otherwise "try in before Zircon (25)" bills as zircon.
-      if (this.isTryInPart(lowerPart)) continue;
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
+      // Prefer try-in match so "try in before Zircon" bills as Try in, not Zircon.
       let best: LabMaterial | null = null;
       let bestLen = -1;
       for (const m of materials) {
-        if (m.key === 'tryIn') continue;
         for (const kw of m.matchKeywords || []) {
           const k = String(kw).toLowerCase();
           if (k && lowerPart.includes(k) && k.length > bestLen) {
@@ -1367,19 +1375,14 @@ export class Admin implements OnInit, OnDestroy {
           }
         }
       }
+      if (!best && this.isTryInPart(lowerPart)) {
+        best =
+          materials.find((m) => String(m.key).toLowerCase() === 'tryin') ||
+          ({ key: 'tryIn', label: 'Try in', matchKeywords: ['try in'], defaultPrice: 0 } as LabMaterial);
+      }
       if (!best) continue;
-      const unit =
-        prices[best.key] ??
-        prices[String(best.key).toLowerCase()] ??
-        (() => {
-          const lower = String(best.key).toLowerCase();
-          for (const [k, v] of Object.entries(prices)) {
-            if (String(k).toLowerCase() === lower) return Number(v);
-          }
-          return undefined;
-        })() ??
-        (Number(best.defaultPrice) || 0);
-      total += qty * (Number(unit) || 0);
+      const unit = priceOf(best.key, Number(best.defaultPrice) || 0);
+      total += qty * unit;
     }
     return total;
   }
