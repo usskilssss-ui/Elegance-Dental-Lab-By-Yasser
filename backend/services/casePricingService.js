@@ -214,12 +214,82 @@ async function calculateCaseCostBreakdownAsync(caseType, metaOrNotes, customPric
 
 function findPricingForDoctor(pricings, doctorName) {
   if (!Array.isArray(pricings) || !doctorName) return null;
-  const exact = pricings.find((p) => doctorKeysMatch(p.doctorName, doctorName));
-  if (exact) return exact;
   const want = String(doctorName).trim().toLowerCase();
-  return (
-    pricings.find((p) => String(p.doctorName || '').trim().toLowerCase() === want) || null
+  const exact = pricings.find((p) => String(p.doctorName || '').trim().toLowerCase() === want);
+  if (exact) return exact;
+  const wantKey = normalizeDoctorKey(doctorName);
+  if (wantKey) {
+    const byKey = pricings.find((p) => normalizeDoctorKey(p.doctorName) === wantKey);
+    if (byKey) return byKey;
+  }
+  return pricings.find((p) => doctorKeysMatch(p.doctorName, doctorName)) || null;
+}
+
+/**
+ * Rewrite unpaid exited case bills for a doctor using current (or provided) prices.
+ * Paid cases are left untouched. Returns how many cases were updated.
+ */
+async function repriceUnpaidExitedCasesForDoctor(doctorName, pricesOverride = null) {
+  const DentalCase = require('../models/DentalCase');
+  const DoctorPricing = require('../models/DoctorPricing');
+  const name = String(doctorName || '').trim();
+  if (!name) return { updated: 0 };
+
+  const materials = await loadActiveMaterials();
+  const labDefaults = materialsToDefaultPrices(materials);
+
+  let prices = pricesOverride;
+  if (!prices || typeof prices !== 'object') {
+    const pricings = await DoctorPricing.find().lean();
+    const pricingDoc = findPricingForDoctor(pricings, name);
+    prices = pricingDoc?.prices || null;
+  }
+
+  const cases = await DentalCase.find({
+    currentStage: 'exited',
+    $or: [{ paymentStatus: { $exists: false } }, { paymentStatus: { $ne: 'paid' } }],
+  }).select(
+    'caseNumber caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus materialCost caseProfit'
   );
+
+  let updated = 0;
+  for (const dentalCase of cases) {
+    const meta = parseNotesMeta(dentalCase.notes || '');
+    const caseDoctor = String(
+      dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
+    ).trim();
+    if (!doctorKeysMatch(caseDoctor, name)) continue;
+    if (isNonBillableCase(dentalCase.caseType, meta)) continue;
+
+    const breakdown = calculateCaseCostBreakdown(
+      dentalCase.caseType,
+      dentalCase.notes,
+      prices,
+      materials,
+      labDefaults
+    );
+    const total = Math.round((Number(breakdown.total) || 0) * 100) / 100;
+    dentalCase.salaryAmount = total;
+    dentalCase.revenueAmount = total;
+    dentalCase.billSnapshot = {
+      doctorName: caseDoctor,
+      pricedAt: new Date().toISOString(),
+      quantity: breakdown.quantity || 0,
+      unitPrice: breakdown.unitPrice || 0,
+      total,
+      lines: breakdown.lines || [],
+      priceSource: prices ? 'doctor-pricing' : 'lab-default',
+    };
+    dentalCase.markModified('billSnapshot');
+
+    const cogs = Math.max(0, Number(dentalCase.materialCost) || 0);
+    dentalCase.caseProfit = Math.round((total - cogs) * 100) / 100;
+
+    await dentalCase.save();
+    updated += 1;
+  }
+
+  return { updated };
 }
 
 module.exports = {
@@ -244,4 +314,5 @@ module.exports = {
   calculateCaseCostAsync,
   calculateCaseCostBreakdownAsync,
   findPricingForDoctor,
+  repriceUnpaidExitedCasesForDoctor,
 };
