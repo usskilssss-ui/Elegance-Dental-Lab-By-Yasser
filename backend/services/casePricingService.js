@@ -262,6 +262,42 @@ function findPricingForDoctor(pricings, doctorName) {
 }
 
 /**
+ * Merge prices from EVERY DoctorPricing row that matches this doctor name.
+ * Fixes empty exact row "فرزات" winning over "د. فرزات" that has germanZircon:75.
+ */
+function mergePricesForDoctor(pricings, doctorName) {
+  if (!Array.isArray(pricings) || !doctorName) return null;
+  const want = String(doctorName).trim().toLowerCase();
+  const wantKey = normalizeDoctorKey(doctorName);
+  const matches = pricings.filter((p) => {
+    const name = String(p.doctorName || '').trim();
+    if (!name) return false;
+    if (name.toLowerCase() === want) return true;
+    if (wantKey && normalizeDoctorKey(name) === wantKey) return true;
+    return doctorKeysMatch(name, doctorName);
+  });
+  if (!matches.length) return null;
+
+  const sorted = [...matches].sort((a, b) => {
+    const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return ta - tb;
+  });
+
+  const merged = {};
+  for (const row of sorted) {
+    const prices = row.prices && typeof row.prices === 'object' ? row.prices : {};
+    for (const [k, v] of Object.entries(prices)) {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) continue;
+      merged[k] = n;
+      merged[String(k).toLowerCase()] = n;
+    }
+  }
+  return Object.keys(merged).length ? merged : null;
+}
+
+/**
  * Rewrite unpaid exited case bills for a doctor using current (or provided) prices.
  * Paid cases are left untouched. Returns how many cases were updated.
  */
@@ -277,8 +313,7 @@ async function repriceUnpaidExitedCasesForDoctor(doctorName, pricesOverride = nu
   let prices = pricesOverride;
   if (!prices || typeof prices !== 'object') {
     const pricings = await DoctorPricing.find().lean();
-    const pricingDoc = findPricingForDoctor(pricings, name);
-    prices = pricingDoc?.prices || null;
+    prices = mergePricesForDoctor(pricings, name);
   }
 
   const cases = await DentalCase.find({
@@ -350,5 +385,6 @@ module.exports = {
   calculateCaseCostAsync,
   calculateCaseCostBreakdownAsync,
   findPricingForDoctor,
+  mergePricesForDoctor,
   repriceUnpaidExitedCasesForDoctor,
 };

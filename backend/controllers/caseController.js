@@ -17,6 +17,7 @@ const {
   loadActiveMaterials,
   materialsToDefaultPrices,
   findPricingForDoctor,
+  mergePricesForDoctor,
   isExcludedWorkPart,
   splitNormalizedCaseTypeParts,
 } = require('../services/casePricingService');
@@ -548,11 +549,11 @@ exports.getFinancialReport = async (req, res) => {
         const doctorName = String(doctorNameRaw).trim() || 'غير محدد';
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
-        const pricingDoc = findPricingForDoctor(pricings, doctorName);
+        const doctorPrices = mergePricesForDoctor(pricings, doctorName);
         const billedAmount = calculateCaseCost(
           doc.caseType,
           notesMeta,
-          pricingDoc?.prices,
+          doctorPrices,
           materials,
           labDefaults
         );
@@ -667,8 +668,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
       DoctorPayment.find().lean(),
     ]);
 
-    const pricingDoc = findPricingForDoctor(pricings, doctorName);
-    const prices = pricingDoc?.prices || null;
+    const prices = mergePricesForDoctor(pricings, doctorName);
     const materials = await loadActiveMaterials();
     const labDefaults = materialsToDefaultPrices(materials);
     const { caseBillAmount, caseBillLines, resolveDoctorPaid } = require('../services/doctorBalanceService');
@@ -696,10 +696,12 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (year && Number.isFinite(year) && exitedAt.getFullYear() !== year) continue;
       if (month && Number.isFinite(month) && exitedAt.getMonth() + 1 !== month) continue;
 
+      // Prefer case-doctor merged prices (same as financial report), fall back to query doctor.
+      const casePrices = mergePricesForDoctor(pricings, caseDoctor) || prices;
       const breakdown = calculateCaseCostBreakdown(
         doc.caseType,
         meta,
-        prices,
+        casePrices,
         materials,
         labDefaults
       );
@@ -1627,7 +1629,7 @@ exports.exitCase = async (req, res) => {
       const DoctorPricing = require('../models/DoctorPricing');
       const {
         calculateCaseCostBreakdownAsync,
-        findPricingForDoctor,
+        mergePricesForDoctor,
         parseNotesMeta,
       } = require('../services/casePricingService');
       const meta = parseNotesMeta(dentalCase.notes || '');
@@ -1635,11 +1637,11 @@ exports.exitCase = async (req, res) => {
         dentalCase.referringDoctor || meta.doctor || meta.doctorName || ''
       ).trim();
       const pricings = await DoctorPricing.find().lean();
-      const pricingDoc = findPricingForDoctor(pricings, doctorName);
+      const doctorPrices = mergePricesForDoctor(pricings, doctorName);
       const breakdown = await calculateCaseCostBreakdownAsync(
         dentalCase.caseType,
         dentalCase.notes,
-        pricingDoc?.prices || null
+        doctorPrices
       );
       const liveTotal = Number(breakdown.total) || 0;
       const stored = Number(dentalCase.salaryAmount) || 0;
@@ -1653,7 +1655,7 @@ exports.exitCase = async (req, res) => {
         unitPrice: breakdown.unitPrice || 0,
         total: revenue,
         lines: breakdown.lines || [],
-        priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+        priceSource: doctorPrices ? 'doctor-pricing' : 'lab-default',
       };
     } catch (priceErr) {
       console.warn('[exit] bill snapshot failed:', dentalCase?.caseNumber, priceErr?.message || priceErr);
@@ -1987,7 +1989,7 @@ exports.updateCase = async (req, res) => {
         const DoctorPricing = require('../models/DoctorPricing');
         const {
           calculateCaseCostBreakdownAsync,
-          findPricingForDoctor,
+          mergePricesForDoctor,
           parseNotesMeta,
         } = require('../services/casePricingService');
         const meta = parseNotesMeta(dentalCase.notes || '');
@@ -2000,11 +2002,11 @@ exports.updateCase = async (req, res) => {
 
         if (workChanged && dentalCase.requesterType !== 'student') {
           const pricings = await DoctorPricing.find().lean();
-          const pricingDoc = findPricingForDoctor(pricings, doctorName);
+          const doctorPrices = mergePricesForDoctor(pricings, doctorName);
           breakdown = await calculateCaseCostBreakdownAsync(
             dentalCase.caseType,
             dentalCase.notes,
-            pricingDoc?.prices || null
+            doctorPrices
           );
           const liveTotal = Number(breakdown.total) || 0;
           if (liveTotal > 0) {
@@ -2018,7 +2020,7 @@ exports.updateCase = async (req, res) => {
             unitPrice: breakdown.unitPrice || 0,
             total: revenue,
             lines: breakdown.lines || [],
-            priceSource: pricingDoc ? 'doctor-pricing' : 'lab-default',
+            priceSource: doctorPrices ? 'doctor-pricing' : 'lab-default',
           };
         } else {
           dentalCase.billSnapshot = {

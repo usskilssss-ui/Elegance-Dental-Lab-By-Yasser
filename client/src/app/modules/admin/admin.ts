@@ -618,9 +618,16 @@ export class Admin implements OnInit, OnDestroy {
       const key = this.doctorGroupKey(name);
 
       const cost = this.calculateCaseCost(c);
-      // Prefer stored bill snapshot when present
+      // Unpaid: always prefer live custom prices (same as Doctor Accounts / Reports intent).
+      // Paid: keep stored bill when present.
       const stored = Number((c as any).revenueAmount ?? c.salary ?? 0) || 0;
-      const dueAmount = stored > 0 ? stored : cost;
+      const dueAmount = c.paid
+        ? stored > 0
+          ? stored
+          : cost
+        : cost > 0
+          ? cost
+          : stored;
       const paidFromCase = c.paid ? dueAmount : 0;
 
       if (!doctorMap.has(key)) {
@@ -2734,7 +2741,16 @@ export class Admin implements OnInit, OnDestroy {
         list.forEach((item: any) => {
           if (item.doctorName) {
             const key = this.doctorGroupKey(item.doctorName);
-            this.doctorPricingsMap.set(key, item.prices);
+            const prev = this.doctorPricingsMap.get(key) || {};
+            const next = { ...prev, ...(item.prices || {}) };
+            // case-insensitive aliases
+            for (const [pk, pv] of Object.entries(item.prices || {})) {
+              const n = Number(pv);
+              if (!Number.isFinite(n) || n < 0) continue;
+              next[pk] = n;
+              next[String(pk).toLowerCase()] = n;
+            }
+            this.doctorPricingsMap.set(key, next);
           }
         });
         if (this.reportDoctorFilter) {
