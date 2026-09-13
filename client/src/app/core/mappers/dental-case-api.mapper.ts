@@ -244,14 +244,36 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   const deliveryTime = String(meta['deliveryTime'] ?? '');
   const receivedDateMeta = String(meta['receivedDate'] ?? '');
   const createdAt = doc['createdAt'];
-  let receivedDisplay = receivedDateMeta;
-  if (!receivedDisplay && createdAt) {
+  const createdClock = (() => {
+    if (!createdAt) return '';
     try {
-      receivedDisplay = new Date(String(createdAt)).toLocaleDateString('ar-EG', {
+      const d = new Date(String(createdAt));
+      if (Number.isNaN(d.getTime())) return '';
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return formatTimeTo12Hour(`${hh}:${mm}`);
+    } catch {
+      return '';
+    }
+  })();
+  const receivedHasTime =
+    /\d{1,2}:\d{2}/.test(receivedDateMeta) ||
+    receivedDateMeta.includes('ص') ||
+    receivedDateMeta.includes('م') ||
+    /am|pm/i.test(receivedDateMeta);
+  let receivedDisplay = receivedDateMeta;
+  if (receivedDisplay && createdClock && !receivedHasTime) {
+    // Doctor/secretary often store date-only; show request hour from createdAt.
+    receivedDisplay = `${receivedDisplay} ${createdClock}`;
+  } else if (!receivedDisplay && createdAt) {
+    try {
+      const d = new Date(String(createdAt));
+      const datePart = d.toLocaleDateString('ar-EG-u-nu-latn', {
         day: 'numeric',
         month: 'numeric',
         year: 'numeric',
       });
+      receivedDisplay = createdClock ? `${datePart} ${createdClock}` : datePart;
     } catch {
       receivedDisplay = '';
     }
