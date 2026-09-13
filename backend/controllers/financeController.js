@@ -568,7 +568,7 @@ exports.getDoctorDebts = async (req, res) => {
       calculateCaseCostBreakdown,
       loadActiveMaterials,
       materialsToDefaultPrices,
-      findPricingForDoctor,
+      mergePricesForDoctor,
     } = require('../services/casePricingService');
     const { caseBillAmount, resolveDoctorPaid } = require('../services/doctorBalanceService');
     const DoctorPricing = require('../models/DoctorPricing');
@@ -597,11 +597,11 @@ exports.getDoctorDebts = async (req, res) => {
       ).trim();
       if (!doctorName) continue;
 
-      const pricingDoc = findPricingForDoctor(pricings, doctorName);
+      const doctorPrices = mergePricesForDoctor(pricings, doctorName);
       const breakdown = calculateCaseCostBreakdown(
         doc.caseType,
         meta,
-        pricingDoc?.prices || null,
+        doctorPrices,
         materials,
         labDefaults
       );
