@@ -42,9 +42,57 @@ async function loadActiveMaterials() {
 function materialsToDefaultPrices(materials) {
   const prices = { ...FALLBACK_PRICES };
   for (const m of materials || []) {
-    if (m?.key) prices[m.key] = Number(m.defaultPrice) || 0;
+    if (!m?.key) continue;
+    const n = Number(m.defaultPrice) || 0;
+    prices[m.key] = n;
+    prices[String(m.key).toLowerCase()] = n;
+  }
+  // Ensure FALLBACK camelCase keys also have lowercase aliases
+  for (const [k, v] of Object.entries(FALLBACK_PRICES)) {
+    const lower = String(k).toLowerCase();
+    if (prices[lower] === undefined) prices[lower] = v;
   }
   return prices;
+}
+
+function lookupPrice(prices, key, fallback = 0) {
+  if (!prices || !key) return fallback;
+  if (prices[key] !== undefined && prices[key] !== null && prices[key] !== '') {
+    const n = Number(prices[key]);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  const lower = String(key).toLowerCase();
+  if (prices[lower] !== undefined && prices[lower] !== null && prices[lower] !== '') {
+    const n = Number(prices[lower]);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  // Scan case-insensitive (covers germanZircon vs germanzircon)
+  for (const [k, v] of Object.entries(prices)) {
+    if (String(k).toLowerCase() !== lower) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return fallback;
+}
+
+function resolvePrices(custom, labDefaults) {
+  const base = { ...(labDefaults || FALLBACK_PRICES) };
+  if (custom && typeof custom === 'object') {
+    for (const [k, v] of Object.entries(custom)) {
+      if (v === undefined || v === null || v === '') continue;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) continue;
+      base[k] = n;
+      base[String(k).toLowerCase()] = n;
+      // Also overwrite any existing key that only differs by case
+      for (const existing of Object.keys(base)) {
+        if (existing !== k && String(existing).toLowerCase() === String(k).toLowerCase()) {
+          base[existing] = n;
+        }
+      }
+    }
+  }
+  return base;
 }
 
 /** Normalize doctor name for matching (titles stripped). */
@@ -97,18 +145,6 @@ function parseNotesMeta(notes) {
   }
 }
 
-function resolvePrices(custom, labDefaults) {
-  const base = { ...(labDefaults || FALLBACK_PRICES) };
-  if (custom && typeof custom === 'object') {
-    for (const [k, v] of Object.entries(custom)) {
-      if (v === undefined || v === null || v === '') continue;
-      const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) base[k] = n;
-    }
-  }
-  return base;
-}
-
 /** Keep pricing aligned with try-in phase labels (before / after). */
 function normalizeMaterialPartForPricing(lowerPart) {
   let lower = String(lowerPart || '').toLowerCase();
@@ -140,7 +176,7 @@ function resolvePartUnitPrice(lowerPart, prices, materials) {
     }
   }
   if (!best) return null;
-  const unitPrice = prices[best.key] ?? (Number(best.defaultPrice) || 0);
+  const unitPrice = lookupPrice(prices, best.key, Number(best.defaultPrice) || 0);
   return { label: best.label, key: best.key, unitPrice };
 }
 
