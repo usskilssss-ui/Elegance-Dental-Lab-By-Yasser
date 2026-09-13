@@ -13,6 +13,20 @@ import {
   buildPrintData,
   formatWorkTypeForPrint,
 } from '../../core/utils/print-job.util';
+import {
+  formatPartWithKind,
+  inferDropdownCaseType,
+  normalizeCaseTypeParts,
+  parsePartKind,
+  type WorkPartKind,
+} from '../../core/utils/case-type-parts.util';
+import {
+  applyWorkPhaseToName,
+  formatWorkPartWithQty,
+  parseMaterialAndPhaseFromPart,
+  supportsTryInPhase,
+  type WorkPhase,
+} from '../../core/utils/tryin-phase.util';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { LanguageService } from '../../core/i18n/language.service';
@@ -182,13 +196,17 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   selectedWorkTypes = new Set<string>();
   workTypeQuantities: Record<string, number> = {};
+  /** Per-material qty split: New / Redo / Modification on the same request */
+  workTypeKindQtys: Record<string, Record<WorkPartKind, number>> = {};
   toothAssignments: ToothAssignment[] = [];
   toothLinkMode: 'connected' | 'separate' = 'separate';
   activeToothMaterial = '';
   nightGuardType: 'Soft' | 'Hard' | '' = '';
+  /** فاينل أو بروفة — بعد اختيار مادة تدعم try-in */
+  workPhase: WorkPhase | '' = '';
   workTypeError = '';
 
-  readonly colorRequiredTypes = new Set(['Zircon', 'Emax', 'Peek', 'Titanium']);
+  readonly colorRequiredTypes = new Set(['Zircon', 'German Zircon', 'Emax', 'Peek', 'Titanium']);
 
   get isColorRequired(): boolean {
     if (this.formDraft.caseType === 'Empty') return false;
@@ -606,12 +624,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
     this.workTypeQuantities = {};
+    this.workTypeKindQtys = {};
     this.toothAssignments = [];
     this.activeToothMaterial = '';
     this.toothLinkMode = 'separate';
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.workPhase = '';
     this.intakeType = '';
     this.existingPlyFileName = null;
     this.plyScanLink = '';
@@ -762,9 +782,11 @@ export class DoctorComponent implements OnInit, OnDestroy {
     };
     this.selectedWorkTypes = new Set();
     this.workTypeQuantities = {};
+    this.workTypeKindQtys = {};
     this.workTypeError = '';
     this.patientNameError = '';
     this.nightGuardType = '';
+    this.workPhase = '';
     this.intakeType =
       c.intakeType === 'scan' || c.intakeType === 'impression' ? c.intakeType : '';
     this.existingPlyFileName = c.plyFileName || (c.plyScanUrl ? 'scan' : null);
@@ -780,11 +802,90 @@ export class DoctorComponent implements OnInit, OnDestroy {
   }
 
   private getCaseTypeFromWorkType(wt: string): 'New' | 'Modification' | 'Redo' | 'Empty' {
-    const s = String(wt || '');
-    if (s === 'Empty' || s === 'غير معروف') return 'Empty';
-    if (s === 'Modification' || s.startsWith('Modification - ') || s.startsWith('تعديل')) return 'Modification';
-    if (s === 'Redo' || s === 'Remake' || s.startsWith('Redo - ') || s.startsWith('اعادة')) return 'Redo';
-    return 'New';
+    return inferDropdownCaseType(wt);
+  }
+
+  private ensureKindQtys(wt: string): void {
+    if (!this.workTypeKindQtys[wt]) {
+      this.workTypeKindQtys[wt] = { New: 0, Redo: 0, Modification: 0 };
+    }
+  }
+
+  getKindQty(wt: string, kind: WorkPartKind): number {
+    return Number(this.workTypeKindQtys[wt]?.[kind]) || 0;
+  }
+
+  setKindQty(wt: string, kind: WorkPartKind, raw: number | string): void {
+    if (!this.selectedWorkTypes.has(wt) || wt === 'Empty') return;
+    this.ensureKindQtys(wt);
+    const n = Math.max(0, Math.floor(Number(raw) || 0));
+    this.workTypeKindQtys[wt][kind] = n;
+    if (this.materialTotalQty(wt) < 1) {
+      this.workTypeKindQtys[wt][kind] = 1;
+    }
+    this.syncTotalQtyFromKinds(wt);
+    this.syncCaseTypeDropdownFromKinds();
+    this.updateWorkTypeString();
+  }
+
+  materialTotalQty(wt: string): number {
+    const m = this.workTypeKindQtys[wt];
+    if (!m) return Number(this.workTypeQuantities[wt]) || 0;
+    return (Number(m.New) || 0) + (Number(m.Redo) || 0) + (Number(m.Modification) || 0);
+  }
+
+  private syncTotalQtyFromKinds(wt: string): void {
+    this.workTypeQuantities[wt] = this.materialTotalQty(wt) || 0;
+  }
+
+  private addKindQty(wt: string, kind: WorkPartKind, qty: number): void {
+    this.ensureKindQtys(wt);
+    this.workTypeKindQtys[wt][kind] = (Number(this.workTypeKindQtys[wt][kind]) || 0) + qty;
+    this.syncTotalQtyFromKinds(wt);
+  }
+
+  private syncCaseTypeDropdownFromKinds(): void {
+    if (this.formDraft.caseType === 'Empty') return;
+    const mats = [...this.selectedWorkTypes].filter((wt) => wt !== 'Empty');
+    if (!mats.length) return;
+    let anyNew = false;
+    let anyRedo = false;
+    let anyMod = false;
+    for (const wt of mats) {
+      if (this.getKindQty(wt, 'New') > 0) anyNew = true;
+      if (this.getKindQty(wt, 'Redo') > 0) anyRedo = true;
+      if (this.getKindQty(wt, 'Modification') > 0) anyMod = true;
+    }
+    if (anyNew || (anyRedo && anyMod)) this.formDraft.caseType = 'New';
+    else if (anyRedo && !anyMod) this.formDraft.caseType = 'Redo';
+    else if (anyMod && !anyRedo) this.formDraft.caseType = 'Modification';
+    else this.formDraft.caseType = 'New';
+  }
+
+  /** المادة الوحيدة اللي ينفع عليها فاينل/بروفة */
+  get phaseMaterial(): string | null {
+    const mats = [...this.selectedWorkTypes].filter((m) => supportsTryInPhase(m));
+    const blockers = [...this.selectedWorkTypes].filter(
+      (m) => !supportsTryInPhase(m) && m !== 'Empty'
+    );
+    if (mats.length === 1 && blockers.length === 0) return mats[0];
+    return null;
+  }
+
+  get showWorkPhaseOptions(): boolean {
+    return !!this.phaseMaterial;
+  }
+
+  get workPhasePreviewLabel(): string {
+    const mat = this.phaseMaterial;
+    if (!mat || !this.workPhase) return '';
+    if (this.workPhase === 'prova') return applyWorkPhaseToName(mat, 'prova');
+    return mat;
+  }
+
+  setWorkPhase(phase: WorkPhase): void {
+    this.workPhase = phase;
+    this.updateWorkTypeString();
   }
 
   private restoreWorkTypes(
@@ -793,34 +894,49 @@ export class DoctorComponent implements OnInit, OnDestroy {
     quantity: number
   ): void {
     if (caseType === 'Empty' || !workType) return;
-    let wtToParse = workType;
-    if (wtToParse.startsWith('Modification - ')) wtToParse = wtToParse.replace('Modification - ', '');
-    else if (wtToParse === 'Modification') wtToParse = '';
-    else if (wtToParse.startsWith('Redo - ')) wtToParse = wtToParse.replace('Redo - ', '');
-    else if (wtToParse === 'Redo' || wtToParse === 'Remake') wtToParse = '';
-    else if (wtToParse.startsWith('تعديل - ')) wtToParse = wtToParse.replace('تعديل - ', '');
-    else if (wtToParse.startsWith('اعادة - ')) wtToParse = wtToParse.replace('اعادة - ', '');
+    const wtToParse = normalizeCaseTypeParts(workType);
+    if (!wtToParse || /^(Redo|Modification|Remake)$/i.test(wtToParse)) return;
 
-    if (!wtToParse) return;
     const parts = wtToParse.split('+').map((s) => s.trim()).filter(Boolean);
     for (const p of parts) {
-      const match = p.match(/^(.*?)(?:\s*\((\d+)\))?$/);
+      const { kind, bare } = parsePartKind(p);
+      const match = bare.match(/^(.*?)(?:\s*\((\d+)\))?$/);
       if (!match) continue;
       let wtName = match[1].trim();
+      if (wtName === 'Zr') wtName = 'Zircon';
+      if (wtName === 'Zr Ger' || wtName === 'Zr Gre') wtName = 'German Zircon';
       const qty = match[2] ? parseInt(match[2], 10) : 1;
+
+      const parsed = parseMaterialAndPhaseFromPart(wtName);
+      wtName = parsed.material;
+      if (parsed.phase) this.workPhase = parsed.phase;
+
       if (wtName.startsWith('Night Guard') || wtName.startsWith('Night Gard')) {
         this.selectedWorkTypes.add('Night Guard');
-        this.workTypeQuantities['Night Guard'] = qty;
+        this.addKindQty('Night Guard', kind, qty);
         this.nightGuardType = wtName.includes('Hard') ? 'Hard' : 'Soft';
-      } else if (this.workTypeOptions.includes(wtName)) {
-        this.selectedWorkTypes.add(wtName);
-        this.workTypeQuantities[wtName] = qty;
+      } else if (this.workTypeOptions.includes(wtName) || supportsTryInPhase(wtName)) {
+        const catalog =
+          this.workTypeOptions.find((o) => o.toLowerCase() === wtName.toLowerCase()) || wtName;
+        this.selectedWorkTypes.add(catalog);
+        this.addKindQty(catalog, kind, qty);
+        if (supportsTryInPhase(catalog) && !this.workPhase) {
+          this.workPhase = 'final';
+        }
       }
     }
+
     if (this.selectedWorkTypes.size === 1 && !workType.includes('(')) {
-      const only = [...this.selectedWorkTypes][0];
-      this.workTypeQuantities[only] = Number(quantity) || 1;
+      const onlyWt = [...this.selectedWorkTypes][0];
+      const total = Number(quantity) || 1;
+      const kind: WorkPartKind =
+        caseType === 'Redo' || caseType === 'Modification' ? caseType : 'New';
+      this.workTypeKindQtys[onlyWt] = { New: 0, Redo: 0, Modification: 0 };
+      this.workTypeKindQtys[onlyWt][kind] = total;
+      this.syncTotalQtyFromKinds(onlyWt);
     }
+
+    this.syncCaseTypeDropdownFromKinds();
     if (this.selectedWorkTypes.size > 0) this.updateWorkTypeString();
   }
 
@@ -836,7 +952,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (this.formDraft.caseType === 'Empty') {
       this.selectedWorkTypes.clear();
       this.workTypeQuantities = {};
+      this.workTypeKindQtys = {};
       this.nightGuardType = '';
+      this.workPhase = '';
       this.workTypeError = '';
       this.formDraft.workType = 'Empty';
       this.formDraft.quantity = 0;
@@ -844,25 +962,52 @@ export class DoctorComponent implements OnInit, OnDestroy {
       this.activeToothMaterial = '';
       return;
     }
+    // Remap existing material totals into the selected kind bucket
+    for (const wt of this.selectedWorkTypes) {
+      if (wt === 'Empty') continue;
+      const total = this.materialTotalQty(wt) || Number(this.workTypeQuantities[wt]) || 1;
+      const kind: WorkPartKind =
+        this.formDraft.caseType === 'Redo' || this.formDraft.caseType === 'Modification'
+          ? this.formDraft.caseType
+          : 'New';
+      this.workTypeKindQtys[wt] = { New: 0, Redo: 0, Modification: 0 };
+      this.workTypeKindQtys[wt][kind] = total;
+      this.syncTotalQtyFromKinds(wt);
+    }
     this.updateWorkTypeString();
   }
 
   toggleWorkType(type: string): void {
+    this.workTypeError = '';
+
     if (this.selectedWorkTypes.has(type)) {
       this.selectedWorkTypes.delete(type);
       delete this.workTypeQuantities[type];
+      delete this.workTypeKindQtys[type];
       if (type === 'Night Guard') this.nightGuardType = '';
       this.toothAssignments = this.toothAssignments.filter((t) => t.material !== type);
       if (this.activeToothMaterial === type) {
         this.activeToothMaterial = this.chartMaterials[0] || '';
       }
+      if (!this.phaseMaterial) this.workPhase = '';
     } else {
       this.selectedWorkTypes.add(type);
-      this.workTypeQuantities[type] = this.workTypeQuantities[type] || 1;
+      const draftKind = this.formDraft.caseType;
+      const kind: WorkPartKind =
+        draftKind === 'Redo' || draftKind === 'Modification' ? draftKind : 'New';
+      this.workTypeKindQtys[type] = { New: 0, Redo: 0, Modification: 0 };
+      this.workTypeKindQtys[type][kind] = 1;
+      this.syncTotalQtyFromKinds(type);
       if (type === 'Night Guard') this.nightGuardType = 'Soft';
       if (!this.activeToothMaterial) this.activeToothMaterial = type;
+      if (supportsTryInPhase(type) && !this.workPhase) {
+        this.workPhase = 'final';
+      }
+      if (!supportsTryInPhase(type) && type === 'Try in') {
+        this.workPhase = '';
+      }
     }
-    this.workTypeError = '';
+    this.syncCaseTypeDropdownFromKinds();
     this.updateWorkTypeString();
   }
 
@@ -879,15 +1024,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
     const counts = countByMaterial(this.toothAssignments);
     for (const [mat, n] of Object.entries(counts)) {
       if (this.selectedWorkTypes.has(mat)) {
-        this.workTypeQuantities[mat] = n;
+        this.ensureKindQtys(mat);
+        this.workTypeKindQtys[mat].New = n;
+        this.syncTotalQtyFromKinds(mat);
       }
     }
-    // Keep materials with no teeth at least qty 1 if still selected (e.g. Night Guard)
     for (const wt of this.selectedWorkTypes) {
-      if (!(wt in counts) && (this.workTypeQuantities[wt] == null || this.workTypeQuantities[wt] < 1)) {
-        this.workTypeQuantities[wt] = 1;
+      if (!(wt in counts) && this.materialTotalQty(wt) < 1) {
+        this.ensureKindQtys(wt);
+        this.workTypeKindQtys[wt].New = 1;
+        this.syncTotalQtyFromKinds(wt);
       }
     }
+    this.syncCaseTypeDropdownFromKinds();
     this.updateWorkTypeString();
   }
 
@@ -923,30 +1072,32 @@ export class DoctorComponent implements OnInit, OnDestroy {
     }
     let total = 0;
     const parts: string[] = [];
+    const kindOrder: WorkPartKind[] = ['New', 'Redo', 'Modification'];
+
     for (const wt of this.selectedWorkTypes) {
-      const q = Number(this.workTypeQuantities[wt]) || 1;
-      total += q;
+      this.ensureKindQtys(wt);
       let displayName = wt;
       if (wt === 'Night Guard') {
         displayName = this.nightGuardType ? `Night Guard ${this.nightGuardType}` : 'Night Guard';
       }
-      if (this.selectedWorkTypes.size > 1 || q > 1) {
-        parts.push(`${displayName} (${q})`);
-      } else {
-        parts.push(displayName);
+      if (this.workPhase && supportsTryInPhase(wt)) {
+        displayName = applyWorkPhaseToName(displayName, this.workPhase);
+      }
+
+      for (const kind of kindOrder) {
+        const q = this.getKindQty(wt, kind);
+        if (q <= 0) continue;
+        total += q;
+        const bare = formatWorkPartWithQty(displayName, q, true);
+        parts.push(formatPartWithKind(bare, kind));
       }
     }
+
     let finalString = parts.join(' + ');
-    if (this.formDraft.caseType === 'Modification' && finalString) {
-      finalString = 'Modification - ' + finalString;
-    } else if (this.formDraft.caseType === 'Redo' && finalString) {
-      finalString = 'Redo - ' + finalString;
-    } else if (
-      (this.formDraft.caseType === 'Modification' || this.formDraft.caseType === 'Redo') &&
-      !finalString
-    ) {
+    if (!finalString && (this.formDraft.caseType === 'Modification' || this.formDraft.caseType === 'Redo')) {
       finalString = this.formDraft.caseType;
     }
+
     this.formDraft.workType = finalString;
     this.formDraft.quantity = total || 1;
   }
