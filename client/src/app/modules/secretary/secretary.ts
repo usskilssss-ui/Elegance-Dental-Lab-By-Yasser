@@ -109,6 +109,22 @@ export class Secretary implements OnInit, OnDestroy {
     return { date: val, time: '' };
   }
 
+  /** Received date + request time (falls back to createdAt when meta date has no clock). */
+  receivedStamp(c: { receivedDate?: string; createdAt?: string }): { date: string; time: string } {
+    const base = this.formatDateValue(c.receivedDate || '');
+    if (base.time) return base;
+    if (!c.createdAt) return base;
+    try {
+      const d = new Date(c.createdAt);
+      if (Number.isNaN(d.getTime())) return base;
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return { date: base.date, time: this.localTimeTo12Hour(`${hh}:${mm}`) };
+    } catch {
+      return base;
+    }
+  }
+
   private localTimeTo12Hour(timeStr: string): string {
     const clean = timeStr.trim().slice(0, 5);
     const parts = clean.split(':');
