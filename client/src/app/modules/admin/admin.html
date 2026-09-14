@@ -882,7 +882,7 @@
                   <td>{{ c.exitedAtDisplay || ('common.unavailable' | t) }}</td>
                   <td>{{ translateCaseType(c.caseType) }}</td>
                   <td>
-                    <span style="font-weight:600;color:#10b981">{{ calculateCaseCost(c) | number:'1.0-0' }} EGP</span>
+                    <span style="font-weight:600;color:#10b981">{{ caseBillDisplay(c) | number:'1.0-0' }} EGP</span>
                   </td>
                   <td>
                     <div class="salary-input-row">

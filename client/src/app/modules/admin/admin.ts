@@ -1109,15 +1109,23 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   getSalaryForCase(c: AdminCaseRow): number {
-    return c.salary || 0;
+    return this.caseBillDisplay(c);
+  }
+
+  /** Live doctor price first; fall back to API salary (never stick on stale 0 for try-in). */
+  caseBillDisplay(c: AdminCaseRow): number {
+    const live = Number(this.calculateCaseCost(c)) || 0;
+    if (live > 0) return live;
+    const stored = Number(c.salary || 0) || 0;
+    if (stored > 0) return stored;
+    return 0;
   }
 
   getSalaryDraft(caseItem: AdminCaseRow): string {
     if (Object.prototype.hasOwnProperty.call(this.salaryDrafts, caseItem.id)) {
       return this.salaryDrafts[caseItem.id];
     }
-    const defaultVal = caseItem.salary || this.calculateCaseCost(caseItem);
-    return String(defaultVal || 0);
+    return String(this.caseBillDisplay(caseItem) || 0);
   }
 
   setSalaryDraft(caseItem: AdminCaseRow, value: string): void {
@@ -1449,9 +1457,29 @@ export class Admin implements OnInit, OnDestroy {
     const nightGuardTotal = nightGuardQty * 300;
     const waxTotal = waxQty * 0;
     const ringTotal = ringQty * 0;
-    const tryInTotal = tryInQty * 0;
+    const tryInUnit =
+      Number(
+        this.labDefaultPrices['tryIn'] ??
+          this.labDefaultPrices['tryin'] ??
+          this.customTryInPrice ??
+          0
+      ) || 0;
+    const tryInTotal = tryInQty * tryInUnit;
 
-    const grandTotal = emaxTotal + germanZirconTotal + zirconTotal + titaniumTotal + peekTotal + pmmaTotal + nightGuardTotal + waxTotal + ringTotal + tryInTotal;
+    // Prefer sum of live case bills (per-doctor try-in/custom prices) over flat lab defaults.
+    const liveGrand = cases.reduce((sum, c) => sum + (this.caseBillDisplay(c) || 0), 0);
+    const materialGrand =
+      emaxTotal +
+      germanZirconTotal +
+      zirconTotal +
+      titaniumTotal +
+      peekTotal +
+      pmmaTotal +
+      nightGuardTotal +
+      waxTotal +
+      ringTotal +
+      tryInTotal;
+    const grandTotal = liveGrand > 0 ? liveGrand : materialGrand;
 
     return {
       emaxQty, emaxTotal,
@@ -1640,6 +1668,14 @@ export class Admin implements OnInit, OnDestroy {
         this.reportCases = Array.isArray(rows)
           ? rows.map((row) => this.mapFinancialReportRowToAdminCase(row))
           : [];
+        // Fill stale salary=0 (legacy try-in free) from live doctor prices.
+        for (const c of this.reportCases) {
+          if (c.paid) continue;
+          const live = this.calculateCaseCost(c);
+          if (live > 0 && !(Number(c.salary) > 0)) {
+            c.salary = live;
+          }
+        }
       },
       error: (err) => {
         console.error(err);
@@ -1706,7 +1742,10 @@ export class Admin implements OnInit, OnDestroy {
     const dueDate = this.normalizeDate(row['dueDate']);
     const exitedAt = this.normalizeDate(row['exitedAt'] || row['updatedAt']);
     const salaryAmountRaw = Number(row['salaryAmount']);
-    const salary = Number.isFinite(salaryAmountRaw) ? salaryAmountRaw : 0;
+    const pricedRaw = Number(row['pricedAmount']);
+    const storedOk = Number.isFinite(salaryAmountRaw) && salaryAmountRaw > 0;
+    const pricedOk = Number.isFinite(pricedRaw) && pricedRaw > 0;
+    const salary = storedOk ? salaryAmountRaw : pricedOk ? pricedRaw : 0;
     const paid = String(row['paymentStatus'] ?? 'unpaid').toLowerCase() === 'paid';
 
     // استخراج notes من البيانات لو موجودة
