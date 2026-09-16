@@ -1206,14 +1206,15 @@ export class Secretary implements OnInit, OnDestroy {
     }, 2000);
   }
 
-  private reloadCasesFromBackend(silent = false): void {
+  private reloadCasesFromBackend(silent = false, after?: () => void): void {
     if (!silent) this.casesLoading.set(true);
     this.caseApi.getAllCases(1, 1500).subscribe({
-      next: res => {
+      next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
-        const mapped = Array.isArray(rows) ? rows.map(r => mapApiCaseToDentalCase(r)) : [];
+        const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];
         this.sharedCases.setCasesFromServer(mapped);
         this.casesLoading.set(false);
+        after?.();
       },
       error: () => {
         this.casesLoading.set(false);
@@ -1454,15 +1455,18 @@ export class Secretary implements OnInit, OnDestroy {
         const qty = Number(res?.sheet?.quantity ?? res?.data?.requestedUnits ?? 0);
         const teethCount = Array.isArray(res?.sheet?.teeth)
           ? res.sheet.teeth.length
-          : Array.isArray(res?.data?.actualDesignedTeeth)
-            ? res.data.actualDesignedTeeth.length
-            : 0;
+          : Array.isArray(res?.data?.requestedTeeth)
+            ? res.data.requestedTeeth.length
+            : Array.isArray(res?.data?.actualDesignedTeeth)
+              ? res.data.actualDesignedTeeth.length
+              : 0;
         this.exocadMessage = res?.success
           ? sheetApplied
             ? `تمت المزامنة — الكمية ${qty} / أسنان ${teethCount}`
             : res?.message || 'تمت المزامنة لكن الشيت لم يتغير'
           : res?.message || 'تعذر المزامنة';
 
+        // Apply designed teeth into the open edit form (drives work-type qty chips too).
         if (res?.success && this.dialogOpen() && this.editingId === caseId) {
           const fdis = Array.isArray(res?.data?.actualDesignedTeeth)
             ? res.data.actualDesignedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
@@ -1481,15 +1485,30 @@ export class Secretary implements OnInit, OnDestroy {
                 groupId: prev?.groupId || `g_exo_${fdi}`,
               };
             });
-            // Use onToothAssignmentsChange so New qty chips follow the chart
+            // IMPORTANT: use onToothAssignmentsChange so New qty chips follow the chart
             this.onToothAssignmentsChange(next);
           } else if (qty > 0) {
             this.formDraft.quantity = qty;
+            for (const wt of this.selectedWorkTypes) {
+              if (wt === 'Remake' || wt === 'Empty') continue;
+              this.ensureKindQtys(wt);
+              this.workTypeKindQtys[wt].New = qty;
+              this.syncTotalQtyFromKinds(wt);
+            }
             this.updateWorkTypeString();
           }
         }
 
-        this.reloadCasesFromBackend();
+        this.reloadCasesFromBackend(false, () => {
+          if (!(this.dialogOpen() && this.editingId === caseId)) return;
+          const updated = this.sharedCases.getCaseById(caseId);
+          if (!updated) return;
+          this.formDraft.quantity = updated.quantity;
+          this.formDraft.workType = updated.workType;
+          if (Array.isArray(updated.teeth) && updated.teeth.length) {
+            this.onToothAssignmentsChange([...(updated.teeth as ToothAssignment[])]);
+          }
+        });
       },
       error: (err) => {
         this.exocadLoading = false;
