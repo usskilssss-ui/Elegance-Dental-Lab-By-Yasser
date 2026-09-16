@@ -26,6 +26,11 @@ const NAME_ALIASES = {
   اسامة: ['osama', 'usama'],
   عماد: ['emad', 'imad'],
   عيد: ['eid'],
+  مروان: ['marwan', 'maruan'],
+  النادي: ['elnady', 'elnadi', 'elnad', 'el nady', 'al nady', 'alnady'],
+  نادي: ['nady', 'nadi', 'nad'],
+  ليلى: ['layla', 'leila', 'laila', 'laylah'],
+  ليلي: ['layla', 'leila', 'laila', 'laylah'],
   الجندي: ['aljendy', 'elgendy', 'elgindy', 'jendy', 'gendy', 'aljendy'],
   جندي: ['aljendy', 'elgendy', 'jendy', 'gendy'],
   فرغلي: ['farghly', 'farghaly'],
@@ -77,21 +82,29 @@ function expandToken(token) {
   return out;
 }
 
+function tokensOverlap(a, b) {
+  const ea = expandToken(a);
+  const eb = expandToken(b);
+  for (const x of ea) {
+    if (eb.has(x)) return true;
+  }
+  // Prefix match for truncated Exocad spellings (elnad ↔ elnady / elnadi)
+  for (const x of ea) {
+    if (x.length < 4) continue;
+    for (const y of eb) {
+      if (y.length < 4) continue;
+      if (x.startsWith(y) || y.startsWith(x)) return true;
+    }
+  }
+  return false;
+}
+
 function tokenSetsMatch(aTokens, bTokens) {
   if (!aTokens.length || !bTokens.length) return false;
   let hit = 0;
   for (const at of aTokens) {
-    const ea = expandToken(at);
     for (const bt of bTokens) {
-      const eb = expandToken(bt);
-      let overlap = false;
-      for (const x of ea) {
-        if (eb.has(x)) {
-          overlap = true;
-          break;
-        }
-      }
-      if (overlap) {
+      if (tokensOverlap(at, bt)) {
         hit += 1;
         break;
       }
@@ -122,6 +135,8 @@ function namesLooselyEqual(a, b) {
   // Doctor nicknames: one strong shared meaningful alias is enough if both sides have it
   const strong = ['aljendy', 'elgendy', 'jendy', 'gendy', 'الجندي', 'جندي'];
   if (strong.some((s) => ea.has(s) && eb.has(s))) return true;
+  // Single given name (patient "ليلى" ↔ "layla"): one shared alias is enough
+  if (Math.min(ta.length, tb.length) === 1 && shared >= 1) return true;
   return shared >= 2;
 }
 
