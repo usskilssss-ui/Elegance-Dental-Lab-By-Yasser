@@ -83,13 +83,14 @@ exports.syncCase = async (req, res) => {
           : result.error === 'CASE_NOT_FOUND'
             ? 404
             : 400;
+      const view = await getCaseExocadView(req.params.caseId);
       return res.status(code).json({
         success: false,
         message:
           result.error === 'CASE_EXITED_LOCKED'
             ? 'الحالات الخارجة لا تُعدَّل'
-            : result.error || 'تعذر المزامنة',
-        data: result,
+            : view?.lastSyncError || result.error || 'تعذر المزامنة',
+        data: view || result,
       });
     }
     const view = await getCaseExocadView(req.params.caseId);

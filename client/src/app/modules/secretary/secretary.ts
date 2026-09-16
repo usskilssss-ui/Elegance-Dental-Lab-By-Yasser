@@ -1539,11 +1539,14 @@ export class Secretary implements OnInit, OnDestroy {
       error: (err) => {
         this.exocadLoading = false;
         this.exocadSyncingId = null;
-        const code = err?.error?.data?.error || err?.error?.error || '';
+        if (err?.error?.data) this.exocadStatus = err.error.data;
+        const code = err?.error?.data?.syncStatus || err?.error?.data?.error || err?.error?.error || '';
+        const detail =
+          err?.error?.data?.lastSyncError || err?.error?.message || '';
         this.exocadMessage =
           code === 'MULTIPLE_MATCHES'
             ? 'في أكتر من مشروع Exocad لنفس المريض — حدّث الصفحة وجرب المزامنة تاني'
-            : err?.error?.message || 'تعذر المزامنة مع Exocad';
+            : detail || 'تعذر المزامنة مع Exocad';
       },
     });
   }

@@ -348,19 +348,47 @@ async function syncCaseById(caseId) {
     }
   }
 
-  const recent = await ExocadIngest.find({
-    syncStatus: {
-      $in: ['PENDING', 'NO_MATCH', 'MULTIPLE_MATCHES', 'NEEDS_REVIEW', 'MATCHED', 'SYNCED'],
-    },
-  })
+  // Do not filter by syncStatus — SYNC_ERROR / older rows must still be matchable.
+  const recent = await ExocadIngest.find({})
     .sort({ lastIngestedAt: -1 })
-    .limit(200)
+    .limit(500)
     .lean();
 
-  const hits = recent.filter((ing) => namesLooselyEqual(ing.patientName, doc.patientName));
+  let hits = recent.filter((ing) => namesLooselyEqual(ing.patientName, doc.patientName));
+
+  // Fallback: patient AR↔EN miss (or agent name empty) → try doctor practice match.
   if (!hits.length) {
+    const byDoctor = [];
+    for (const ing of recent) {
+      const mapped = await resolveInternalDoctorNames(ing.practiceName);
+      if (doctorMatchesPractice(doc.referringDoctor, ing.practiceName, mapped)) {
+        byDoctor.push(ing);
+      }
+    }
+    if (byDoctor.length === 1 && Number(byDoctor[0].designedUnits || 0) > 0) {
+      hits = byDoctor;
+    } else if (byDoctor.length > 1) {
+      // Same doctor, several projects — keep those whose patient loosely matches,
+      // else keep all doctor projects so richest-CAD pick can still run.
+      const patientAmongDoctor = byDoctor.filter((ing) =>
+        namesLooselyEqual(ing.patientName, doc.patientName)
+      );
+      hits = patientAmongDoctor.length ? patientAmongDoctor : byDoctor;
+    }
+  }
+
+  if (!hits.length) {
+    const sample = recent
+      .slice(0, 5)
+      .map((r) => `${r.patientName || '?'} / ${r.practiceName || '?'}`)
+      .join(' | ');
     doc.set('exocad.syncStatus', 'NO_MATCH');
-    doc.set('exocad.lastSyncError', 'No Exocad ingest found for this patient');
+    doc.set(
+      'exocad.lastSyncError',
+      recent.length
+        ? `لا يوجد مشروع Exocad مطابق للمريض "${doc.patientName || ''}" (آخر وصول: ${sample})`
+        : 'مفيش أي مشاريع واصلة من الـ Exocad Agent — تأكد إن الـ agent شغال ومتصل بالسيرفر'
+    );
     await doc.save();
     return { ok: false, error: 'NO_MATCH' };
   }
