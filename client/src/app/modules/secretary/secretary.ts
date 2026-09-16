@@ -1643,7 +1643,7 @@ export class Secretary implements OnInit, OnDestroy {
       date: (() => {
         const raw = existing.receivedDateRaw || '';
         if (raw) return raw;
-        return existing.receivedDate || existing.date || '';
+        return existing.receivedDate || '';
       })(),
       deliveryDate: '',
       deliveryTime: '',
