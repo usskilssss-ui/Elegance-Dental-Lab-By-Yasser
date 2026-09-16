@@ -469,6 +469,34 @@
         </div>
       </div>
 
+      <!-- Exocad doctor name mapping (Arabic ↔ Exocad English) -->
+      <div class="card" style="margin-top:20px;padding:16px;border-top:3px solid #0d9488;">
+        <h3 style="margin:0 0 8px;font-size:16px;">ربط أسماء Exocad</h3>
+        <p style="margin:0 0 12px;font-size:13px;opacity:.8;">
+          مثال: عماد عيد → Emad Eid. الحالات الخارجة لا تتأثر. الفواتير تبقى على المطلوب.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <input
+            type="text"
+            [(ngModel)]="exocadMapInternalName"
+            placeholder="الاسم في النظام (عربي)"
+            style="flex:1;min-width:160px;padding:8px;border-radius:8px;border:1px solid #cbd5e1;"
+          />
+          <input
+            type="text"
+            [(ngModel)]="exocadMapExocadNames"
+            placeholder="أسماء Exocad (مفصولة بفاصلة)"
+            style="flex:1;min-width:160px;padding:8px;border-radius:8px;border:1px solid #cbd5e1;"
+          />
+          <button type="button" class="export-btn" (click)="saveExocadDoctorMapping()">حفظ الربط</button>
+        </div>
+        <p *ngIf="exocadMapMessage" style="font-size:13px;color:#0f766e;">{{ exocadMapMessage }}</p>
+        <div *ngFor="let m of exocadDoctorMappings" style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #e2e8f0;font-size:13px;">
+          <span><strong>{{ m.internalDoctorName }}</strong> ← {{ (m.exocadNames || []).join(', ') }}</span>
+          <button type="button" class="staff-btn" style="color:#dc2626;" (click)="deleteExocadDoctorMapping(m._id!)">حذف</button>
+        </div>
+      </div>
+
       <div class="modal-overlay" *ngIf="showDoctorModal" (click)="closeDoctorModal()">
         <div class="modal-content" (click)="$event.stopPropagation()">
           <div class="modal-header">

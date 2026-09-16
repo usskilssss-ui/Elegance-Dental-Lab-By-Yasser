@@ -1,0 +1,10 @@
+{
+  "name": "elegance-exocad-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Watches Exocad CAD-Data and syncs designed teeth to Elegance (active cases only)",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  }
+}

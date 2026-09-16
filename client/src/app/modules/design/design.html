@@ -433,6 +433,60 @@
         </div>
       </div>
 
+      <!-- Exocad sync (additive — does not change billing / requested qty) -->
+      <div class="card" style="border-top:3px solid #0d9488;">
+        <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span>Exocad</span>
+          <button
+            type="button"
+            class="btn-ply-preview"
+            style="padding:6px 12px;font-size:12px;"
+            [disabled]="exocadLoading || selectedCase.status === 'exited'"
+            (click)="syncExocad()"
+          >
+            {{ exocadLoading ? '...' : 'مزامنة مع Exocad' }}
+          </button>
+        </div>
+        <div class="work-details-grid" style="padding:12px 16px 16px;">
+          <div class="work-detail-item">
+            <span class="work-label">المطلوب</span>
+            <span class="work-value">{{ exocadStatus?.requestedUnits ?? selectedCase.quantity }}</span>
+          </div>
+          <div class="work-detail-item">
+            <span class="work-label">الفعلي (Exocad)</span>
+            <span class="work-value" [style.color]="(exocadStatus?.unitsDifference || 0) !== 0 ? '#dc2626' : '#0d9488'">
+              {{ exocadStatus?.actualDesignedUnits ?? '—' }}
+            </span>
+          </div>
+          <div class="work-detail-item">
+            <span class="work-label">الفرق</span>
+            <span class="work-value">
+              @if (exocadStatus?.unitsDifference != null) {
+                {{ exocadStatus!.unitsDifference! > 0 ? '+' : '' }}{{ exocadStatus?.unitsDifference }}
+              } @else {
+                —
+              }
+            </span>
+          </div>
+          <div class="work-detail-item">
+            <span class="work-label">الحالة</span>
+            <span class="work-value">{{ exocadStatus?.syncStatus || '—' }}</span>
+          </div>
+        </div>
+        @if (exocadStatus?.actualDesignedTeeth?.length) {
+          <p style="margin:0 16px 12px;font-size:13px;opacity:.9;">
+            أسنان Exocad:
+            <strong dir="ltr">{{ exocadStatus!.actualDesignedTeeth.join(', ') }}</strong>
+          </p>
+        }
+        @if (exocadMessage) {
+          <p style="margin:0 16px 12px;font-size:12px;color:#b45309;">{{ exocadMessage }}</p>
+        }
+        @if (selectedCase.status === 'exited') {
+          <p style="margin:0 16px 12px;font-size:12px;opacity:.75;">الحالات الخارجة مقفولة — لا مزامنة.</p>
+        }
+      </div>
+
       <!-- مسح PLY من السكرتير -->
       <div class="card ply-scan-card" *ngIf="selectedCase.plyScanUrl">
         <div class="card-head">

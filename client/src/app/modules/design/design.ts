@@ -20,6 +20,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { AppOverflowMenuComponent } from '../../shared/app-overflow-menu/app-overflow-menu';
 import { formatCaseWorkflowError } from '../../core/utils/api-error';
+import { ExocadApiService, ExocadCaseStatus } from '../../core/services/exocad-api.service';
 
 export type CasePriority = 'emergency' | 'normal' | 'low';
 export type CaseStatus =
@@ -60,6 +61,10 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
   /* ── View state ── */
   view: 'list' | 'detail' = 'list';
   selectedCase: DentalCase | null = null;
+  exocadStatus: ExocadCaseStatus | null = null;
+  exocadLoading = false;
+  exocadMessage = '';
+  private readonly exocadApi = inject(ExocadApiService);
   sidebarOpen       = false;
   isSaving          = false;
   saveSuccess       = false;
@@ -339,6 +344,7 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     this.view = 'detail';
     this.sidebarOpen = false;
     this.showFinishConfirm = false;
+    this.loadExocadStatus(c.id);
 
     // Auto-set to in-progress when opening a pending case
     if (this.selectedCase.status === 'pending') {
@@ -348,6 +354,43 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
     this.router.navigate(['/designer/dashboard', c.id]);
+  }
+
+  loadExocadStatus(caseId: string): void {
+    this.exocadStatus = null;
+    this.exocadMessage = '';
+    this.exocadLoading = true;
+    this.exocadApi.getCaseStatus(caseId).subscribe({
+      next: (res) => {
+        this.exocadLoading = false;
+        this.exocadStatus = res?.data || null;
+      },
+      error: () => {
+        this.exocadLoading = false;
+        this.exocadStatus = null;
+      },
+    });
+  }
+
+  syncExocad(): void {
+    if (!this.selectedCase?.id) return;
+    if (this.selectedCase.status === 'exited') {
+      this.exocadMessage = 'الحالات الخارجة لا تُعدَّل';
+      return;
+    }
+    this.exocadLoading = true;
+    this.exocadMessage = '';
+    this.exocadApi.syncCase(this.selectedCase.id).subscribe({
+      next: (res) => {
+        this.exocadLoading = false;
+        if (res?.data) this.exocadStatus = res.data;
+        this.exocadMessage = res?.success ? 'تمت المزامنة' : res?.message || 'تعذر المزامنة';
+      },
+      error: (err) => {
+        this.exocadLoading = false;
+        this.exocadMessage = err?.error?.message || 'تعذر المزامنة مع Exocad';
+      },
+    });
   }
 
   goBack(): void {
