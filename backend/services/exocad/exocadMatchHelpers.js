@@ -1,38 +1,38 @@
-/**
- * Name normalization + AR↔EN matching for Exocad sync.
+﻿/**
+ * Name normalization + ARΓåöEN matching for Exocad sync.
  * Notes meta prefix must match caseController.
  */
 
 const NOTES_META_PREFIX = '__META__\n';
 
-/** Common Egyptian dental-lab name aliases (Arabic ↔ Latin). */
+/** Common Egyptian dental-lab name aliases (Arabic Γåö Latin). */
 const NAME_ALIASES = {
-  احمد: ['ahmed', 'ahmad'],
-  محمد: ['mohamed', 'mohammed', 'muhammad', 'moahmed'],
-  محمود: ['mahmoud', 'mahmood'],
-  علي: ['ali', 'aly'],
-  خالد: ['khaled', 'khalid'],
-  حسن: ['hassan', 'hasan', 'hasaan'],
-  حسين: ['hussein', 'hussain'],
-  ابراهيم: ['ibrahim', 'ebrahim', 'ibrahem'],
-  عبداللة: ['abdallah', 'abdalah', 'abdullah'],
-  عبدالله: ['abdallah', 'abdalah', 'abdullah'],
-  يوسف: ['youssef', 'yousef', 'yusuf'],
-  سعيد: ['saeed', 'said', 'sayed'],
-  سامح: ['sameh'],
-  سامر: ['samer', 'samier'],
-  عمر: ['omar', 'omer'],
-  عثمان: ['othman', 'osman'],
-  اسامة: ['osama', 'usama'],
-  عماد: ['emad', 'imad'],
-  عيد: ['eid'],
-  الجندي: ['aljendy', 'elgendy', 'elgindy', 'jendy', 'gendy', 'aljendy'],
-  جندي: ['aljendy', 'elgendy', 'jendy', 'gendy'],
-  فرغلي: ['farghly', 'farghaly'],
-  الاهرام: ['alharam', 'al ahram'],
+  ╪º╪¡┘à╪»: ['ahmed', 'ahmad'],
+  ┘à╪¡┘à╪»: ['mohamed', 'mohammed', 'muhammad', 'moahmed'],
+  ┘à╪¡┘à┘ê╪»: ['mahmoud', 'mahmood'],
+  ╪╣┘ä┘è: ['ali', 'aly'],
+  ╪«╪º┘ä╪»: ['khaled', 'khalid'],
+  ╪¡╪│┘å: ['hassan', 'hasan', 'hasaan'],
+  ╪¡╪│┘è┘å: ['hussein', 'hussain'],
+  ╪º╪¿╪▒╪º┘ç┘è┘à: ['ibrahim', 'ebrahim', 'ibrahem'],
+  ╪╣╪¿╪»╪º┘ä┘ä╪⌐: ['abdallah', 'abdalah', 'abdullah'],
+  ╪╣╪¿╪»╪º┘ä┘ä┘ç: ['abdallah', 'abdalah', 'abdullah'],
+  ┘è┘ê╪│┘ü: ['youssef', 'yousef', 'yusuf'],
+  ╪│╪╣┘è╪»: ['saeed', 'said', 'sayed'],
+  ╪│╪º┘à╪¡: ['sameh'],
+  ╪│╪º┘à╪▒: ['samer', 'samier'],
+  ╪╣┘à╪▒: ['omar', 'omer'],
+  ╪╣╪½┘à╪º┘å: ['othman', 'osman'],
+  ╪º╪│╪º┘à╪⌐: ['osama', 'usama'],
+  ╪╣┘à╪º╪»: ['emad', 'imad'],
+  ╪╣┘è╪»: ['eid'],
+  ╪º┘ä╪¼┘å╪»┘è: ['aljendy', 'elgendy', 'elgindy', 'jendy', 'gendy', 'aljendy'],
+  ╪¼┘å╪»┘è: ['aljendy', 'elgendy', 'jendy', 'gendy'],
+  ┘ü╪▒╪║┘ä┘è: ['farghly', 'farghaly'],
+  ╪º┘ä╪º┘ç╪▒╪º┘à: ['alharam', 'al ahram'],
 };
 
-// Reverse Latin → Arabic keys for lookup
+// Reverse Latin ΓåÆ Arabic keys for lookup
 const LATIN_TO_KEYS = {};
 for (const [ar, list] of Object.entries(NAME_ALIASES)) {
   for (const lat of list) {
@@ -44,10 +44,10 @@ for (const [ar, list] of Object.entries(NAME_ALIASES)) {
 function normalizeName(value) {
   return String(value || '')
     .normalize('NFKC')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي')
-    .replace(/ط/g, 'ط')
+    .replace(/[╪ú╪Ñ╪ó┘▒]/g, '╪º')
+    .replace(/╪⌐/g, '┘ç')
+    .replace(/┘ë/g, '┘è')
+    .replace(/╪╖/g, '╪╖')
     .replace(/\bdr\b\.?/gi, ' ')
     .replace(/\bdoctor\b/gi, ' ')
     .replace(/\bdentist\b/gi, ' ')
@@ -112,7 +112,7 @@ function namesLooselyEqual(a, b) {
   const tb = nb.split(' ').filter((t) => t.length > 1);
   if (tokenSetsMatch(ta, tb)) return true;
 
-  // Fold full strings through alias expansion (الجندي vs DR/MOHAMED_ALJENDY)
+  // Fold full strings through alias expansion (╪º┘ä╪¼┘å╪»┘è vs DR/MOHAMED_ALJENDY)
   const ea = new Set();
   const eb = new Set();
   for (const t of ta) for (const x of expandToken(t)) ea.add(x);
@@ -120,7 +120,7 @@ function namesLooselyEqual(a, b) {
   let shared = 0;
   for (const x of ea) if (eb.has(x)) shared += 1;
   // Doctor nicknames: one strong shared meaningful alias is enough if both sides have it
-  const strong = ['aljendy', 'elgendy', 'jendy', 'gendy', 'الجندي', 'جندي'];
+  const strong = ['aljendy', 'elgendy', 'jendy', 'gendy', '╪º┘ä╪¼┘å╪»┘è', '╪¼┘å╪»┘è'];
   if (strong.some((s) => ea.has(s) && eb.has(s))) return true;
   return shared >= 2;
 }
@@ -185,7 +185,7 @@ function defaultMaterialFromTeeth(existingTeeth) {
 function materialFromCaseType(caseType) {
   const s = String(caseType || '').trim();
   if (!s) return 'Zircon';
-  // "Zircon (10)" / "Zircon Final (10) + Emax (2)" → first material token
+  // "Zircon (10)" / "Zircon Final (10) + Emax (2)" ΓåÆ first material token
   const first = s.split('+')[0].trim().replace(/\s*\(\d+\)\s*$/, '').trim();
   const bare = first
     .replace(/\s+(final|try\s*in|try-in|prova|waxup)\s*$/i, '')
@@ -225,7 +225,7 @@ function buildTeethFromDesigned(designedTeeth, existingTeeth, fallbackMaterial) 
 
 /**
  * Keep work-type labels; rewrite (n) quantities to match Exocad units.
- * Single (n) → designedUnits. Multiple → rebuild from teeth material counts.
+ * Single (n) ΓåÆ designedUnits. Multiple ΓåÆ rebuild from teeth material counts.
  */
 function rewriteCaseTypeUnits(caseType, designedUnits, teeth) {
   const s = String(caseType || '').trim();
