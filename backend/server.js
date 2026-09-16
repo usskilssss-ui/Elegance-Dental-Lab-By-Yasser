@@ -27,6 +27,7 @@ const monthArchiveRoutes = require('./routes/monthArchiveRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const materialRoutes = require('./routes/materialRoutes');
 const financeRoutes = require('./routes/financeRoutes');
+const exocadRoutes = require('./routes/exocadRoutes');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -133,6 +134,7 @@ app.use('/api/month-archive', monthArchiveRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/exocad', exocadRoutes);
 
 // Static files with proper CORS headers
 // Prefer UPLOAD_DIR (Railway Volume). Default local ./uploads is wiped on redeploy.

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -30,6 +30,7 @@ import {
   isWholeCaseExcluded,
   splitNormalizedCaseTypeParts,
 } from '../../core/utils/case-type-parts.util';
+import { ExocadApiService, ExocadDoctorMapping } from '../../core/services/exocad-api.service';
 
 export interface StaffMember {
   id: string;
@@ -426,6 +427,13 @@ export class Admin implements OnInit, OnDestroy {
   doctorSaving = false;
   doctorModalError = '';
   showDoctorPassword = false;
+
+  /** Exocad doctor name mappings (admin) */
+  exocadDoctorMappings: ExocadDoctorMapping[] = [];
+  exocadMapInternalName = '';
+  exocadMapExocadNames = '';
+  exocadMapMessage = '';
+  private readonly exocadApi = inject(ExocadApiService);
   currentDoctor: StaffMember = {
     id: '',
     name: '',
@@ -1897,6 +1905,7 @@ export class Admin implements OnInit, OnDestroy {
     this.persistActiveNav();
     if (nav === 'staff' || nav === 'doctors') {
       this.loadStaffFromApi();
+      if (nav === 'doctors') this.loadExocadDoctorMappings();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
       if (nav === 'financials') {
@@ -1909,6 +1918,50 @@ export class Admin implements OnInit, OnDestroy {
     } else if (nav === 'lab') {
       this.loadLabConfig();
     }
+  }
+
+  loadExocadDoctorMappings(): void {
+    this.exocadApi.listDoctorMappings().subscribe({
+      next: (res) => {
+        this.exocadDoctorMappings = res?.data || [];
+      },
+      error: () => {
+        this.exocadDoctorMappings = [];
+      },
+    });
+  }
+
+  saveExocadDoctorMapping(): void {
+    const internalDoctorName = this.exocadMapInternalName.trim();
+    const exocadNames = this.exocadMapExocadNames
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!internalDoctorName || !exocadNames.length) {
+      this.exocadMapMessage = 'اكتب اسم النظام واسم Exocad';
+      return;
+    }
+    this.exocadApi.saveDoctorMapping({ internalDoctorName, exocadNames, active: true }).subscribe({
+      next: () => {
+        this.exocadMapMessage = 'تم حفظ الربط';
+        this.exocadMapInternalName = '';
+        this.exocadMapExocadNames = '';
+        this.loadExocadDoctorMappings();
+      },
+      error: (err) => {
+        this.exocadMapMessage = err?.error?.message || 'تعذر الحفظ';
+      },
+    });
+  }
+
+  deleteExocadDoctorMapping(id: string): void {
+    if (!id) return;
+    this.exocadApi.deleteDoctorMapping(id).subscribe({
+      next: () => this.loadExocadDoctorMappings(),
+      error: () => {
+        this.exocadMapMessage = 'تعذر الحذف';
+      },
+    });
   }
 
   syncFinancePanelPeriod(): void {

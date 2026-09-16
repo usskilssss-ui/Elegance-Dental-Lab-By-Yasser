@@ -149,9 +149,41 @@ const dentalCaseSchema = new mongoose.Schema(
       completed: Date,
       exited: Date,
     },
+
+    /**
+     * Exocad sync (additive). Never overwrites requested quantity/teeth in notes.
+     * Billing stays on original request. Exited cases must not be mutated by sync.
+     */
+    exocad: {
+      caseId: { type: String, default: '', index: true },
+      doctorName: { type: String, default: '' },
+      patientName: { type: String, default: '' },
+      sourceFile: { type: String, default: '' },
+      actualDesignedUnits: { type: Number, default: null },
+      actualDesignedTeeth: { type: [String], default: undefined },
+      unitsDifference: { type: Number, default: null },
+      syncStatus: {
+        type: String,
+        enum: [
+          '',
+          'MATCHED',
+          'NO_MATCH',
+          'MULTIPLE_MATCHES',
+          'NEEDS_REVIEW',
+          'SYNCED',
+          'SYNC_ERROR',
+        ],
+        default: '',
+      },
+      lastSyncedAt: { type: Date, default: null },
+      lastSyncError: { type: String, default: '' },
+      matchCandidateIds: { type: [String], default: undefined },
+    },
   },
   { timestamps: true }
 );
+
+dentalCaseSchema.index({ 'exocad.caseId': 1 }, { sparse: true });
 
 // Assign unique case number before save (avoid countDocuments+1: races, deletes, and dup keys).
 dentalCaseSchema.pre('validate', async function (next) {
