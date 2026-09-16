@@ -317,7 +317,8 @@ async function confirmMatch(caseId, exocadCaseId) {
   ingest.matchedCaseId = caseId;
   ingest.lastError = '';
   await ingest.save();
-  return { ok: true, ingest, applied };
+  // Flatten so controllers can read result.sheet directly
+  return { ok: true, ingest, sheet: applied.sheet, applied };
 }
 
 async function syncCaseById(caseId) {

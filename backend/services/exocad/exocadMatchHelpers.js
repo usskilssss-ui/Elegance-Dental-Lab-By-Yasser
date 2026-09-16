@@ -182,17 +182,31 @@ function defaultMaterialFromTeeth(existingTeeth) {
   return best || 'Zircon';
 }
 
+function materialFromCaseType(caseType) {
+  const s = String(caseType || '').trim();
+  if (!s) return 'Zircon';
+  // "Zircon (10)" / "Zircon Final (10) + Emax (2)" → first material token
+  const first = s.split('+')[0].trim().replace(/\s*\(\d+\)\s*$/, '').trim();
+  const bare = first
+    .replace(/\s+(final|try\s*in|try-in|prova|waxup)\s*$/i, '')
+    .trim();
+  if (/^zr(\s|$)/i.test(bare)) return 'Zircon';
+  if (/german\s*zircon/i.test(bare)) return 'German Zircon';
+  return bare || 'Zircon';
+}
+
 /**
  * Build ToothAssignment[] from Exocad FDI list.
  * Keeps material/groupId for teeth that already exist on the case sheet.
  */
-function buildTeethFromDesigned(designedTeeth, existingTeeth) {
+function buildTeethFromDesigned(designedTeeth, existingTeeth, fallbackMaterial) {
   const byFdi = new Map();
   for (const t of existingTeeth || []) {
     const fdi = String(t?.fdi || '').trim();
     if (fdi) byFdi.set(fdi, t);
   }
-  const fallbackMaterial = defaultMaterialFromTeeth(existingTeeth);
+  const fallback =
+    String(fallbackMaterial || '').trim() || defaultMaterialFromTeeth(existingTeeth) || 'Zircon';
   const out = [];
   const seen = new Set();
   for (const raw of designedTeeth || []) {
@@ -202,7 +216,7 @@ function buildTeethFromDesigned(designedTeeth, existingTeeth) {
     const prev = byFdi.get(fdi);
     out.push({
       fdi,
-      material: String(prev?.material || '').trim() || fallbackMaterial,
+      material: String(prev?.material || '').trim() || fallback,
       groupId: String(prev?.groupId || '').trim() || `g_exo_${fdi}`,
     });
   }
@@ -259,14 +273,15 @@ function applyDesignedSheetToDoc(doc, payload) {
 
   const meta = parseNotesMeta(doc.notes || '');
   const existingTeeth = Array.isArray(meta.teeth) ? meta.teeth : [];
-  const nextTeeth = buildTeethFromDesigned(designedTeeth, existingTeeth);
+  const fallbackMaterial = materialFromCaseType(doc.caseType);
+  const nextTeeth = buildTeethFromDesigned(designedTeeth, existingTeeth, fallbackMaterial);
   const nextUnits = designedTeeth.length ? designedTeeth.length : designedUnits;
 
   meta.quantity = nextUnits;
   if (meta.qty != null) meta.qty = nextUnits;
   meta.teeth = nextTeeth;
   doc.notes = stringifyNotesMeta(meta);
-  doc.caseType = rewriteCaseTypeUnits(doc.caseType, nextUnits, nextTeeth);
+  doc.caseType = rewriteCaseTypeUnits(doc.caseType || fallbackMaterial, nextUnits, nextTeeth);
   if (typeof doc.markModified === 'function') {
     doc.markModified('notes');
     doc.markModified('caseType');
