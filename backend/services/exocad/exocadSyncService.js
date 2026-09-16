@@ -8,6 +8,7 @@ const {
   requestedUnitsFromCase,
   requestedTeethFromCase,
   isExitedCase,
+  applyDesignedSheetToDoc,
 } = require('./exocadMatchHelpers');
 
 function basenameOnly(p) {
@@ -114,7 +115,14 @@ async function applyToCase(caseId, payload, syncStatus = 'SYNCED', extra = {}) {
   if (isExitedCase(doc)) return { ok: false, error: 'CASE_EXITED_LOCKED' };
 
   doc.exocad = buildExocadFields(payload, doc, syncStatus, extra);
+  let sheet = null;
   if (syncStatus === 'SYNCED') {
+    // Overwrite active case quantity + tooth chart from CAD-Data (Exocad).
+    sheet = applyDesignedSheetToDoc(doc, payload);
+    // After sheet apply, requested matches designed → difference reflects post-sync state.
+    const requested = requestedUnitsFromCase(doc);
+    const actual = Number(payload.designedUnits) || (payload.designedTeeth || []).length || 0;
+    doc.exocad.unitsDifference = actual - requested;
     doc.exocad.lastSyncedAt = new Date();
     doc.exocad.lastSyncError = '';
   }
@@ -122,6 +130,7 @@ async function applyToCase(caseId, payload, syncStatus = 'SYNCED', extra = {}) {
   return {
     ok: true,
     case: doc,
+    sheet,
     requestedUnits: requestedUnitsFromCase(doc),
     requestedTeeth: requestedTeethFromCase(doc),
   };

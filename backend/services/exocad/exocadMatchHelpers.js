@@ -155,13 +155,124 @@ function isExitedCase(doc) {
   return String(doc.currentStage || '') === 'exited' || String(doc.status || '') === 'exited';
 }
 
+function stringifyNotesMeta(meta) {
+  return NOTES_META_PREFIX + JSON.stringify(meta && typeof meta === 'object' ? meta : {});
+}
+
+/** Majority material from existing chart, else Zircon. */
+function defaultMaterialFromTeeth(existingTeeth) {
+  const counts = new Map();
+  for (const t of existingTeeth || []) {
+    const m = String(t?.material || '').trim();
+    if (!m) continue;
+    counts.set(m, (counts.get(m) || 0) + 1);
+  }
+  let best = '';
+  let bestN = 0;
+  for (const [m, n] of counts) {
+    if (n > bestN) {
+      best = m;
+      bestN = n;
+    }
+  }
+  return best || 'Zircon';
+}
+
+/**
+ * Build ToothAssignment[] from Exocad FDI list.
+ * Keeps material/groupId for teeth that already exist on the case sheet.
+ */
+function buildTeethFromDesigned(designedTeeth, existingTeeth) {
+  const byFdi = new Map();
+  for (const t of existingTeeth || []) {
+    const fdi = String(t?.fdi || '').trim();
+    if (fdi) byFdi.set(fdi, t);
+  }
+  const fallbackMaterial = defaultMaterialFromTeeth(existingTeeth);
+  const out = [];
+  const seen = new Set();
+  for (const raw of designedTeeth || []) {
+    const fdi = String(raw || '').trim();
+    if (!fdi || seen.has(fdi)) continue;
+    seen.add(fdi);
+    const prev = byFdi.get(fdi);
+    out.push({
+      fdi,
+      material: String(prev?.material || '').trim() || fallbackMaterial,
+      groupId: String(prev?.groupId || '').trim() || `g_exo_${fdi}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * Keep work-type labels; rewrite (n) quantities to match Exocad units.
+ * Single (n) → designedUnits. Multiple → rebuild from teeth material counts.
+ */
+function rewriteCaseTypeUnits(caseType, designedUnits, teeth) {
+  const s = String(caseType || '').trim();
+  const units = Number(designedUnits) || 0;
+  if (!s) return s;
+  const matches = [...s.matchAll(/\((\d+)\)/g)];
+  if (matches.length === 1) {
+    return s.replace(/\((\d+)\)/, `(${units})`);
+  }
+  if (matches.length > 1 && Array.isArray(teeth) && teeth.length) {
+    const counts = new Map();
+    for (const t of teeth) {
+      const m = String(t?.material || '').trim() || 'Zircon';
+      counts.set(m, (counts.get(m) || 0) + 1);
+    }
+    return [...counts.entries()].map(([m, n]) => `${m} (${n})`).join(' + ');
+  }
+  if (!matches.length && units > 0) {
+    return `${s} (${units})`;
+  }
+  return s;
+}
+
+/**
+ * On SYNCED: overwrite case sheet quantity + teeth from Exocad designed data.
+ * Mutates doc.notes and doc.caseType. Does not touch exited (caller must guard).
+ */
+function applyDesignedSheetToDoc(doc, payload) {
+  const designedTeeth = Array.isArray(payload?.designedTeeth) ? payload.designedTeeth : [];
+  const designedUnits =
+    Number(payload?.designedUnits) || designedTeeth.length || 0;
+  if (!designedUnits && !designedTeeth.length) {
+    return { applied: false, reason: 'EMPTY_DESIGN' };
+  }
+
+  const meta = parseNotesMeta(doc.notes || '');
+  const existingTeeth = Array.isArray(meta.teeth) ? meta.teeth : [];
+  const nextTeeth = buildTeethFromDesigned(designedTeeth, existingTeeth);
+  const nextUnits = designedTeeth.length ? designedTeeth.length : designedUnits;
+
+  meta.quantity = nextUnits;
+  if (meta.qty != null) meta.qty = nextUnits;
+  meta.teeth = nextTeeth;
+  doc.notes = stringifyNotesMeta(meta);
+  doc.caseType = rewriteCaseTypeUnits(doc.caseType, nextUnits, nextTeeth);
+
+  return {
+    applied: true,
+    quantity: nextUnits,
+    teeth: nextTeeth,
+    caseType: doc.caseType,
+  };
+}
+
 module.exports = {
   NOTES_META_PREFIX,
   normalizeName,
   namesLooselyEqual,
   parseNotesMeta,
+  stringifyNotesMeta,
   requestedUnitsFromCase,
   requestedTeethFromCase,
   isExitedCase,
   expandToken,
+  buildTeethFromDesigned,
+  rewriteCaseTypeUnits,
+  applyDesignedSheetToDoc,
 };

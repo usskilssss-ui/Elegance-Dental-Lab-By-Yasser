@@ -151,8 +151,9 @@ const dentalCaseSchema = new mongoose.Schema(
     },
 
     /**
-     * Exocad sync (additive). Never overwrites requested quantity/teeth in notes.
-     * Billing stays on original request. Exited cases must not be mutated by sync.
+     * Exocad sync. On SYNCED (active cases only): also overwrites notes meta
+     * quantity/teeth and caseType (n) to match CAD-Data designed units/teeth.
+     * Exited cases must not be mutated by sync.
      */
     exocad: {
       caseId: { type: String, default: '', index: true },
