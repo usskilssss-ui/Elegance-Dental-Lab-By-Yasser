@@ -93,16 +93,17 @@ exports.syncCase = async (req, res) => {
       });
     }
     const view = await getCaseExocadView(req.params.caseId);
+    const sheet = result.sheet || result.applied?.sheet || null;
     return res.json({
       success: true,
       data: view,
-      sheet: result.sheet || null,
-      message: result.sheet?.applied
-        ? `تم تحديث الشيت: كمية ${result.sheet.quantity} / أسنان ${
-            Array.isArray(result.sheet.teeth) ? result.sheet.teeth.length : 0
+      sheet,
+      message: sheet?.applied
+        ? `تم تحديث الشيت: كمية ${sheet.quantity} / أسنان ${
+            Array.isArray(sheet.teeth) ? sheet.teeth.length : 0
           }`
-        : result.sheet?.reason
-          ? `المزامنة تمت لكن الشيت لم يُحدَّث (${result.sheet.reason})`
+        : sheet?.reason
+          ? `المزامنة تمت لكن الشيت لم يُحدَّث (${sheet.reason})`
           : 'تمت المزامنة',
     });
   } catch (error) {

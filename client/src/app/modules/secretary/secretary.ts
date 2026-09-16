@@ -626,19 +626,29 @@ export class Secretary implements OnInit, OnDestroy {
   onToothAssignmentsChange(list: ToothAssignment[]): void {
     this.toothAssignments = list || [];
     const counts = countByMaterial(this.toothAssignments);
-    for (const [mat, n] of Object.entries(counts)) {
-      if (this.selectedWorkTypes.has(mat)) {
-        this.ensureKindQtys(mat);
-        // Tooth chart drives the New bucket; Redo/Mod stay as entered.
-        this.workTypeKindQtys[mat].New = n;
-        this.syncTotalQtyFromKinds(mat);
+    // Auto-select materials coming from Exocad so New qty chips actually update.
+    for (const mat of Object.keys(counts)) {
+      if (!mat || mat === 'Remake' || mat === 'Empty') continue;
+      if (!this.selectedWorkTypes.has(mat)) {
+        const catalog =
+          this.workTypeOptions.find((o) => o.toLowerCase() === mat.toLowerCase()) || mat;
+        this.selectedWorkTypes.add(catalog);
       }
+    }
+    for (const [mat, n] of Object.entries(counts)) {
+      const catalog =
+        [...this.selectedWorkTypes].find((o) => o.toLowerCase() === String(mat).toLowerCase()) ||
+        mat;
+      if (!this.selectedWorkTypes.has(catalog)) continue;
+      this.ensureKindQtys(catalog);
+      this.workTypeKindQtys[catalog].New = n;
+      this.syncTotalQtyFromKinds(catalog);
     }
     for (const wt of this.selectedWorkTypes) {
       if (!(wt in counts) && this.materialTotalQty(wt) < 1) {
+        // Keep previously selected materials that aren't on the chart at least at 0 New
+        // (don't force 1 — Exocad may have replaced the whole chart).
         this.ensureKindQtys(wt);
-        this.workTypeKindQtys[wt].New = 1;
-        this.syncTotalQtyFromKinds(wt);
       }
     }
     this.updateWorkTypeString();
@@ -1451,42 +1461,29 @@ export class Secretary implements OnInit, OnDestroy {
         this.exocadLoading = false;
         this.exocadSyncingId = null;
         if (res?.data) this.exocadStatus = res.data;
-        const sheetApplied = !!res?.sheet?.applied;
-        const qty = Number(res?.sheet?.quantity ?? res?.data?.requestedUnits ?? 0);
-        const teethCount = Array.isArray(res?.sheet?.teeth)
-          ? res.sheet.teeth.length
-          : Array.isArray(res?.data?.requestedTeeth)
-            ? res.data.requestedTeeth.length
-            : Array.isArray(res?.data?.actualDesignedTeeth)
-              ? res.data.actualDesignedTeeth.length
-              : 0;
+
+        const sheetTeethRaw = Array.isArray(res?.sheet?.teeth) ? res.sheet.teeth : [];
+        const builtTeeth = this.buildToothAssignmentsFromExocadSync(res);
+        const qty = Number(
+          res?.sheet?.quantity ??
+            builtTeeth.length ??
+            res?.data?.actualDesignedUnits ??
+            res?.data?.requestedUnits ??
+            0
+        );
+        const teethCount = builtTeeth.length || qty;
         this.exocadMessage = res?.success
-          ? sheetApplied
-            ? `تمت المزامنة — الكمية ${qty} / أسنان ${teethCount}`
-            : res?.message || 'تمت المزامنة لكن الشيت لم يتغير'
+          ? `تمت المزامنة — الكمية ${qty || teethCount} / أسنان ${teethCount}`
           : res?.message || 'تعذر المزامنة';
 
-        // Apply designed teeth into the open edit form (drives work-type qty chips too).
-        if (res?.success && this.dialogOpen() && this.editingId === caseId) {
-          const fdis = Array.isArray(res?.data?.actualDesignedTeeth)
-            ? res.data.actualDesignedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
-            : Array.isArray(res?.data?.requestedTeeth)
-              ? res.data.requestedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
-              : [];
-          if (fdis.length) {
-            const byFdi = new Map(this.toothAssignments.map((t) => [String(t.fdi), t]));
-            const fallback =
-              this.toothAssignments[0]?.material || this.activeToothMaterial || 'Zircon';
-            const next = fdis.map((fdi: string) => {
-              const prev = byFdi.get(fdi);
-              return {
-                fdi,
-                material: prev?.material || fallback,
-                groupId: prev?.groupId || `g_exo_${fdi}`,
-              };
-            });
-            // IMPORTANT: use onToothAssignmentsChange so New qty chips follow the chart
-            this.onToothAssignmentsChange(next);
+        if (!res?.success) {
+          this.reloadCasesFromBackend(false);
+          return;
+        }
+
+        if (this.dialogOpen() && this.editingId === caseId) {
+          if (builtTeeth.length) {
+            this.onToothAssignmentsChange(builtTeeth);
           } else if (qty > 0) {
             this.formDraft.quantity = qty;
             for (const wt of this.selectedWorkTypes) {
@@ -1499,16 +1496,45 @@ export class Secretary implements OnInit, OnDestroy {
           }
         }
 
-        this.reloadCasesFromBackend(false, () => {
-          if (!(this.dialogOpen() && this.editingId === caseId)) return;
-          const updated = this.sharedCases.getCaseById(caseId);
-          if (!updated) return;
-          this.formDraft.quantity = updated.quantity;
-          this.formDraft.workType = updated.workType;
-          if (Array.isArray(updated.teeth) && updated.teeth.length) {
-            this.onToothAssignmentsChange([...(updated.teeth as ToothAssignment[])]);
-          }
-        });
+        const finishReload = () => {
+          this.reloadCasesFromBackend(false, () => {
+            if (!(this.dialogOpen() && this.editingId === caseId)) return;
+            const updated = this.sharedCases.getCaseById(caseId);
+            if (!updated) return;
+            // Prefer server teeth when present; otherwise keep what we just painted.
+            if (Array.isArray(updated.teeth) && updated.teeth.length) {
+              this.onToothAssignmentsChange([...(updated.teeth as ToothAssignment[])]);
+            } else if (builtTeeth.length) {
+              this.onToothAssignmentsChange(builtTeeth);
+            }
+            if (Number(updated.quantity) > 0) {
+              this.formDraft.quantity = updated.quantity;
+            }
+            if (updated.workType) {
+              this.formDraft.workType = updated.workType;
+            }
+          });
+        };
+
+        // Persist qty+teeth into notes so refresh/reopen keeps the chart.
+        // Backend sync should already do this; client update is a safety net.
+        if (builtTeeth.length || qty > 0) {
+          this.persistExocadSheetToCase(
+            caseId,
+            {
+              quantity: qty || builtTeeth.length || undefined,
+              teeth: builtTeeth.length
+                ? builtTeeth
+                : sheetTeethRaw.length
+                  ? sheetTeethRaw
+                  : undefined,
+              workType: res?.sheet?.caseType || this.formDraft.workType || undefined,
+            },
+            finishReload
+          );
+        } else {
+          finishReload();
+        }
       },
       error: (err) => {
         this.exocadLoading = false;
@@ -1518,6 +1544,130 @@ export class Secretary implements OnInit, OnDestroy {
           code === 'MULTIPLE_MATCHES'
             ? 'في أكتر من مشروع Exocad لنفس المريض — حدّث الصفحة وجرب المزامنة تاني'
             : err?.error?.message || 'تعذر المزامنة مع Exocad';
+      },
+    });
+  }
+
+  /** Normalize Exocad sync payload into ToothAssignment[] (sheet first, then designed FDIs). */
+  private buildToothAssignmentsFromExocadSync(res: any): ToothAssignment[] {
+    const sheetTeeth = Array.isArray(res?.sheet?.teeth) ? res.sheet.teeth : [];
+    if (sheetTeeth.length) {
+      return sheetTeeth
+        .map((t: any) => ({
+          fdi: String(t?.fdi || '').trim(),
+          material: String(t?.material || '').trim() || 'Zircon',
+          groupId: String(t?.groupId || '').trim() || `g_exo_${t?.fdi || ''}`,
+        }))
+        .filter((t: ToothAssignment) => !!t.fdi && !!t.material && !!t.groupId);
+    }
+    const fdis = Array.isArray(res?.data?.actualDesignedTeeth)
+      ? res.data.actualDesignedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
+      : Array.isArray(res?.data?.requestedTeeth)
+        ? res.data.requestedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
+        : [];
+    if (!fdis.length) return [];
+    const byFdi = new Map(this.toothAssignments.map((t) => [String(t.fdi), t]));
+    const existing = this.sharedCases.getCaseById(this.editingId || '')?.teeth;
+    const existingByFdi = new Map(
+      (Array.isArray(existing) ? existing : []).map((t: ToothAssignment) => [String(t.fdi), t])
+    );
+    const fromWorkType = String(this.formDraft.workType || '')
+      .split('+')[0]
+      .trim()
+      .replace(/\s*\(\d+\)\s*$/, '')
+      .replace(/\s+(final|try\s*in|try-in|prova|waxup)\s*$/i, '')
+      .trim();
+    const materialHint =
+      this.toothAssignments[0]?.material ||
+      this.activeToothMaterial ||
+      (Array.isArray(existing) && existing[0]?.material) ||
+      fromWorkType ||
+      'Zircon';
+    return fdis.map((fdi: string) => {
+      const prev = byFdi.get(fdi) || existingByFdi.get(fdi);
+      return {
+        fdi,
+        material: prev?.material || materialHint,
+        groupId: prev?.groupId || `g_exo_${fdi}`,
+      };
+    });
+  }
+
+  /** Quietly write Exocad sheet (qty + teeth) onto the case so a page refresh keeps them. */
+  private persistExocadSheetToCase(
+    caseId: string,
+    patch: {
+      quantity?: number;
+      teeth?: Array<{ fdi: string; material: string; groupId: string }>;
+      workType?: string;
+    },
+    after?: () => void
+  ): void {
+    const existing = this.sharedCases.getCaseById(caseId);
+    if (!existing) {
+      after?.();
+      return;
+    }
+    const teeth =
+      Array.isArray(patch.teeth) && patch.teeth.length
+        ? patch.teeth
+        : Array.isArray(existing.teeth)
+          ? existing.teeth
+          : [];
+    if (!teeth.length && !(Number(patch.quantity) > 0)) {
+      after?.();
+      return;
+    }
+    const quantity =
+      Number(patch.quantity) > 0
+        ? Number(patch.quantity)
+        : teeth.length || Number(existing.quantity) || 1;
+    const workType = String(
+      patch.workType ||
+        (this.dialogOpen() && this.editingId === caseId ? this.formDraft.workType : '') ||
+        existing.workType ||
+        ''
+    ).trim();
+    const formPayload = {
+      requesterType: existing.requesterType === 'student' ? ('student' as const) : ('doctor' as const),
+      studentPrice: Number(existing.salaryAmount || 0),
+      doctor: existing.doctor || '',
+      patient: existing.patient || '',
+      patientEmail: existing.patientEmail?.trim() || undefined,
+      patientPhone: existing.patientPhone || '',
+      workType: workType || existing.workType || '',
+      workDetail: existing.workDetail || '',
+      color: existing.color || '',
+      size: existing.size || '',
+      quantity,
+      date: (() => {
+        const raw = existing.receivedDateRaw || '';
+        if (raw) return raw;
+        return existing.receivedDate || existing.date || '';
+      })(),
+      deliveryDate: '',
+      deliveryTime: '',
+      intakeType: existing.intakeType,
+      entrySource: 'secretary' as const,
+      teeth: teeth.length ? teeth : undefined,
+    };
+    const plyPreserveMeta = existing.plyScanUrl
+      ? (() => {
+          const scanPath = toStoredCaseImagePath(existing.plyScanUrl);
+          return scanPath
+            ? { plyScanPath: scanPath, plyFileName: existing.plyFileName }
+            : undefined;
+        })()
+      : undefined;
+
+    this.caseApi.updateCase(caseId, buildCreateCasePayload(formPayload, plyPreserveMeta)).subscribe({
+      next: () => after?.(),
+      error: () => {
+        // Backend sheet apply may still have succeeded; don't block UI refresh.
+        this.exocadMessage =
+          (this.exocadMessage ? this.exocadMessage + ' — ' : '') +
+          'تعذر حفظ الأسنان/الكمية من الواجهة (تحقق من صلاحية التعديل)';
+        after?.();
       },
     });
   }
