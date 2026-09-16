@@ -37,6 +37,7 @@ exports.ingest = async (req, res) => {
       exocadCaseId: result.ingest?.exocadCaseId,
       matchedCaseId: result.ingest?.matchedCaseId || null,
       error: result.error || '',
+      matchSelfTest: result.matchSelfTest || null,
     });
   } catch (error) {
     console.error('[exocad.ingest]', error);

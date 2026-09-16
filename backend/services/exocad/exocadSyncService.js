@@ -9,6 +9,8 @@ const {
   requestedTeethFromCase,
   isExitedCase,
   applyDesignedSheetToDoc,
+  parseNotesMeta,
+  expandToken,
 } = require('./exocadMatchHelpers');
 
 function basenameOnly(p) {
@@ -61,6 +63,44 @@ function doctorMatchesPractice(referringDoctor, practiceName, mappedNames) {
   return false;
 }
 
+function caseDoctorName(doc) {
+  const meta = parseNotesMeta(doc.notes || '');
+  return String(doc.referringDoctor || meta.doctor || meta.doctorName || '').trim();
+}
+
+function casePatientName(doc) {
+  const meta = parseNotesMeta(doc.notes || '');
+  return String(doc.patientName || meta.patient || meta.patientName || '').trim();
+}
+
+/** True if ingest patient/folder/source looks like this case patient (AR↔EN). */
+function ingestMatchesPatient(ing, patient) {
+  const p = String(patient || '').trim();
+  if (!p) return false;
+  if (namesLooselyEqual(ing.patientName, p)) return true;
+  const hay = normalizeName(
+    `${ing.patientName || ''} ${ing.projectFolder || ''} ${ing.sourceFile || ''}`
+  );
+  if (!hay) return false;
+  const tokens = normalizeName(p)
+    .split(' ')
+    .filter((t) => t.length > 1);
+  for (const t of tokens) {
+    for (const alias of expandToken(t)) {
+      const a = normalizeName(alias);
+      if (a.length >= 3 && hay.includes(a)) return true;
+    }
+  }
+  return false;
+}
+
+function matchSelfTest() {
+  return {
+    layla: namesLooselyEqual('ليلى', 'layla'),
+    marwan: namesLooselyEqual('مروان النادي', 'DR / MARWAN ELNADY'),
+  };
+}
+
 /** Non-exited cases only. */
 async function findCandidateCases(payload) {
   const doctorNames = await resolveInternalDoctorNames(payload.practiceName);
@@ -73,12 +113,12 @@ async function findCandidateCases(payload) {
     status: { $ne: 'exited' },
   })
     .sort({ createdAt: -1 })
-    .limit(500)
+    .limit(800)
     .lean();
 
-  const patientHits = cases.filter((c) => namesLooselyEqual(c.patientName, patient));
+  const patientHits = cases.filter((c) => namesLooselyEqual(casePatientName(c), patient));
   const both = patientHits.filter((c) =>
-    doctorMatchesPractice(c.referringDoctor, practice, doctorNames)
+    doctorMatchesPractice(caseDoctorName(c), practice, doctorNames)
   );
 
   if (both.length) {
@@ -88,7 +128,11 @@ async function findCandidateCases(payload) {
   if (patientHits.length) {
     return { candidates: patientHits, doctorMapped: false };
   }
-  return { candidates: [], doctorMapped: doctorNames.length > 0 };
+  return {
+    candidates: [],
+    doctorMapped: doctorNames.length > 0,
+    matchSelfTest: matchSelfTest(),
+  };
 }
 
 function buildExocadFields(payload, dentalCase, syncStatus, extra = {}) {
@@ -252,7 +296,9 @@ async function ingestAndMatch(rawPayload) {
     ingest.matchedCaseId = null;
     ingest.lastError = 'No active (non-exited) case matched';
     await ingest.save();
-    return { ingest, status: 'NO_MATCH', candidates: [], doctorMapped };
+    return { ingest, status: 'NO_MATCH',
+    matchSelfTest: matchSelfTest(),
+    candidates: [], doctorMapped };
   }
 
   if (candidates.length > 1 || !doctorMapped) {
@@ -354,26 +400,34 @@ async function syncCaseById(caseId) {
     .limit(500)
     .lean();
 
-  let hits = recent.filter((ing) => namesLooselyEqual(ing.patientName, doc.patientName));
+  const patient = casePatientName(doc);
+  const doctor = caseDoctorName(doc);
+  let hits = recent.filter((ing) => ingestMatchesPatient(ing, patient));
 
   // Fallback: patient AR↔EN miss (or agent name empty) → try doctor practice match.
   if (!hits.length) {
     const byDoctor = [];
     for (const ing of recent) {
       const mapped = await resolveInternalDoctorNames(ing.practiceName);
-      if (doctorMatchesPractice(doc.referringDoctor, ing.practiceName, mapped)) {
+      if (doctorMatchesPractice(doctor, ing.practiceName, mapped)) {
         byDoctor.push(ing);
       }
     }
     if (byDoctor.length === 1 && Number(byDoctor[0].designedUnits || 0) > 0) {
       hits = byDoctor;
     } else if (byDoctor.length > 1) {
-      // Same doctor, several projects — keep those whose patient loosely matches,
-      // else keep all doctor projects so richest-CAD pick can still run.
       const patientAmongDoctor = byDoctor.filter((ing) =>
-        namesLooselyEqual(ing.patientName, doc.patientName)
+        ingestMatchesPatient(ing, patient)
       );
-      hits = patientAmongDoctor.length ? patientAmongDoctor : byDoctor;
+      const needed = requestedUnitsFromCase(doc);
+      const qtyHits = patientAmongDoctor.length
+        ? patientAmongDoctor
+        : byDoctor.filter((ing) => Number(ing.designedUnits || 0) === needed && needed > 0);
+      hits = qtyHits.length
+        ? qtyHits
+        : patientAmongDoctor.length
+          ? patientAmongDoctor
+          : byDoctor;
     }
   }
 
@@ -382,15 +436,16 @@ async function syncCaseById(caseId) {
       .slice(0, 5)
       .map((r) => `${r.patientName || '?'} / ${r.practiceName || '?'}`)
       .join(' | ');
+    const probe = matchSelfTest();
     doc.set('exocad.syncStatus', 'NO_MATCH');
     doc.set(
       'exocad.lastSyncError',
       recent.length
-        ? `لا يوجد مشروع Exocad مطابق للمريض "${doc.patientName || ''}" (آخر وصول: ${sample})`
+        ? `لا يوجد مشروع Exocad مطابق للمريض "${patient}" (probe layla=${probe.layla}, marwan=${probe.marwan}; آخر وصول: ${sample})`
         : 'مفيش أي مشاريع واصلة من الـ Exocad Agent — تأكد إن الـ agent شغال ومتصل بالسيرفر'
     );
     await doc.save();
-    return { ok: false, error: 'NO_MATCH' };
+    return { ok: false, error: 'NO_MATCH', matchSelfTest: probe };
   }
 
   // Prefer projects whose Exocad practice matches this case's doctor
@@ -398,7 +453,7 @@ async function syncCaseById(caseId) {
   const doctorHits = [];
   for (const ing of hits) {
     const mapped = await resolveInternalDoctorNames(ing.practiceName);
-    if (doctorMatchesPractice(doc.referringDoctor, ing.practiceName, mapped)) {
+    if (doctorMatchesPractice(doctor, ing.practiceName, mapped)) {
       doctorHits.push(ing);
     }
   }
