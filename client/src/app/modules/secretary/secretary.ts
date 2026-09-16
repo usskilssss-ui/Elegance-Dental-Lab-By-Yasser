@@ -1486,7 +1486,6 @@ export class Secretary implements OnInit, OnDestroy {
               };
             });
             // IMPORTANT: use onToothAssignmentsChange so New qty chips follow the chart
-            // (updateWorkTypeString alone keeps old chip totals and reverts quantity).
             this.onToothAssignmentsChange(next);
           } else if (qty > 0) {
             this.formDraft.quantity = qty;
@@ -1514,7 +1513,11 @@ export class Secretary implements OnInit, OnDestroy {
       error: (err) => {
         this.exocadLoading = false;
         this.exocadSyncingId = null;
-        this.exocadMessage = err?.error?.message || 'تعذر المزامنة مع Exocad';
+        const code = err?.error?.data?.error || err?.error?.error || '';
+        this.exocadMessage =
+          code === 'MULTIPLE_MATCHES'
+            ? 'في أكتر من مشروع Exocad لنفس المريض — حدّث الصفحة وجرب المزامنة تاني'
+            : err?.error?.message || 'تعذر المزامنة مع Exocad';
       },
     });
   }
