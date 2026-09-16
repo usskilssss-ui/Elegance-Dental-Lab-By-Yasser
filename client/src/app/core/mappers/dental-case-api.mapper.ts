@@ -404,6 +404,26 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     exitedAtRaw: exitedAtRaw ? String(exitedAtRaw) : undefined,
     sourceTryInCaseNumber: String(meta['sourceTryInCaseNumber'] ?? '').trim() || undefined,
     sourceTryInCaseId: String(meta['sourceTryInCaseId'] ?? '').trim() || undefined,
+    ...(() => {
+      const ex = (doc['exocad'] || {}) as Record<string, unknown>;
+      const actual = ex['actualDesignedUnits'];
+      const actualN =
+        typeof actual === 'number' && Number.isFinite(actual)
+          ? actual
+          : actual != null && actual !== '' && Number.isFinite(Number(actual))
+            ? Number(actual)
+            : null;
+      const teethArr = Array.isArray(ex['actualDesignedTeeth'])
+        ? (ex['actualDesignedTeeth'] as unknown[]).map((t) => String(t))
+        : [];
+      return {
+        exocadActualUnits: actualN,
+        exocadActualTeeth: teethArr,
+        exocadSyncStatus: String(ex['syncStatus'] ?? '') || undefined,
+        exocadUnitsDiff:
+          actualN != null && Number.isFinite(quantity) ? actualN - Number(quantity) : null,
+      };
+    })(),
   };
 }
 

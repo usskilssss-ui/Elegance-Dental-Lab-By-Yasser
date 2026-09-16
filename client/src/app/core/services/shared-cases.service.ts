@@ -58,6 +58,11 @@ export interface DentalCase {
   /** رقم حالة التراي إن اللي اتعمل منها الفاينل */
   sourceTryInCaseNumber?: string;
   sourceTryInCaseId?: string;
+  /** Exocad: actual designed units (does not replace quantity) */
+  exocadActualUnits?: number | null;
+  exocadActualTeeth?: string[];
+  exocadSyncStatus?: string;
+  exocadUnitsDiff?: number | null;
 }
 
 @Injectable({

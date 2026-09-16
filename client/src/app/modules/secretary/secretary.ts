@@ -28,6 +28,7 @@ import { CaseBarcodeComponent } from '../../shared/case-barcode/case-barcode';
 import { LabConfigService } from '../../core/services/lab-config.service';
 import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
 import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
+import { ExocadApiService, ExocadCaseStatus } from '../../core/services/exocad-api.service';
 import {
   applyWorkPhaseToName,
   buildAfterTryInLabel,
@@ -371,6 +372,13 @@ export class Secretary implements OnInit, OnDestroy {
   readonly dialogOpen = signal(false);
   readonly dialogMode = signal<'create' | 'edit'>('create');
   editingId: string | null = null;
+
+  /** Exocad sync (secretary) — never changes requested quantity / billing */
+  private readonly exocadApi = inject(ExocadApiService);
+  exocadStatus: ExocadCaseStatus | null = null;
+  exocadLoading = false;
+  exocadMessage = '';
+  exocadSyncingId: string | null = null;
   formDraft: any = emptyDraft();
 
   // Autocomplete Doctor logic — فقط دكاترة لهم أكونت نشط على السيستم
@@ -1290,6 +1298,7 @@ export class Secretary implements OnInit, OnDestroy {
   proceedWithEdit(c: any): void {
     this.dialogMode.set('edit');
     this.editingId = c.id;
+    this.loadExocadStatus(c.id);
     this.existingPlyFileName = c.plyFileName || null;
     this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))
       ? String(c.plyScanUrl)
@@ -1405,6 +1414,52 @@ export class Secretary implements OnInit, OnDestroy {
     this.existingPlyFileName = null;
     this.plyScanLink = '';
     this.clearPlySelection();
+    this.exocadStatus = null;
+    this.exocadMessage = '';
+    this.exocadLoading = false;
+    this.exocadSyncingId = null;
+  }
+
+  loadExocadStatus(caseId: string): void {
+    this.exocadStatus = null;
+    this.exocadMessage = '';
+    this.exocadLoading = true;
+    this.exocadApi.getCaseStatus(caseId).subscribe({
+      next: (res) => {
+        this.exocadLoading = false;
+        this.exocadStatus = res?.data || null;
+      },
+      error: () => {
+        this.exocadLoading = false;
+        this.exocadStatus = null;
+      },
+    });
+  }
+
+  syncExocadForCase(caseId: string, status?: string): void {
+    if (!caseId) return;
+    if (status === 'exited') {
+      this.exocadMessage = 'الحالات الخارجة لا تُعدَّل';
+      return;
+    }
+    this.exocadLoading = true;
+    this.exocadSyncingId = caseId;
+    this.exocadMessage = '';
+    this.exocadApi.syncCase(caseId).subscribe({
+      next: (res) => {
+        this.exocadLoading = false;
+        this.exocadSyncingId = null;
+        if (res?.data) this.exocadStatus = res.data;
+        this.exocadMessage = res?.success ? 'تمت المزامنة' : res?.message || 'تعذر المزامنة';
+        // Refresh list so card shows updated Exocad fields without touching quantity/billing
+        this.reloadCasesFromBackend();
+      },
+      error: (err) => {
+        this.exocadLoading = false;
+        this.exocadSyncingId = null;
+        this.exocadMessage = err?.error?.message || 'تعذر المزامنة مع Exocad';
+      },
+    });
   }
 
   onPlyFileSelected(event: Event): void {
