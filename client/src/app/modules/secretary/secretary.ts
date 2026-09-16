@@ -373,7 +373,7 @@ export class Secretary implements OnInit, OnDestroy {
   readonly dialogMode = signal<'create' | 'edit'>('create');
   editingId: string | null = null;
 
-  /** Exocad sync (secretary) — never changes requested quantity / billing */
+  /** Exocad sync (secretary) — on SYNCED updates quantity + teeth chart from CAD-Data */
   private readonly exocadApi = inject(ExocadApiService);
   exocadStatus: ExocadCaseStatus | null = null;
   exocadLoading = false;
@@ -1450,8 +1450,31 @@ export class Secretary implements OnInit, OnDestroy {
         this.exocadLoading = false;
         this.exocadSyncingId = null;
         if (res?.data) this.exocadStatus = res.data;
-        this.exocadMessage = res?.success ? 'تمت المزامنة' : res?.message || 'تعذر المزامنة';
-        // Refresh list so card shows updated Exocad fields without touching quantity/billing
+        this.exocadMessage = res?.success
+          ? 'تمت المزامنة — تم تحديث الكمية والأسنان من Exocad'
+          : res?.message || 'تعذر المزامنة';
+        // If edit dialog is open for this case, refresh chart + qty from Exocad teeth
+        if (res?.success && this.dialogOpen() && this.editingId === caseId && res?.data) {
+          const fdis = Array.isArray(res.data.actualDesignedTeeth)
+            ? res.data.actualDesignedTeeth.map((t) => String(t).trim()).filter(Boolean)
+            : [];
+          if (fdis.length) {
+            const byFdi = new Map(this.toothAssignments.map((t) => [String(t.fdi), t]));
+            const fallback =
+              this.toothAssignments[0]?.material || this.activeToothMaterial || 'Zircon';
+            this.toothAssignments = fdis.map((fdi) => {
+              const prev = byFdi.get(fdi);
+              return {
+                fdi,
+                material: prev?.material || fallback,
+                groupId: prev?.groupId || `g_exo_${fdi}`,
+              };
+            });
+            this.updateWorkTypeString();
+          } else if (res.data.actualDesignedUnits != null) {
+            this.formDraft.quantity = Number(res.data.actualDesignedUnits) || this.formDraft.quantity;
+          }
+        }
         this.reloadCasesFromBackend();
       },
       error: (err) => {
