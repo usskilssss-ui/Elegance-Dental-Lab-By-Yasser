@@ -111,11 +111,13 @@ export type SecretaryCaseFormPayload = {
 };
 
 function parseMeta(notes: string | undefined): Record<string, unknown> {
-  if (!notes || !notes.startsWith(META_PREFIX)) {
-    return {};
-  }
+  if (!notes) return {};
+  const normalized = notes.replace(/^\uFEFF/, '');
+  // Accept __META__\n and __META__\r\n
+  if (!normalized.startsWith('__META__')) return {};
+  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
   try {
-    return JSON.parse(notes.slice(META_PREFIX.length)) as Record<string, unknown>;
+    return JSON.parse(rest) as Record<string, unknown>;
   } catch {
     return {};
   }

@@ -1206,14 +1206,15 @@ export class Secretary implements OnInit, OnDestroy {
     }, 2000);
   }
 
-  private reloadCasesFromBackend(silent = false): void {
+  private reloadCasesFromBackend(silent = false, after?: () => void): void {
     if (!silent) this.casesLoading.set(true);
     this.caseApi.getAllCases(1, 1500).subscribe({
-      next: res => {
+      next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
-        const mapped = Array.isArray(rows) ? rows.map(r => mapApiCaseToDentalCase(r)) : [];
+        const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];
         this.sharedCases.setCasesFromServer(mapped);
         this.casesLoading.set(false);
+        after?.();
       },
       error: () => {
         this.casesLoading.set(false);
@@ -1446,23 +1447,37 @@ export class Secretary implements OnInit, OnDestroy {
     this.exocadSyncingId = caseId;
     this.exocadMessage = '';
     this.exocadApi.syncCase(caseId).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.exocadLoading = false;
         this.exocadSyncingId = null;
         if (res?.data) this.exocadStatus = res.data;
+        const sheetApplied = !!res?.sheet?.applied;
+        const qty = Number(res?.sheet?.quantity ?? res?.data?.requestedUnits ?? 0);
+        const teethCount = Array.isArray(res?.sheet?.teeth)
+          ? res.sheet.teeth.length
+          : Array.isArray(res?.data?.requestedTeeth)
+            ? res.data.requestedTeeth.length
+            : Array.isArray(res?.data?.actualDesignedTeeth)
+              ? res.data.actualDesignedTeeth.length
+              : 0;
         this.exocadMessage = res?.success
-          ? 'تمت المزامنة — تم تحديث الكمية والأسنان من Exocad'
+          ? sheetApplied
+            ? `تمت المزامنة — الكمية ${qty} / أسنان ${teethCount}`
+            : res?.message || 'تمت المزامنة لكن الشيت لم يتغير'
           : res?.message || 'تعذر المزامنة';
-        // If edit dialog is open for this case, refresh chart + qty from Exocad teeth
-        if (res?.success && this.dialogOpen() && this.editingId === caseId && res?.data) {
-          const fdis = Array.isArray(res.data.actualDesignedTeeth)
-            ? res.data.actualDesignedTeeth.map((t) => String(t).trim()).filter(Boolean)
-            : [];
+
+        // Apply designed teeth into the open edit form (drives work-type qty chips too).
+        if (res?.success && this.dialogOpen() && this.editingId === caseId) {
+          const fdis = Array.isArray(res?.data?.actualDesignedTeeth)
+            ? res.data.actualDesignedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
+            : Array.isArray(res?.data?.requestedTeeth)
+              ? res.data.requestedTeeth.map((t: unknown) => String(t).trim()).filter(Boolean)
+              : [];
           if (fdis.length) {
             const byFdi = new Map(this.toothAssignments.map((t) => [String(t.fdi), t]));
             const fallback =
               this.toothAssignments[0]?.material || this.activeToothMaterial || 'Zircon';
-            this.toothAssignments = fdis.map((fdi) => {
+            const next = fdis.map((fdi: string) => {
               const prev = byFdi.get(fdi);
               return {
                 fdi,
@@ -1470,12 +1485,31 @@ export class Secretary implements OnInit, OnDestroy {
                 groupId: prev?.groupId || `g_exo_${fdi}`,
               };
             });
+            // IMPORTANT: use onToothAssignmentsChange so New qty chips follow the chart
+            // (updateWorkTypeString alone keeps old chip totals and reverts quantity).
+            this.onToothAssignmentsChange(next);
+          } else if (qty > 0) {
+            this.formDraft.quantity = qty;
+            for (const wt of this.selectedWorkTypes) {
+              if (wt === 'Remake' || wt === 'Empty') continue;
+              this.ensureKindQtys(wt);
+              this.workTypeKindQtys[wt].New = qty;
+              this.syncTotalQtyFromKinds(wt);
+            }
             this.updateWorkTypeString();
-          } else if (res.data.actualDesignedUnits != null) {
-            this.formDraft.quantity = Number(res.data.actualDesignedUnits) || this.formDraft.quantity;
           }
         }
-        this.reloadCasesFromBackend();
+
+        this.reloadCasesFromBackend(false, () => {
+          if (!(this.dialogOpen() && this.editingId === caseId)) return;
+          const updated = this.sharedCases.getCaseById(caseId);
+          if (!updated) return;
+          this.formDraft.quantity = updated.quantity;
+          this.formDraft.workType = updated.workType;
+          if (Array.isArray(updated.teeth) && updated.teeth.length) {
+            this.onToothAssignmentsChange([...(updated.teeth as ToothAssignment[])]);
+          }
+        });
       },
       error: (err) => {
         this.exocadLoading = false;

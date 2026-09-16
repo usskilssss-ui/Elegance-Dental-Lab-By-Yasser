@@ -126,9 +126,13 @@ function namesLooselyEqual(a, b) {
 }
 
 function parseNotesMeta(notes) {
-  if (!notes || typeof notes !== 'string' || !notes.startsWith(NOTES_META_PREFIX)) return {};
+  if (!notes || typeof notes !== 'string') return {};
+  const normalized = notes.replace(/^\uFEFF/, '');
+  // Accept both __META__\n and __META__\r\n (Windows / mixed DB rows).
+  if (!normalized.startsWith('__META__')) return {};
+  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
   try {
-    return JSON.parse(notes.slice(NOTES_META_PREFIX.length));
+    return JSON.parse(rest);
   } catch {
     return {};
   }
@@ -234,11 +238,21 @@ function rewriteCaseTypeUnits(caseType, designedUnits, teeth) {
 /**
  * On SYNCED: overwrite case sheet quantity + teeth from Exocad designed data.
  * Mutates doc.notes and doc.caseType. Does not touch exited (caller must guard).
+ * Falls back to teeth/units already stored on doc.exocad when payload is thin.
  */
 function applyDesignedSheetToDoc(doc, payload) {
-  const designedTeeth = Array.isArray(payload?.designedTeeth) ? payload.designedTeeth : [];
+  const fromPayloadTeeth = Array.isArray(payload?.designedTeeth)
+    ? payload.designedTeeth.map((t) => String(t).trim()).filter(Boolean)
+    : [];
+  const fromExocadTeeth = Array.isArray(doc?.exocad?.actualDesignedTeeth)
+    ? doc.exocad.actualDesignedTeeth.map((t) => String(t).trim()).filter(Boolean)
+    : [];
+  const designedTeeth = fromPayloadTeeth.length ? fromPayloadTeeth : fromExocadTeeth;
   const designedUnits =
-    Number(payload?.designedUnits) || designedTeeth.length || 0;
+    Number(payload?.designedUnits) ||
+    Number(doc?.exocad?.actualDesignedUnits) ||
+    designedTeeth.length ||
+    0;
   if (!designedUnits && !designedTeeth.length) {
     return { applied: false, reason: 'EMPTY_DESIGN' };
   }
@@ -253,6 +267,10 @@ function applyDesignedSheetToDoc(doc, payload) {
   meta.teeth = nextTeeth;
   doc.notes = stringifyNotesMeta(meta);
   doc.caseType = rewriteCaseTypeUnits(doc.caseType, nextUnits, nextTeeth);
+  if (typeof doc.markModified === 'function') {
+    doc.markModified('notes');
+    doc.markModified('caseType');
+  }
 
   return {
     applied: true,

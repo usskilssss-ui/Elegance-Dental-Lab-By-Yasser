@@ -93,7 +93,18 @@ exports.syncCase = async (req, res) => {
       });
     }
     const view = await getCaseExocadView(req.params.caseId);
-    return res.json({ success: true, data: view });
+    return res.json({
+      success: true,
+      data: view,
+      sheet: result.sheet || null,
+      message: result.sheet?.applied
+        ? `تم تحديث الشيت: كمية ${result.sheet.quantity} / أسنان ${
+            Array.isArray(result.sheet.teeth) ? result.sheet.teeth.length : 0
+          }`
+        : result.sheet?.reason
+          ? `المزامنة تمت لكن الشيت لم يُحدَّث (${result.sheet.reason})`
+          : 'تمت المزامنة',
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
