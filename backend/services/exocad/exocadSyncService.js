@@ -114,17 +114,40 @@ async function applyToCase(caseId, payload, syncStatus = 'SYNCED', extra = {}) {
   if (!doc) return { ok: false, error: 'CASE_NOT_FOUND' };
   if (isExitedCase(doc)) return { ok: false, error: 'CASE_EXITED_LOCKED' };
 
-  doc.exocad = buildExocadFields(payload, doc, syncStatus, extra);
+  // Merge payload with any teeth already on the case (agent annotate / prior sync).
+  const mergedPayload = {
+    ...payload,
+    designedTeeth:
+      Array.isArray(payload?.designedTeeth) && payload.designedTeeth.length
+        ? payload.designedTeeth
+        : Array.isArray(doc.exocad?.actualDesignedTeeth)
+          ? doc.exocad.actualDesignedTeeth
+          : [],
+    designedUnits:
+      Number(payload?.designedUnits) ||
+      Number(doc.exocad?.actualDesignedUnits) ||
+      0,
+  };
+
   let sheet = null;
   if (syncStatus === 'SYNCED') {
-    // Overwrite active case quantity + tooth chart from CAD-Data (Exocad).
-    sheet = applyDesignedSheetToDoc(doc, payload);
-    // After sheet apply, requested matches designed → difference reflects post-sync state.
+    // Apply sheet FIRST (uses existing doc.exocad as fallback), then refresh exocad block.
+    sheet = applyDesignedSheetToDoc(doc, mergedPayload);
+  }
+
+  doc.exocad = buildExocadFields(mergedPayload, doc, syncStatus, extra);
+  if (syncStatus === 'SYNCED') {
     const requested = requestedUnitsFromCase(doc);
-    const actual = Number(payload.designedUnits) || (payload.designedTeeth || []).length || 0;
+    const actual =
+      Number(mergedPayload.designedUnits) ||
+      (mergedPayload.designedTeeth || []).length ||
+      0;
     doc.exocad.unitsDifference = actual - requested;
     doc.exocad.lastSyncedAt = new Date();
-    doc.exocad.lastSyncError = '';
+    doc.exocad.lastSyncError = sheet?.applied
+      ? ''
+      : sheet?.reason || doc.exocad.lastSyncError || '';
+    if (typeof doc.markModified === 'function') doc.markModified('exocad');
   }
   await doc.save();
   return {

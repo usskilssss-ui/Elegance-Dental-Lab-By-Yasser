@@ -79,10 +79,13 @@ function emitCaseUpdated(dentalCase, reqUser) {
 }
 
 const parseNotesMeta = (notes) => {
-  const prefix = '__META__\n';
-  if (!notes || typeof notes !== 'string' || !notes.startsWith(prefix)) return {};
+  if (!notes || typeof notes !== 'string') return {};
+  const normalized = notes.replace(/^\uFEFF/, '');
+  // Accept __META__\n and __META__\r\n
+  if (!normalized.startsWith('__META__')) return {};
+  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
   try {
-    return JSON.parse(notes.slice(prefix.length));
+    return JSON.parse(rest);
   } catch {
     return {};
   }
@@ -103,9 +106,12 @@ const sanitizeCaseImagePath = (rawUrl) => {
 
 const sanitizeNotesMetaString = (notes) => {
   const prefix = '__META__\n';
-  if (!notes || typeof notes !== 'string' || !notes.startsWith(prefix)) return notes || '';
+  if (!notes || typeof notes !== 'string') return notes || '';
+  const normalized = notes.replace(/^\uFEFF/, '');
+  if (!normalized.startsWith('__META__')) return notes || '';
+  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
   try {
-    const meta = JSON.parse(notes.slice(prefix.length));
+    const meta = JSON.parse(rest);
     const rawImages = Array.isArray(meta?.designImages) ? meta.designImages : [];
     const cleanedImages = [...new Set(rawImages.map(sanitizeCaseImagePath).filter(Boolean))];
     meta.designImages = cleanedImages;
