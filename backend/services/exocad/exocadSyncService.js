@@ -44,48 +44,50 @@ async function resolveInternalDoctorNames(exocadPracticeName) {
       hits.push(m.internalDoctorName);
     }
   }
+  // Built-in nickname match (e.g. الجندي ↔ DR/MOHAMED_ALJENDY) even without saved mapping
+  if (!hits.length && namesLooselyEqual(practice, 'الجندي')) {
+    hits.push('الجندي');
+  }
   return [...new Set(hits)];
+}
+
+function doctorMatchesPractice(referringDoctor, practiceName, mappedNames) {
+  const doc = String(referringDoctor || '').trim();
+  const practice = String(practiceName || '').trim();
+  if (!doc || !practice) return false;
+  if (namesLooselyEqual(doc, practice)) return true;
+  if (mappedNames.some((d) => namesLooselyEqual(d, doc))) return true;
+  return false;
 }
 
 /** Non-exited cases only. */
 async function findCandidateCases(payload) {
   const doctorNames = await resolveInternalDoctorNames(payload.practiceName);
   const patient = String(payload.patientName || '').trim();
+  const practice = String(payload.practiceName || '').trim();
 
-  let cases;
-  if (doctorNames.length) {
-    const or = [];
-    for (const name of doctorNames) {
-      or.push({ referringDoctor: new RegExp(escapeRegex(name), 'i') });
-      or.push({ notes: new RegExp(escapeRegex(name), 'i') });
-    }
-    cases = await DentalCase.find({
-      currentStage: { $ne: 'exited' },
-      status: { $ne: 'exited' },
-      $or: or,
-    })
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .lean();
-  } else {
-    cases = await DentalCase.find({
-      currentStage: { $ne: 'exited' },
-      status: { $ne: 'exited' },
-    })
-      .sort({ createdAt: -1 })
-      .limit(300)
-      .lean();
-  }
+  // Always scan recent active cases; filter in JS with AR↔EN-aware matching
+  const cases = await DentalCase.find({
+    currentStage: { $ne: 'exited' },
+    status: { $ne: 'exited' },
+  })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .lean();
 
   const patientHits = cases.filter((c) => namesLooselyEqual(c.patientName, patient));
-  if (doctorNames.length) {
-    const both = patientHits.filter((c) =>
-      doctorNames.some((d) => namesLooselyEqual(d, c.referringDoctor || ''))
-    );
-    if (both.length) return { candidates: both, doctorMapped: true };
-    return { candidates: patientHits, doctorMapped: true };
+  const both = patientHits.filter((c) =>
+    doctorMatchesPractice(c.referringDoctor, practice, doctorNames)
+  );
+
+  if (both.length) {
+    return { candidates: both, doctorMapped: true };
   }
-  return { candidates: patientHits, doctorMapped: false };
+  // Patient matched but doctor weak → still return for NEEDS_REVIEW (never auto-apply)
+  if (patientHits.length) {
+    return { candidates: patientHits, doctorMapped: false };
+  }
+  return { candidates: [], doctorMapped: doctorNames.length > 0 };
 }
 
 function buildExocadFields(payload, dentalCase, syncStatus, extra = {}) {
