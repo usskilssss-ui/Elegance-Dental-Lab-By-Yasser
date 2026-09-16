@@ -127,7 +127,14 @@ async function scanOnce() {
     }
     const mtimeMs = stat.mtimeMs;
     const prev = state.files[file];
-    if (prev && prev.mtimeMs === mtimeMs && prev.ok) continue;
+    // Skip unchanged SYNCED files. Retry NO_MATCH / MULTIPLE_MATCHES every 10 min
+    // so doctor-mapping / case fixes can take effect without touching the CAD file.
+    if (prev && prev.mtimeMs === mtimeMs && prev.ok) {
+      const status = String(prev.status || '');
+      if (status === 'SYNCED') continue;
+      const ageMs = Date.now() - new Date(prev.at || 0).getTime();
+      if (Number.isFinite(ageMs) && ageMs < 10 * 60 * 1000) continue;
+    }
 
     try {
       const res = await ingestFile(file);

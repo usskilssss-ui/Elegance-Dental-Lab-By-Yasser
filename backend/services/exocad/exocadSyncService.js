@@ -46,7 +46,7 @@ async function resolveInternalDoctorNames(exocadPracticeName) {
     }
   }
   // Built-in nickname match (e.g. الجندي ↔ DR/MOHAMED_ALJENDY) even without saved mapping
-  if (!hits.length && namesLooselyEqual(practice, 'الجندي')) {
+  if (namesLooselyEqual(practice, 'الجندي')) {
     hits.push('الجندي');
   }
   return [...new Set(hits)];
@@ -325,10 +325,12 @@ async function syncCaseById(caseId) {
   }
 
   const recent = await ExocadIngest.find({
-    syncStatus: { $in: ['PENDING', 'NO_MATCH', 'MULTIPLE_MATCHES', 'NEEDS_REVIEW', 'MATCHED'] },
+    syncStatus: {
+      $in: ['PENDING', 'NO_MATCH', 'MULTIPLE_MATCHES', 'NEEDS_REVIEW', 'MATCHED', 'SYNCED'],
+    },
   })
     .sort({ lastIngestedAt: -1 })
-    .limit(100)
+    .limit(200)
     .lean();
 
   const hits = recent.filter((ing) => namesLooselyEqual(ing.patientName, doc.patientName));
@@ -338,24 +340,48 @@ async function syncCaseById(caseId) {
     await doc.save();
     return { ok: false, error: 'NO_MATCH' };
   }
-  if (hits.length > 1) {
-    doc.set('exocad.syncStatus', 'MULTIPLE_MATCHES');
-    doc.set('exocad.lastSyncError', 'Multiple Exocad projects — pick one to confirm');
-    await doc.save();
-    return {
-      ok: false,
-      error: 'MULTIPLE_MATCHES',
-      ingests: hits.map((h) => ({
-        exocadCaseId: h.exocadCaseId,
-        patientName: h.patientName,
-        practiceName: h.practiceName,
-        designedUnits: h.designedUnits,
-        designedTeeth: h.designedTeeth,
-      })),
-    };
+
+  // Prefer projects whose Exocad practice matches this case's doctor
+  // (e.g. الجندي ↔ DR/MOHAMED_ALJENDY) so "ahmed khaled" under another doctor is ignored.
+  const doctorHits = [];
+  for (const ing of hits) {
+    const mapped = await resolveInternalDoctorNames(ing.practiceName);
+    if (doctorMatchesPractice(doc.referringDoctor, ing.practiceName, mapped)) {
+      doctorHits.push(ing);
+    }
+  }
+  const narrowed = doctorHits.length ? doctorHits : hits;
+
+  if (narrowed.length === 1) {
+    return confirmMatch(caseId, narrowed[0].exocadCaseId);
   }
 
-  return confirmMatch(caseId, hits[0].exocadCaseId);
+  // Still several projects for same doctor+patient → pick the richest CAD design
+  // (highest designedUnits), which is what the user expects after expanding teeth.
+  narrowed.sort(
+    (a, b) =>
+      Number(b.designedUnits || 0) - Number(a.designedUnits || 0) ||
+      String(b.lastIngestedAt || '').localeCompare(String(a.lastIngestedAt || ''))
+  );
+  const best = narrowed[0];
+  if (best && Number(best.designedUnits || 0) > 0) {
+    return confirmMatch(caseId, best.exocadCaseId);
+  }
+
+  doc.set('exocad.syncStatus', 'MULTIPLE_MATCHES');
+  doc.set('exocad.lastSyncError', 'Multiple Exocad projects — pick one to confirm');
+  await doc.save();
+  return {
+    ok: false,
+    error: 'MULTIPLE_MATCHES',
+    ingests: narrowed.map((h) => ({
+      exocadCaseId: h.exocadCaseId,
+      patientName: h.patientName,
+      practiceName: h.practiceName,
+      designedUnits: h.designedUnits,
+      designedTeeth: h.designedTeeth,
+    })),
+  };
 }
 
 async function getCaseExocadView(caseId) {
