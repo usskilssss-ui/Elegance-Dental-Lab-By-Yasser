@@ -54,4 +54,9 @@ export class UserApiService {
   convertClientRole(id: string, role: 'doctor' | 'student' | 'lab'): Observable<any> {
     return this.http.patch(`${this.apiUrl}/${id}/convert-client-role`, { role });
   }
+
+  /** Admin or secretary: create or convert by name, then retag cases. */
+  ensureClientAccount(fullName: string, role: 'doctor' | 'student' | 'lab'): Observable<any> {
+    return this.http.post(`${this.apiUrl}/ensure-client-account`, { fullName, role });
+  }
 }

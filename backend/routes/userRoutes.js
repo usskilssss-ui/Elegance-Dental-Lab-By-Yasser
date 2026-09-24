@@ -40,6 +40,15 @@ router.get('/', authorize('admin'), userController.getAllUsers);
 // Get users by role
 router.get('/role/:role', userController.getUsersByRole);
 
+// Convert/create doctor/student/lab by name and retag their cases
+router.post(
+  '/ensure-client-account',
+  authorize('admin', 'secretary'),
+  body('fullName').trim().notEmpty(),
+  body('role').isIn(['doctor', 'student', 'lab']),
+  userController.ensureClientAccount
+);
+
 // Get user by ID
 router.get('/:id', userController.getUserById);
 

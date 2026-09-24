@@ -110,7 +110,8 @@ async function ensureClientAccount(fullName, requesterType) {
     isActive: { $ne: false },
   });
   if (sameRole) {
-    return { action: 'exists', user: sameRole };
+    const updatedCases = await retagCasesForClientName(sameRole.fullName, role);
+    return { action: updatedCases ? 'retagged' : 'exists', user: sameRole, updatedCases };
   }
 
   const otherRole = await User.findOne({
@@ -128,7 +129,8 @@ async function ensureClientAccount(fullName, requesterType) {
   }
 
   const created = await createClientAccount(name, role);
-  return { action: 'created', user: created };
+  const updatedCases = await retagCasesForClientName(name, role);
+  return { action: 'created', user: created, updatedCases };
 }
 
 module.exports = {

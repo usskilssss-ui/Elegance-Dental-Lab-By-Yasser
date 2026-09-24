@@ -5,7 +5,7 @@ const {
   departmentForClientRole,
   normalizeClientRole,
 } = require('../utils/clientRoles');
-const { retagCasesForClientName } = require('../services/clientAccountEnsure');
+const { ensureClientAccount, retagCasesForClientName } = require('../services/clientAccountEnsure');
 
 // Get all users (admin). Pass includeInactive=true to list deactivated accounts too.
 exports.getAllUsers = async (req, res) => {
@@ -282,6 +282,51 @@ exports.convertClientRole = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to convert account',
+      error: error.message,
+    });
+  }
+};
+
+// Admin or secretary: convert/create by name (works even when there is no account yet)
+exports.ensureClientAccount = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const fullName = String(req.body?.fullName || '').trim();
+    const role = normalizeClientRole(req.body?.role);
+    if (!fullName) {
+      return res.status(400).json({ message: 'الاسم مطلوب' });
+    }
+
+    const result = await ensureClientAccount(fullName, role);
+    const updatedCases = Number(result.updatedCases || 0);
+
+    res.status(200).json({
+      success: true,
+      message:
+        role === 'student'
+          ? 'تم تحويل الاسم إلى طالب'
+          : role === 'lab'
+            ? 'تم تحويل الاسم إلى معمل'
+            : 'تم تحويل الاسم إلى دكتور',
+      action: result.action,
+      updatedCases,
+      user: result.user
+        ? {
+            id: result.user._id,
+            fullName: result.user.fullName,
+            email: result.user.email,
+            role: result.user.role,
+          }
+        : undefined,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to convert name',
       error: error.message,
     });
   }
