@@ -2707,7 +2707,10 @@ export class Admin implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.convertingAccountId = '';
-        this.doctorLoadError = err?.error?.message || 'تعذر تحويل الحساب';
+        const raw = String(err?.error?.message || '').trim();
+        this.doctorLoadError = /route not found/i.test(raw)
+          ? this.lang.t('secretary.clients.convertNeedDeploy')
+          : raw || 'تعذر تحويل الحساب';
       },
     });
   }
