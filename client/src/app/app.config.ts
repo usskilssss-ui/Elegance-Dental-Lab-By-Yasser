@@ -9,6 +9,7 @@ import { provideHttpClient, withInterceptorsFromDi, HTTP_INTERCEPTORS } from '@a
 import { firstValueFrom } from 'rxjs';
 
 import { routes } from './app.routes';
+import { RailwayApiInterceptor } from './core/interceptors/railway-api.interceptor';
 import { JwtInterceptor } from './core/interceptors/jwt.interceptor';
 import { UnauthorizedInterceptor } from './core/interceptors/unauthorized.interceptor';
 import { AuthService } from './core/services/auth.service';
@@ -24,6 +25,7 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptorsFromDi()),
+    { provide: HTTP_INTERCEPTORS, useClass: RailwayApiInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: UnauthorizedInterceptor, multi: true },
     {
