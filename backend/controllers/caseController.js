@@ -29,6 +29,17 @@ const {
   isExitedCase,
 } = require('../services/caseWorkflowService');
 const { isClientPortalRole, requesterTypeForRole } = require('../utils/clientRoles');
+const { ensureClientAccount } = require('../services/clientAccountEnsure');
+
+async function maybeEnsureClientAccount(req, name, requesterType) {
+  if (!name || isClientPortalRole(req.user?.role)) return null;
+  try {
+    return await ensureClientAccount(name, requesterType);
+  } catch (err) {
+    console.error('[ensureClientAccount]', name, err?.message || err);
+    return null;
+  }
+}
 
 /** Validate create payload for quantity / empty / work type rigor */
 function validateCreateCaseBusinessRules({ caseType, notes }) {
@@ -204,6 +215,11 @@ exports.createCase = async (req, res) => {
     const isStudentCase = normalizedRequesterType === 'student';
     const notesFinal = notes ?? '';
     const referringDoctor = referringDoctorFromNotes(notesFinal);
+    const accountEnsure = await maybeEnsureClientAccount(
+      req,
+      referringDoctor,
+      normalizedRequesterType
+    );
 
     const newCase = new DentalCase({
       patientName,
@@ -280,6 +296,12 @@ exports.createCase = async (req, res) => {
       success: true,
       message: 'Case created successfully',
       case: newCase,
+      accountEnsure: accountEnsure
+        ? {
+            action: accountEnsure.action,
+            email: accountEnsure.user?.email,
+          }
+        : undefined,
     });
   } catch (error) {
     res.status(500).json({
@@ -2058,12 +2080,24 @@ exports.updateCase = async (req, res) => {
     await dentalCase.save();
     await dentalCase.populate('createdBy', 'fullName email role');
 
+    const accountEnsure = await maybeEnsureClientAccount(
+      req,
+      dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes),
+      dentalCase.requesterType || 'doctor'
+    );
+
     emitCaseUpdated(dentalCase, req.user);
 
     res.status(200).json({
       success: true,
       message: 'Case updated successfully',
       case: dentalCase,
+      accountEnsure: accountEnsure
+        ? {
+            action: accountEnsure.action,
+            email: accountEnsure.user?.email,
+          }
+        : undefined,
     });
   } catch (error) {
     res.status(500).json({

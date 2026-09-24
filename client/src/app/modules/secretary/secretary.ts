@@ -3,7 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
+import { catchError, forkJoin, of, Subscription, switchMap, tap } from 'rxjs';
+import type { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
 import { CaseApiService } from '../../core/services/case-api.service';
@@ -1156,6 +1157,68 @@ export class Secretary implements OnInit, OnDestroy {
     this.doctorListSearchQuery.set('');
   }
 
+  private namesMatch(a: string, b: string): boolean {
+    return a.trim().toLowerCase() === b.trim().toLowerCase();
+  }
+
+  private nameHasRoleAccount(name: string, kind: ClientAccountKind): boolean {
+    const list =
+      kind === 'student'
+        ? this.accountStudents()
+        : kind === 'lab'
+          ? this.accountLabs()
+          : this.accountDoctors();
+    return list.some((row) => this.namesMatch(row, name));
+  }
+
+  private autoAccountEmail(name: string, kind: ClientAccountKind): string {
+    const ascii = name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '.')
+      .replace(/[^a-z0-9.]/g, '')
+      .replace(/\.+/g, '.')
+      .replace(/^\.|\.$/g, '');
+    const base = ascii || 'client';
+    return `${base}.${kind}.${Date.now().toString(36)}@elegance.com`;
+  }
+
+  private convertAccountError(err: unknown): string {
+    const raw = String((err as { error?: { message?: string } })?.error?.message || '').trim();
+    if (/route not found/i.test(raw)) {
+      return this.lang.t('secretary.clients.convertNeedDeploy');
+    }
+    return raw || this.lang.t('secretary.toast.saveGeneric');
+  }
+
+  /** Create a client account when the form name has no doctor/student/lab user yet. */
+  private ensureFormAccount(name: string, kind: ClientAccountKind): Observable<boolean> {
+    const trimmed = name.trim();
+    if (!trimmed || this.nameHasRoleAccount(trimmed, kind)) {
+      return of(false);
+    }
+    if (
+      this.nameHasRoleAccount(trimmed, 'doctor') ||
+      this.nameHasRoleAccount(trimmed, 'student') ||
+      this.nameHasRoleAccount(trimmed, 'lab')
+    ) {
+      return of(false);
+    }
+    return this.auth
+      .registerDoctor({
+        fullName: trimmed,
+        email: this.autoAccountEmail(trimmed, kind),
+        phone: '0000000000',
+        password: '123456',
+        role: kind,
+      })
+      .pipe(
+        tap(() => this.loadAccountDoctors()),
+        switchMap(() => of(true)),
+        catchError(() => of(false))
+      );
+  }
+
   convertAccountKind(doc: { id: string; fullName: string }, kind: ClientAccountKind): void {
     if (!doc.id || kind === this.accountKind || this.convertingAccountId) return;
     const kindLabel =
@@ -1182,7 +1245,7 @@ export class Secretary implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.convertingAccountId = '';
-        this.flash(err?.error?.message || this.lang.t('secretary.toast.saveGeneric'));
+        this.flash(this.convertAccountError(err));
       },
     });
   }
@@ -2016,10 +2079,18 @@ export class Secretary implements OnInit, OnDestroy {
       };
 
       const skipPrint = this.isAdminUser();
-      this.caseApi
-        .createCase(buildCreateCasePayload(formPayload))
+      let createdAccount = false;
+      this.ensureFormAccount(docName, requesterType)
         .pipe(
-          switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
+          switchMap((created) => {
+            createdAccount = created;
+            return this.caseApi.createCase(buildCreateCasePayload(formPayload));
+          }),
+          switchMap((res: {
+            case?: { caseNumber?: string; _id?: string; id?: string };
+            accountEnsure?: { action?: string };
+          }) => {
+            if (res?.accountEnsure?.action === 'created') createdAccount = true;
             const caseNumber = String(res?.case?.caseNumber ?? '');
             const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
             const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
@@ -2044,11 +2115,13 @@ export class Secretary implements OnInit, OnDestroy {
         .subscribe({
           next: () => {
             this.saveInProgress.set(false);
+            const saved = skipPrint
+              ? this.lang.t('secretary.toast.savedNoPrint')
+              : this.lang.t('secretary.toast.savedPrint');
             this.flash(
-              skipPrint
-                ? this.lang.t('secretary.toast.savedNoPrint')
-                : this.lang.t('secretary.toast.savedPrint')
+              createdAccount ? `${saved} — ${this.lang.t('secretary.clients.autoCreated')}` : saved
             );
+            this.loadAccountDoctors();
             this.closeDialog();
             this.reloadCasesFromBackend();
           },
@@ -2067,13 +2140,18 @@ export class Secretary implements OnInit, OnDestroy {
       this.saveInProgress.set(true);
       const ply = this.intakeType === 'scan' ? this.selectedPlyFile : null;
       const plyLink = this.intakeType === 'scan' && !ply ? this.plyScanLink.trim() : '';
-      this.caseApi
-        .updateCase(this.editingId, buildCreateCasePayload(formPayload, plyPreserveMeta))
+      this.ensureFormAccount(docName, requesterType)
+        .pipe(
+          switchMap(() =>
+            this.caseApi.updateCase(this.editingId!, buildCreateCasePayload(formPayload, plyPreserveMeta))
+          )
+        )
         .subscribe({
         next: () => {
           const done = () => {
             this.saveInProgress.set(false);
             this.flash(this.lang.t('secretary.toast.savedEdit'));
+            this.loadAccountDoctors();
             this.closeDialog();
             this.reloadCasesFromBackend();
           };

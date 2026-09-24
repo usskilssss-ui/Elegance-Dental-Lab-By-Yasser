@@ -1,12 +1,11 @@
 const User = require('../models/User');
-const DentalCase = require('../models/DentalCase');
 const { validationResult } = require('express-validator');
 const {
   isClientPortalRole,
   departmentForClientRole,
   normalizeClientRole,
-  requesterTypeForRole,
 } = require('../utils/clientRoles');
+const { retagCasesForClientName } = require('../services/clientAccountEnsure');
 
 // Get all users (admin). Pass includeInactive=true to list deactivated accounts too.
 exports.getAllUsers = async (req, res) => {
@@ -236,52 +235,6 @@ exports.resetDoctorPassword = async (req, res) => {
     });
   }
 };
-
-function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function setRequesterTypeInNotes(notes, requesterType) {
-  const prefix = '__META__\n';
-  if (!notes || typeof notes !== 'string') {
-    return `${prefix}${JSON.stringify({ requesterType })}`;
-  }
-  const normalized = notes.replace(/^\uFEFF/, '');
-  if (!normalized.startsWith('__META__')) return notes;
-  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
-  try {
-    const meta = JSON.parse(rest) || {};
-    meta.requesterType = requesterType;
-    return `${prefix}${JSON.stringify(meta)}`;
-  } catch {
-    return notes;
-  }
-}
-
-async function retagCasesForClientName(fullName, role) {
-  const name = String(fullName || '').trim();
-  const requesterType = requesterTypeForRole(role);
-  if (!name) return 0;
-
-  const nameRe = new RegExp(`^${escapeRegex(name)}$`, 'i');
-  const notesRe = new RegExp(`"doctor"\\s*:\\s*"${escapeRegex(name)}"`, 'i');
-  const cases = await DentalCase.find({
-    $or: [{ referringDoctor: nameRe }, { notes: notesRe }],
-  });
-
-  let updated = 0;
-  for (const dentalCase of cases) {
-    const nextNotes = setRequesterTypeInNotes(dentalCase.notes || '', requesterType);
-    const changed =
-      dentalCase.requesterType !== requesterType || String(dentalCase.notes || '') !== nextNotes;
-    if (!changed) continue;
-    dentalCase.requesterType = requesterType;
-    dentalCase.notes = nextNotes;
-    await dentalCase.save();
-    updated += 1;
-  }
-  return updated;
-}
 
 // Admin or secretary: convert an existing doctor/student/lab account and retag their cases
 exports.convertClientRole = async (req, res) => {
