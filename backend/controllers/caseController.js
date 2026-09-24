@@ -331,15 +331,15 @@ exports.retagRequesterByName = async (req, res) => {
         : req.body?.requesterType === 'lab'
           ? 'lab'
           : 'doctor';
+    const caseIds = Array.isArray(req.body?.caseIds)
+      ? req.body.caseIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
     if (!fullName) {
       return res.status(400).json({ message: 'الاسم مطلوب' });
     }
 
     const account = await ensureClientAccount(fullName, requesterType);
-    let updatedCases = Number(account?.updatedCases || 0);
-    if (!updatedCases) {
-      updatedCases = await retagCasesForClientName(fullName, requesterType);
-    }
+    const updatedCases = await retagCasesForClientName(fullName, requesterType, caseIds);
 
     res.status(200).json({
       success: true,
