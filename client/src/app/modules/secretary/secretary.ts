@@ -1877,7 +1877,7 @@ export class Secretary implements OnInit, OnDestroy {
         ''
     ).trim();
     const formPayload = {
-      requesterType: existing.requesterType === 'student' ? ('student' as const) : ('doctor' as const),
+      requesterType: normalizeRequesterType(existing.requesterType),
       studentPrice: Number(existing.salaryAmount || 0),
       doctor: existing.doctor || '',
       patient: existing.patient || '',
@@ -2379,25 +2379,35 @@ export class Secretary implements OnInit, OnDestroy {
           if (!this.isMissingRoute(err)) throw err;
           return this.convertCaseRequesterFallback(name, kind);
         }),
-        switchMap((res) =>
-          this.retagVisibleCases(name, kind).pipe(
+        switchMap((res) => {
+          const n = Number(res?.updatedCases || 0);
+          if (n > 0) return of(res);
+          return this.retagVisibleCases(name, kind).pipe(
             map((visible) => ({
-              updatedCases: Math.max(
-                Number(res?.updatedCases || 0),
-                Number(visible?.updatedCases || 0)
-              ),
+              updatedCases: Math.max(n, Number(visible?.updatedCases || 0)),
             }))
-          )
-        )
+          );
+        })
       )
       .subscribe({
         next: (res) => {
           this.convertingCaseName = '';
-          this.flash(
-            this.lang.t('secretary.clients.convertDone').replace('{n}', String(res.updatedCases || 0))
-          );
-          this.loadAccountDoctors();
-          this.applyRequesterOverrides();
+          this.reloadCasesFromBackend(true, () => {
+            const persisted = this.sharedCases
+              .cases()
+              .filter(
+                (row) =>
+                  this.namesMatch(String(row.doctor || ''), name) &&
+                  normalizeRequesterType(row.requesterType) === kind
+              ).length;
+            this.applyRequesterOverrides();
+            this.flash(
+              this.lang
+                .t('secretary.clients.convertDone')
+                .replace('{n}', String(Math.max(Number(res?.updatedCases || 0), persisted)))
+            );
+            this.loadAccountDoctors();
+          });
         },
         error: (err) => {
           this.convertingCaseName = '';

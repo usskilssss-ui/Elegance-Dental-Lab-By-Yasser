@@ -75,6 +75,26 @@ function caseMatchesClientName(dentalCase, name) {
   return new RegExp(escapeRegex(wanted), 'i').test(String(dentalCase.notes || ''));
 }
 
+async function persistRequesterType(id, requesterType, notes, referringDoctor) {
+  const $set = {
+    notes,
+    ...(referringDoctor ? { referringDoctor } : {}),
+  };
+  try {
+    await DentalCase.updateOne({ _id: id }, { $set: { ...$set, requesterType } });
+    return true;
+  } catch (err) {
+    try {
+      // Atlas / older validators may reject requesterType=lab; notes still win in the UI mapper.
+      await DentalCase.updateOne({ _id: id }, { $set });
+      return true;
+    } catch (err2) {
+      console.error('[retagCasesForClientName]', String(id), err2?.message || err?.message || err2);
+      return false;
+    }
+  }
+}
+
 async function retagCasesForClientName(fullName, role, extraIds = []) {
   const name = String(fullName || '').trim();
   const requesterType = requesterTypeForRole(role);
@@ -100,10 +120,14 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
   }
 
   if (idList.length) {
-    await DentalCase.updateMany(
-      { _id: { $in: idList } },
-      { $set: { requesterType } }
-    );
+    try {
+      await DentalCase.updateMany(
+        { _id: { $in: idList } },
+        { $set: { requesterType } }
+      );
+    } catch (err) {
+      console.error('[retagCasesForClientName] updateMany', err?.message || err);
+    }
   }
 
   if (!seen.size && name) {
@@ -129,22 +153,17 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
       dentalCase.requesterType !== requesterType ||
       notesText !== nextNotes ||
       (displayName && dentalCase.referringDoctor !== displayName);
-    if (!changed) continue;
-    try {
-      await DentalCase.updateOne(
-        { _id: dentalCase._id },
-        {
-          $set: {
-            requesterType,
-            notes: nextNotes,
-            ...(displayName ? { referringDoctor: displayName } : {}),
-          },
-        }
-      );
+    if (!changed) {
       updated += 1;
-    } catch (err) {
-      console.error('[retagCasesForClientName]', String(dentalCase._id), err?.message || err);
+      continue;
     }
+    const ok = await persistRequesterType(
+      dentalCase._id,
+      requesterType,
+      nextNotes,
+      displayName
+    );
+    if (ok) updated += 1;
   }
   return updated;
 }
@@ -224,9 +243,16 @@ async function ensureClientAccount(fullName, requesterType, opts = {}) {
     if (!shouldRetag) {
       return { action: 'exists', user: otherRole, updatedCases: 0 };
     }
-    otherRole.role = role;
-    otherRole.department = departmentForClientRole(role);
-    await otherRole.save();
+    try {
+      otherRole.role = role;
+      otherRole.department = departmentForClientRole(role);
+      await otherRole.save();
+    } catch (err) {
+      await User.updateOne(
+        { _id: otherRole._id },
+        { $set: { role, department: departmentForClientRole(role) } }
+      );
+    }
     const updatedCases = await retagCasesForClientName(otherRole.fullName, role);
     return { action: 'converted', user: otherRole, updatedCases };
   }

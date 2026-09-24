@@ -338,8 +338,14 @@ exports.retagRequesterByName = async (req, res) => {
       return res.status(400).json({ message: 'الاسم مطلوب' });
     }
 
-    const account = await ensureClientAccount(fullName, requesterType);
+    let account = { action: 'skipped', updatedCases: 0 };
+    try {
+      account = await ensureClientAccount(fullName, requesterType);
+    } catch (err) {
+      console.error('[retagRequesterByName] account', err?.message || err);
+    }
     const updatedCases = await retagCasesForClientName(fullName, requesterType, caseIds);
+    const n = Math.max(Number(account?.updatedCases || 0), Number(updatedCases || 0));
 
     res.status(200).json({
       success: true,
@@ -350,7 +356,7 @@ exports.retagRequesterByName = async (req, res) => {
             ? 'تم تحويل الاسم إلى معمل'
             : 'تم تحويل الاسم إلى دكتور',
       action: account?.action,
-      updatedCases,
+      updatedCases: n,
       user: account?.user
         ? {
             id: account.user._id,
