@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
+const { doctorKeysMatch, parseNotesMeta } = require('./casePricingService');
 const {
   CLIENT_PORTAL_ROLES,
   departmentForClientRole,
@@ -34,18 +35,27 @@ function setRequesterTypeInNotes(notes, requesterType) {
   }
 }
 
+function caseNameFromDoc(dentalCase) {
+  const meta = parseNotesMeta(dentalCase.notes || '');
+  return String(dentalCase.referringDoctor || meta.doctor || meta.doctorName || '').trim();
+}
+
 async function retagCasesForClientName(fullName, role) {
   const name = String(fullName || '').trim();
   const requesterType = requesterTypeForRole(role);
   if (!name) return 0;
 
-  const notesRe = new RegExp(`"doctor"\\s*:\\s*"${escapeRegex(name)}"`, 'i');
-  const cases = await DentalCase.find({
-    $or: [{ referringDoctor: nameRegex(name) }, { notes: notesRe }],
-  });
+  const looseRe = new RegExp(escapeRegex(name), 'i');
+  const candidates = await DentalCase.find({
+    $or: [{ referringDoctor: looseRe }, { notes: looseRe }],
+  }).limit(5000);
 
   let updated = 0;
-  for (const dentalCase of cases) {
+  for (const dentalCase of candidates) {
+    const caseName = caseNameFromDoc(dentalCase);
+    if (caseName && !doctorKeysMatch(caseName, name)) continue;
+    if (!caseName && !looseRe.test(String(dentalCase.notes || ''))) continue;
+
     const nextNotes = setRequesterTypeInNotes(dentalCase.notes || '', requesterType);
     const changed =
       dentalCase.requesterType !== requesterType || String(dentalCase.notes || '') !== nextNotes;
@@ -137,4 +147,5 @@ module.exports = {
   DEFAULT_PASSWORD,
   ensureClientAccount,
   retagCasesForClientName,
+  setRequesterTypeInNotes,
 };

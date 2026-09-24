@@ -29,7 +29,7 @@ const {
   isExitedCase,
 } = require('../services/caseWorkflowService');
 const { isClientPortalRole, requesterTypeForRole } = require('../utils/clientRoles');
-const { ensureClientAccount } = require('../services/clientAccountEnsure');
+const { ensureClientAccount, setRequesterTypeInNotes } = require('../services/clientAccountEnsure');
 
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
@@ -1948,6 +1948,7 @@ exports.updateCase = async (req, res) => {
     if (requesterType !== undefined) {
       dentalCase.requesterType =
         requesterType === 'student' ? 'student' : requesterType === 'lab' ? 'lab' : 'doctor';
+      dentalCase.notes = setRequesterTypeInNotes(dentalCase.notes || '', dentalCase.requesterType);
       if (dentalCase.requesterType === 'student') {
         dentalCase.paymentStatus = 'paid';
         dentalCase.paidAt = new Date();
