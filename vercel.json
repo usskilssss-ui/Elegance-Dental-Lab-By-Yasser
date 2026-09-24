@@ -1,6 +1,6 @@
 {
   "buildCommand": "cd client && npm run build",
-  "outputDirectory": "client/dist/client",
+  "outputDirectory": "client/dist/client/browser",
   "routes": [
     {
       "src": "/api/(.*)",
