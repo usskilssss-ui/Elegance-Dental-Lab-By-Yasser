@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, forkJoin, of, Subscription, switchMap, tap } from 'rxjs';
+import { catchError, forkJoin, map, of, Subscription, switchMap, tap } from 'rxjs';
 import type { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
@@ -223,6 +223,8 @@ export class Secretary implements OnInit, OnDestroy {
   accountKind: ClientAccountKind = 'doctor';
   convertingAccountId = '';
   requesterMenuCaseId: string | null = null;
+  requesterMenuCase: { id: string; doctor?: string; requesterType?: string } | null = null;
+  requesterMenuPos = { top: 0, left: 0 };
   convertingCaseName = '';
   newDoctor = { name: '', email: '', phone: '', password: '' };
   createDoctorError = '';
@@ -2200,9 +2202,109 @@ export class Secretary implements OnInit, OnDestroy {
     return this.dialogRequesterType() === 'lab';
   }
 
-  toggleRequesterMenu(caseId: string, ev: Event): void {
+  closeRequesterMenu(): void {
+    this.requesterMenuCaseId = null;
+    this.requesterMenuCase = null;
+  }
+
+  toggleRequesterMenu(
+    c: { id: string; doctor?: string; requesterType?: string },
+    ev: Event
+  ): void {
     ev.stopPropagation();
-    this.requesterMenuCaseId = this.requesterMenuCaseId === caseId ? null : caseId;
+    if (this.requesterMenuCaseId === c.id) {
+      this.closeRequesterMenu();
+      return;
+    }
+    this.requesterMenuCaseId = c.id;
+    this.requesterMenuCase = c;
+    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const menuWidth = 140;
+    this.requesterMenuPos = {
+      top: Math.round(rect.bottom + 8),
+      left: Math.round(Math.min(window.innerWidth - menuWidth - 8, Math.max(8, rect.left))),
+    };
+  }
+
+  private clientUsersFromResponse(
+    res: unknown,
+    role: ClientAccountKind
+  ): { id: string; fullName: string; role: ClientAccountKind }[] {
+    const rows = Array.isArray((res as { data?: unknown[] })?.data)
+      ? (res as { data: unknown[] }).data
+      : Array.isArray(res)
+        ? res
+        : [];
+    return rows
+      .map((u) => {
+        const row = u as { _id?: string; id?: string; fullName?: string };
+        return {
+          id: String(row._id || row.id || ''),
+          fullName: String(row.fullName || '').trim(),
+          role,
+        };
+      })
+      .filter((u) => u.id && u.fullName);
+  }
+
+  private findClientUser(name: string): Observable<{ id: string; fullName: string; role: ClientAccountKind } | null> {
+    const empty = of({ data: [] });
+    return forkJoin({
+      doctor: this.userApi.getUsersByRole('doctor').pipe(catchError(() => empty)),
+      student: this.userApi.getUsersByRole('student').pipe(catchError(() => empty)),
+      lab: this.userApi.getUsersByRole('lab').pipe(catchError(() => empty)),
+    }).pipe(
+      map((res) => {
+        const all = [
+          ...this.clientUsersFromResponse(res.doctor, 'doctor'),
+          ...this.clientUsersFromResponse(res.student, 'student'),
+          ...this.clientUsersFromResponse(res.lab, 'lab'),
+        ];
+        return all.find((u) => this.namesMatch(u.fullName, name)) || null;
+      })
+    );
+  }
+
+  private retagVisibleCases(name: string, kind: ClientAccountKind): Observable<{ updatedCases: number }> {
+    const matches = this.sharedCases
+      .cases()
+      .filter((row) => this.namesMatch(String(row.doctor || ''), name));
+    if (!matches.length) return of({ updatedCases: 0 });
+    return forkJoin(
+      matches.map((row) =>
+        this.caseApi.updateCase(row.id, { requesterType: kind }).pipe(catchError(() => of(null)))
+      )
+    ).pipe(map((results) => ({ updatedCases: results.filter((row) => !!row).length })));
+  }
+
+  private convertCaseRequesterFallback(
+    name: string,
+    kind: ClientAccountKind
+  ): Observable<{ updatedCases?: number }> {
+    return this.findClientUser(name).pipe(
+      switchMap((user) => {
+        if (user) {
+          return this.userApi.convertClientRole(user.id, kind);
+        }
+        return this.auth
+          .registerDoctor({
+            fullName: name,
+            email: this.autoAccountEmail(name, kind),
+            phone: '0000000000',
+            password: '123456',
+            role: kind,
+          })
+          .pipe(
+            switchMap(() => this.findClientUser(name)),
+            switchMap((created) => {
+              if (created) return this.userApi.convertClientRole(created.id, kind);
+              return this.retagVisibleCases(name, kind);
+            }),
+            catchError(() => this.retagVisibleCases(name, kind))
+          );
+      }),
+      catchError(() => this.retagVisibleCases(name, kind))
+    );
   }
 
   convertCaseRequester(c: { id: string; doctor?: string; requesterType?: string }, kind: ClientAccountKind): void {
@@ -2210,7 +2312,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (!name || this.convertingCaseName) return;
     const current = normalizeRequesterType(c.requesterType);
     if (current === kind) {
-      this.requesterMenuCaseId = null;
+      this.closeRequesterMenu();
       return;
     }
     const kindLabel =
@@ -2227,10 +2329,18 @@ export class Secretary implements OnInit, OnDestroy {
     );
     if (!ok) return;
     this.convertingCaseName = name;
-    this.userApi.ensureClientAccount(name, kind).subscribe({
+    this.userApi.ensureClientAccount(name, kind).pipe(
+      catchError((err) => {
+        const raw = String(err?.error?.message || err?.message || '');
+        if (/route not found/i.test(raw) || err?.status === 404) {
+          return this.convertCaseRequesterFallback(name, kind);
+        }
+        throw err;
+      })
+    ).subscribe({
       next: (res) => {
         this.convertingCaseName = '';
-        this.requesterMenuCaseId = null;
+        this.closeRequesterMenu();
         const n = Number(res?.updatedCases ?? 0);
         this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
         this.loadAccountDoctors();
@@ -2450,8 +2560,8 @@ export class Secretary implements OnInit, OnDestroy {
     this.menuOpenId.set(null);
     this.notificationsOpen.set(false);
     this.filterOpen.set(false);
-    if (!el.closest('.requester-switch')) {
-      this.requesterMenuCaseId = null;
+    if (!el.closest('.requester-switch') && !el.closest('.requester-menu')) {
+      this.closeRequesterMenu();
     }
   }
 
