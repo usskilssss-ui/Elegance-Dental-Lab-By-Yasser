@@ -38,7 +38,7 @@ const {
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
   try {
-    return await ensureClientAccount(name, requesterType);
+    return await ensureClientAccount(name, requesterType, { retag: false });
   } catch (err) {
     console.error('[ensureClientAccount]', name, err?.message || err);
     return null;

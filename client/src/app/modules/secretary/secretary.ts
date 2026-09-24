@@ -2274,7 +2274,7 @@ export class Secretary implements OnInit, OnDestroy {
         (err as { message?: string } | null)?.message ||
         ''
     );
-    return status === 404 || /route not found/i.test(raw);
+    return status === 404 || status === 405 || /route not found/i.test(raw);
   }
 
   private retagVisibleCases(name: string, kind: ClientAccountKind): Observable<{ updatedCases?: number }> {
@@ -2384,8 +2384,7 @@ export class Secretary implements OnInit, OnDestroy {
             map((visible) => ({
               updatedCases: Math.max(
                 Number(res?.updatedCases || 0),
-                Number(visible?.updatedCases || 0),
-                localN
+                Number(visible?.updatedCases || 0)
               ),
             }))
           )

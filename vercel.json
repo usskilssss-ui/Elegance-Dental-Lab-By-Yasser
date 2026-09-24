@@ -1,6 +1,12 @@
 {
   "buildCommand": "cd client && npm run build",
   "outputDirectory": "client/dist/client/browser",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://elegance-dental-lab-by-yasser-production-da7c.up.railway.app/api/$1"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

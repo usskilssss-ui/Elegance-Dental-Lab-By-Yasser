@@ -99,6 +99,13 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
     seen.set(String(dentalCase._id), dentalCase);
   }
 
+  if (idList.length) {
+    await DentalCase.updateMany(
+      { _id: { $in: idList } },
+      { $set: { requesterType } }
+    );
+  }
+
   if (!seen.size && name) {
     const fallback = await DentalCase.find({ notes: /__META__/ }).limit(20000);
     for (const dentalCase of fallback) {
@@ -198,20 +205,25 @@ async function createClientAccount(fullName, role) {
  * Find or create a doctor/student/lab account for a form name.
  * If the same name already exists as another client role, convert it and retag cases.
  */
-async function ensureClientAccount(fullName, requesterType) {
+async function ensureClientAccount(fullName, requesterType, opts = {}) {
   const name = String(fullName || '').trim().replace(/\s+/g, ' ');
   const role = normalizeClientRole(requesterType);
+  const shouldRetag = opts.retag !== false;
   if (!name) return { action: 'skipped' };
 
   const matches = await findClientUsersByName(name);
   const sameRole = matches.find((user) => user.role === role);
   if (sameRole) {
-    const updatedCases = await retagCasesForClientName(sameRole.fullName, role);
+    const updatedCases = shouldRetag ? await retagCasesForClientName(sameRole.fullName, role) : 0;
     return { action: updatedCases ? 'retagged' : 'exists', user: sameRole, updatedCases };
   }
 
   const otherRole = matches.find((user) => user.role !== role);
   if (otherRole) {
+    // Creating/editing a case must not flip an already-converted lab/student account back to doctor.
+    if (!shouldRetag) {
+      return { action: 'exists', user: otherRole, updatedCases: 0 };
+    }
     otherRole.role = role;
     otherRole.department = departmentForClientRole(role);
     await otherRole.save();
@@ -220,7 +232,7 @@ async function ensureClientAccount(fullName, requesterType) {
   }
 
   const created = await createClientAccount(name, role);
-  const updatedCases = await retagCasesForClientName(name, role);
+  const updatedCases = shouldRetag ? await retagCasesForClientName(name, role) : 0;
   return { action: 'created', user: created, updatedCases };
 }
 
