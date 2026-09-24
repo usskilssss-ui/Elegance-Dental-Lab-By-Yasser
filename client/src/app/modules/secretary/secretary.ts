@@ -453,16 +453,40 @@ export class Secretary implements OnInit, OnDestroy {
       .replace(/\s+/g, ' ');
   }
 
-  private namesFromUserResponse(res: unknown): string[] {
+  private rowsFromUserResponse(
+    res: unknown,
+    kind?: ClientAccountKind
+  ): { id: string; fullName: string; email: string; phone: string; role: string }[] {
     const raw = res as { data?: unknown } | unknown[] | null;
     const rows = Array.isArray((raw as { data?: unknown })?.data)
       ? (raw as { data: unknown[] }).data
       : Array.isArray(raw)
         ? raw
         : [];
-    const names = rows
-      .map((u: unknown) => String((u as { fullName?: string })?.fullName || '').trim())
-      .filter((n: string) => !!n);
+    return rows
+      .map((u: unknown) => {
+        const row = u as {
+          _id?: string;
+          id?: string;
+          fullName?: string;
+          email?: string;
+          phone?: string;
+          role?: string;
+        };
+        return {
+          id: String(row._id || row.id || ''),
+          fullName: String(row.fullName || '').trim(),
+          email: String(row.email || '').trim(),
+          phone: String(row.phone || '').trim(),
+          role: String(row.role || '').trim().toLowerCase(),
+        };
+      })
+      .filter((u) => u.id && u.fullName)
+      .filter((u) => !kind || u.role === kind);
+  }
+
+  private namesFromUserResponse(res: unknown, kind?: ClientAccountKind): string[] {
+    const names = this.rowsFromUserResponse(res, kind).map((u) => u.fullName);
     return Array.from(new Set(names));
   }
 
@@ -474,9 +498,9 @@ export class Secretary implements OnInit, OnDestroy {
       lab: this.userApi.getUsersByRole('lab').pipe(catchError(() => empty)),
     }).subscribe({
       next: (res) => {
-        this.accountDoctors.set(this.namesFromUserResponse(res.doctor));
-        this.accountStudents.set(this.namesFromUserResponse(res.student));
-        this.accountLabs.set(this.namesFromUserResponse(res.lab));
+        this.accountDoctors.set(this.namesFromUserResponse(res.doctor, 'doctor'));
+        this.accountStudents.set(this.namesFromUserResponse(res.student, 'student'));
+        this.accountLabs.set(this.namesFromUserResponse(res.lab, 'lab'));
       },
       error: () => {
         this.accountDoctors.set([]);
@@ -1149,6 +1173,7 @@ export class Secretary implements OnInit, OnDestroy {
   openAccountListModal(kind: ClientAccountKind): void {
     this.accountKind = kind;
     this.doctorListSearchQuery.set('');
+    this.doctorRows = [];
     this.doctorListOpen.set(true);
     this.loadDoctorRows();
   }
@@ -1264,22 +1289,18 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   private loadDoctorRows(): void {
+    const kind = this.accountKind;
     this.doctorListLoading = true;
     this.doctorListError = '';
-    this.userApi.getUsersByRole(this.accountKind).subscribe({
+    this.doctorRows = [];
+    this.userApi.getUsersByRole(kind).subscribe({
       next: (res) => {
-        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-        this.doctorRows = rows
-          .map((u: { _id?: string; id?: string; fullName?: string; email?: string; phone?: string }) => ({
-            id: String(u._id || u.id || ''),
-            fullName: String(u.fullName || '').trim(),
-            email: String(u.email || '').trim(),
-            phone: String(u.phone || '').trim(),
-          }))
-          .filter((u: { id: string; fullName: string }) => u.id && u.fullName);
+        if (this.accountKind !== kind) return;
+        this.doctorRows = this.rowsFromUserResponse(res, kind);
         this.doctorListLoading = false;
       },
       error: () => {
+        if (this.accountKind !== kind) return;
         this.doctorListLoading = false;
         this.doctorListError = this.lang.t('secretary.toast.loadFail');
         this.doctorRows = [];
@@ -2232,21 +2253,11 @@ export class Secretary implements OnInit, OnDestroy {
     res: unknown,
     role: ClientAccountKind
   ): { id: string; fullName: string; role: ClientAccountKind }[] {
-    const rows = Array.isArray((res as { data?: unknown[] })?.data)
-      ? (res as { data: unknown[] }).data
-      : Array.isArray(res)
-        ? res
-        : [];
-    return rows
-      .map((u) => {
-        const row = u as { _id?: string; id?: string; fullName?: string };
-        return {
-          id: String(row._id || row.id || ''),
-          fullName: String(row.fullName || '').trim(),
-          role,
-        };
-      })
-      .filter((u) => u.id && u.fullName);
+    return this.rowsFromUserResponse(res, role).map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      role,
+    }));
   }
 
   private findClientUser(name: string): Observable<{ id: string; fullName: string; role: ClientAccountKind } | null> {
