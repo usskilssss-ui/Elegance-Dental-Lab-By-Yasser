@@ -2336,7 +2336,15 @@ export class Secretary implements OnInit, OnDestroy {
           return this.convertCaseRequesterFallback(name, kind);
         }
         throw err;
-      })
+      }),
+      switchMap((res) =>
+        this.retagVisibleCases(name, kind).pipe(
+          map((local) => ({
+            ...res,
+            updatedCases: Math.max(Number(res?.updatedCases || 0), local.updatedCases),
+          }))
+        )
+      )
     ).subscribe({
       next: (res) => {
         this.convertingCaseName = '';
