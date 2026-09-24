@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
-const { doctorKeysMatch, parseNotesMeta } = require('./casePricingService');
+const { doctorKeysMatch, normalizeDoctorKey } = require('./casePricingService');
 const {
   CLIENT_PORTAL_ROLES,
   departmentForClientRole,
@@ -14,29 +14,49 @@ function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function nameRegex(fullName) {
-  return new RegExp(`^${escapeRegex(String(fullName || '').trim())}$`, 'i');
+function parseJsonObject(text) {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
-function setRequesterTypeInNotes(notes, requesterType) {
-  const prefix = '__META__\n';
-  if (!notes || typeof notes !== 'string') {
-    return `${prefix}${JSON.stringify({ requesterType })}`;
-  }
+function parseMetaLenient(notes) {
+  if (!notes || typeof notes !== 'string') return {};
   const normalized = notes.replace(/^\uFEFF/, '');
-  if (!normalized.startsWith('__META__')) return notes;
-  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
-  try {
-    const meta = JSON.parse(rest) || {};
-    meta.requesterType = requesterType;
-    return `${prefix}${JSON.stringify(meta)}`;
-  } catch {
-    return notes;
+  if (normalized.startsWith('__META__')) {
+    return parseJsonObject(normalized.slice('__META__'.length).replace(/^\r?\n/, '')) || {};
   }
+  return parseJsonObject(normalized) || {};
+}
+
+function setRequesterTypeInNotes(notes, requesterType, extra = {}) {
+  const prefix = '__META__\n';
+  const raw = String(notes || '');
+  const normalized = raw.replace(/^\uFEFF/, '');
+  const hasMetaPrefix = normalized.startsWith('__META__');
+  const meta = parseMetaLenient(raw);
+  const next = { ...meta, ...extra, requesterType };
+  const encoded = `${prefix}${JSON.stringify(next)}`;
+  if (!hasMetaPrefix && raw.trim() && !parseJsonObject(normalized)) {
+    return `${encoded}\n${raw}`;
+  }
+  return encoded;
 }
 
 function caseNameFromDoc(dentalCase) {
-  const meta = parseNotesMeta(dentalCase.notes || '');
+  const meta = parseMetaLenient(dentalCase.notes || '');
   return String(dentalCase.referringDoctor || meta.doctor || meta.doctorName || '').trim();
 }
 
@@ -46,26 +66,53 @@ async function retagCasesForClientName(fullName, role) {
   if (!name) return 0;
 
   const looseRe = new RegExp(escapeRegex(name), 'i');
-  const candidates = await DentalCase.find({
+  let candidates = await DentalCase.find({
     $or: [{ referringDoctor: looseRe }, { notes: looseRe }],
-  }).limit(5000);
+  }).limit(8000);
+
+  if (!candidates.length) {
+    candidates = await DentalCase.find({ notes: /__META__/ }).limit(8000);
+  }
 
   let updated = 0;
   for (const dentalCase of candidates) {
     const caseName = caseNameFromDoc(dentalCase);
-    if (caseName && !doctorKeysMatch(caseName, name)) continue;
-    if (!caseName && !looseRe.test(String(dentalCase.notes || ''))) continue;
+    const notesText = String(dentalCase.notes || '');
+    const matched =
+      (caseName && doctorKeysMatch(caseName, name)) ||
+      (!caseName && looseRe.test(notesText));
+    if (!matched) continue;
 
-    const nextNotes = setRequesterTypeInNotes(dentalCase.notes || '', requesterType);
+    const nextNotes = setRequesterTypeInNotes(notesText, requesterType, {
+      doctor: caseName || name,
+    });
     const changed =
-      dentalCase.requesterType !== requesterType || String(dentalCase.notes || '') !== nextNotes;
+      dentalCase.requesterType !== requesterType || notesText !== nextNotes;
     if (!changed) continue;
     dentalCase.requesterType = requesterType;
     dentalCase.notes = nextNotes;
+    if (!dentalCase.referringDoctor) {
+      dentalCase.referringDoctor = caseName || name;
+    }
     await dentalCase.save();
     updated += 1;
   }
   return updated;
+}
+
+async function findClientUsersByName(name) {
+  const clients = await User.find({
+    role: { $in: CLIENT_PORTAL_ROLES },
+    isActive: { $ne: false },
+  }).limit(4000);
+  const matches = clients.filter((user) => doctorKeysMatch(user.fullName, name));
+  const wanted = normalizeDoctorKey(name);
+  matches.sort((a, b) => {
+    const aExact = normalizeDoctorKey(a.fullName) === wanted ? 0 : 1;
+    const bExact = normalizeDoctorKey(b.fullName) === wanted ? 0 : 1;
+    return aExact - bExact;
+  });
+  return matches;
 }
 
 function emailLocalPart(fullName, role) {
@@ -114,22 +161,14 @@ async function ensureClientAccount(fullName, requesterType) {
   const role = normalizeClientRole(requesterType);
   if (!name) return { action: 'skipped' };
 
-  const sameRole = await User.findOne({
-    fullName: nameRegex(name),
-    role,
-    isActive: { $ne: false },
-  });
+  const matches = await findClientUsersByName(name);
+  const sameRole = matches.find((user) => user.role === role);
   if (sameRole) {
     const updatedCases = await retagCasesForClientName(sameRole.fullName, role);
     return { action: updatedCases ? 'retagged' : 'exists', user: sameRole, updatedCases };
   }
 
-  const otherRole = await User.findOne({
-    fullName: nameRegex(name),
-    role: { $in: CLIENT_PORTAL_ROLES },
-    isActive: { $ne: false },
-  }).sort({ createdAt: 1 });
-
+  const otherRole = matches.find((user) => user.role !== role);
   if (otherRole) {
     otherRole.role = role;
     otherRole.department = departmentForClientRole(role);

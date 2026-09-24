@@ -119,17 +119,34 @@ export type SecretaryCaseFormPayload = {
   sourceTryInCaseId?: string;
 };
 
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 function parseMeta(notes: string | undefined): Record<string, unknown> {
   if (!notes) return {};
   const normalized = notes.replace(/^\uFEFF/, '');
-  // Accept __META__\n and __META__\r\n
-  if (!normalized.startsWith('__META__')) return {};
-  const rest = normalized.slice('__META__'.length).replace(/^\r?\n/, '');
-  try {
-    return JSON.parse(rest) as Record<string, unknown>;
-  } catch {
-    return {};
+  if (normalized.startsWith('__META__')) {
+    return parseJsonObject(normalized.slice('__META__'.length).replace(/^\r?\n/, '')) || {};
   }
+  return parseJsonObject(normalized) || {};
 }
 
 function stringifyMeta(meta: CaseMeta): string {
