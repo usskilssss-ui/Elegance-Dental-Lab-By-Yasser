@@ -1,4 +1,8 @@
-import { buildCreateCasePayload } from '../mappers/dental-case-api.mapper';
+import {
+  buildCreateCasePayload,
+  normalizeRequesterType,
+  type RequesterType,
+} from '../mappers/dental-case-api.mapper';
 
 export interface PrintFormDraft {
   doctor: string;
@@ -57,14 +61,14 @@ export function buildPrintData(draft: PrintFormDraft, caseNumber: string) {
 export function buildCasePayloadFromPrintForm(
   draft: PrintFormDraft,
   opts?: {
-    requesterType?: 'doctor' | 'student';
+    requesterType?: RequesterType;
     priority?: string;
     date?: string;
     entrySource?: 'secretary' | 'print' | 'doctor';
   }
 ) {
   const payload = buildCreateCasePayload({
-    requesterType: opts?.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType: normalizeRequesterType(opts?.requesterType),
     doctor: draft.doctor.trim(),
     patient: draft.patient.trim(),
     workType: draft.workType.trim(),
