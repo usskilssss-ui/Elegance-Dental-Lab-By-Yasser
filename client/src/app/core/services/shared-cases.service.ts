@@ -138,6 +138,21 @@ export class SharedCasesService {
     this.emitCases();
   }
 
+  patchRequesterTypeByDoctor(name: string, requesterType: 'doctor' | 'student' | 'lab'): number {
+    const key = String(name || '').trim().toLowerCase();
+    if (!key) return 0;
+    let updated = 0;
+    this._cases.update((rows) =>
+      rows.map((row) => {
+        if (String(row.doctor || '').trim().toLowerCase() !== key) return row;
+        updated += 1;
+        return { ...row, requesterType };
+      })
+    );
+    if (updated) this.emitCases();
+    return updated;
+  }
+
   // تحديث حالة
   updateCase(id: string, updatedCase: DentalCase): void {
     this._cases.update((cases) => cases.map((c) => (c.id === id ? updatedCase : c)));

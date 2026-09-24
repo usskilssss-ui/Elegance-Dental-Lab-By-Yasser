@@ -29,7 +29,11 @@ const {
   isExitedCase,
 } = require('../services/caseWorkflowService');
 const { isClientPortalRole, requesterTypeForRole } = require('../utils/clientRoles');
-const { ensureClientAccount, setRequesterTypeInNotes } = require('../services/clientAccountEnsure');
+const {
+  ensureClientAccount,
+  retagCasesForClientName,
+  setRequesterTypeInNotes,
+} = require('../services/clientAccountEnsure');
 
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
@@ -307,6 +311,59 @@ exports.createCase = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create case',
+      error: error.message,
+    });
+  }
+};
+
+// Secretary/admin: convert a name to doctor/student/lab, move/create the account, retag all cases
+exports.retagRequesterByName = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const fullName = String(req.body?.fullName || '').trim();
+    const requesterType =
+      req.body?.requesterType === 'student'
+        ? 'student'
+        : req.body?.requesterType === 'lab'
+          ? 'lab'
+          : 'doctor';
+    if (!fullName) {
+      return res.status(400).json({ message: 'الاسم مطلوب' });
+    }
+
+    const account = await ensureClientAccount(fullName, requesterType);
+    let updatedCases = Number(account?.updatedCases || 0);
+    if (!updatedCases) {
+      updatedCases = await retagCasesForClientName(fullName, requesterType);
+    }
+
+    res.status(200).json({
+      success: true,
+      message:
+        requesterType === 'student'
+          ? 'تم تحويل الاسم إلى طالب'
+          : requesterType === 'lab'
+            ? 'تم تحويل الاسم إلى معمل'
+            : 'تم تحويل الاسم إلى دكتور',
+      action: account?.action,
+      updatedCases,
+      user: account?.user
+        ? {
+            id: account.user._id,
+            fullName: account.user.fullName,
+            email: account.user.email,
+            role: account.user.role,
+          }
+        : undefined,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to convert requester',
       error: error.message,
     });
   }

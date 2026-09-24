@@ -2265,45 +2265,44 @@ export class Secretary implements OnInit, OnDestroy {
     );
   }
 
-  private retagVisibleCases(name: string, kind: ClientAccountKind): Observable<{ updatedCases: number }> {
-    const matches = this.sharedCases
-      .cases()
-      .filter((row) => this.namesMatch(String(row.doctor || ''), name));
-    if (!matches.length) return of({ updatedCases: 0 });
-    return forkJoin(
-      matches.map((row) =>
-        this.caseApi.updateCase(row.id, { requesterType: kind }).pipe(catchError(() => of(null)))
-      )
-    ).pipe(map((results) => ({ updatedCases: results.filter((row) => !!row).length })));
+  private isMissingRoute(err: unknown): boolean {
+    const status = Number((err as { status?: number } | null)?.status || 0);
+    const raw = String(
+      (err as { error?: { message?: string }; message?: string } | null)?.error?.message ||
+        (err as { message?: string } | null)?.message ||
+        ''
+    );
+    return status === 404 || /route not found/i.test(raw);
   }
 
   private convertCaseRequesterFallback(
     name: string,
     kind: ClientAccountKind
   ): Observable<{ updatedCases?: number }> {
-    return this.findClientUser(name).pipe(
-      switchMap((user) => {
-        if (user) {
-          return this.userApi.convertClientRole(user.id, kind);
-        }
-        return this.auth
-          .registerDoctor({
-            fullName: name,
-            email: this.autoAccountEmail(name, kind),
-            phone: '0000000000',
-            password: '123456',
-            role: kind,
+    return this.userApi.ensureClientAccount(name, kind).pipe(
+      catchError((err) => {
+        if (!this.isMissingRoute(err)) throw err;
+        return this.findClientUser(name).pipe(
+          switchMap((user) => {
+            if (user) return this.userApi.convertClientRole(user.id, kind);
+            return this.auth
+              .registerDoctor({
+                fullName: name,
+                email: this.autoAccountEmail(name, kind),
+                phone: '0000000000',
+                password: '123456',
+                role: kind,
+              })
+              .pipe(
+                switchMap(() => this.findClientUser(name)),
+                switchMap((created) => {
+                  if (created) return this.userApi.convertClientRole(created.id, kind);
+                  return of({ updatedCases: 0 });
+                })
+              );
           })
-          .pipe(
-            switchMap(() => this.findClientUser(name)),
-            switchMap((created) => {
-              if (created) return this.userApi.convertClientRole(created.id, kind);
-              return this.retagVisibleCases(name, kind);
-            }),
-            catchError(() => this.retagVisibleCases(name, kind))
-          );
-      }),
-      catchError(() => this.retagVisibleCases(name, kind))
+        );
+      })
     );
   }
 
@@ -2328,37 +2327,31 @@ export class Secretary implements OnInit, OnDestroy {
         .replace('{kind}', kindLabel)
     );
     if (!ok) return;
+    const localN = this.sharedCases.patchRequesterTypeByDoctor(name, kind);
+    this.closeRequesterMenu();
     this.convertingCaseName = name;
-    this.userApi.ensureClientAccount(name, kind).pipe(
-      catchError((err) => {
-        const raw = String(err?.error?.message || err?.message || '');
-        if (/route not found/i.test(raw) || err?.status === 404) {
+    this.caseApi
+      .retagRequester(name, kind)
+      .pipe(
+        catchError((err) => {
+          if (!this.isMissingRoute(err)) throw err;
           return this.convertCaseRequesterFallback(name, kind);
-        }
-        throw err;
-      }),
-      switchMap((res) =>
-        this.retagVisibleCases(name, kind).pipe(
-          map((local) => ({
-            ...res,
-            updatedCases: Math.max(Number(res?.updatedCases || 0), local.updatedCases),
-          }))
-        )
+        })
       )
-    ).subscribe({
-      next: (res) => {
-        this.convertingCaseName = '';
-        this.closeRequesterMenu();
-        const n = Number(res?.updatedCases ?? 0);
-        this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
-        this.loadAccountDoctors();
-        this.reloadCasesFromBackend();
-      },
-      error: (err) => {
-        this.convertingCaseName = '';
-        this.flash(this.convertAccountError(err));
-      },
-    });
+      .subscribe({
+        next: (res) => {
+          this.convertingCaseName = '';
+          const n = Math.max(Number(res?.updatedCases || 0), localN);
+          this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
+          this.loadAccountDoctors();
+          this.reloadCasesFromBackend();
+        },
+        error: (err) => {
+          this.convertingCaseName = '';
+          this.flash(this.convertAccountError(err));
+          this.reloadCasesFromBackend();
+        },
+      });
   }
 
   requesterLabel(type: unknown): string {

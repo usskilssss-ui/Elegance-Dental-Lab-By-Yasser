@@ -80,6 +80,15 @@ router.post(
   caseController.scanAtStation
 );
 
+// Convert doctor/student/lab by name and retag all their cases (must be before /:id)
+router.post(
+  '/retag-requester',
+  authorize('admin', 'secretary'),
+  body('fullName').trim().notEmpty(),
+  body('requesterType').isIn(['doctor', 'student', 'lab']),
+  caseController.retagRequesterByName
+);
+
 // Get case by ID
 router.get('/:id', caseController.getCaseById);
 
