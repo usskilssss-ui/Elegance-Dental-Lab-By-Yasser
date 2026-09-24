@@ -1,3 +1,4 @@
+// railway-deploy-stamp: 2026-09-24 lab-convert (no behavior change)
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
 const { doctorKeysMatch, normalizeDoctorKey } = require('./casePricingService');
