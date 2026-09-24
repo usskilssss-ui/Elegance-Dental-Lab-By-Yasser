@@ -23,6 +23,8 @@ const registerValidation = [
     'finisher',
     'requester',
     'doctor',
+    'student',
+    'lab',
     'scanner1',
     'scanner2',
     'scanner3',
@@ -35,6 +37,7 @@ const registerDoctorValidation = [
   body('email').isEmail().normalizeEmail(),
   body('phone').optional({ nullable: true }).trim(),
   body('password').isLength({ min: 6 }),
+  body('role').optional().isIn(['doctor', 'student', 'lab']),
 ];
 
 // Public routes

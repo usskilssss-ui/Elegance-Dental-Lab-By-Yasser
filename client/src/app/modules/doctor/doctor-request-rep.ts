@@ -38,8 +38,14 @@ export class DoctorRequestRepComponent implements OnInit {
 
   ngOnInit(): void {
     const as = (this.route.snapshot.queryParamMap.get('as') || '').trim();
+    const kind = (this.route.snapshot.queryParamMap.get('kind') || '').trim();
     const role = this.auth.getSession()?.role;
     this.viewingAsDoctor.set(role === 'admin' && as ? as : null);
+    if (role === 'student' || role === 'lab' || kind === 'student' || kind === 'lab') {
+      this.router.navigate(['/doctor/dashboard'], {
+        queryParams: as && role === 'admin' ? { as, kind } : {},
+      });
+    }
   }
 
   backToDashboard(): void {

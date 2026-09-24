@@ -336,7 +336,9 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
       ? (entryRaw as 'secretary' | 'print' | 'doctor')
       : undefined;
   if (!entrySource) {
-    if (createdByRole === 'doctor') entrySource = 'doctor';
+    if (createdByRole === 'doctor' || createdByRole === 'student' || createdByRole === 'lab') {
+      entrySource = 'doctor';
+    }
     else if (createdByRole === 'secretary') entrySource = 'secretary';
     else if (createdByRole === 'requester') entrySource = 'print';
   }

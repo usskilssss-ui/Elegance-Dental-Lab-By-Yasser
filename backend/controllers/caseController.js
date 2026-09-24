@@ -28,6 +28,7 @@ const {
   assertCanExit,
   isExitedCase,
 } = require('../services/caseWorkflowService');
+const { isClientPortalRole, requesterTypeForRole } = require('../utils/clientRoles');
 
 /** Validate create payload for quantity / empty / work type rigor */
 function validateCreateCaseBusinessRules({ caseType, notes }) {
@@ -187,10 +188,10 @@ exports.createCase = async (req, res) => {
     } =
       req.body;
 
-    // Doctor accounts: lock referring doctor name to the logged-in user
-    if (req.user?.role === 'doctor') {
+    // Client portal accounts: lock referring name + requester type to the logged-in user
+    if (isClientPortalRole(req.user?.role)) {
       notes = forceDoctorNameInNotes(notes, req.user.fullName);
-      requesterType = 'doctor';
+      requesterType = requesterTypeForRole(req.user.role);
     }
 
     const businessError = validateCreateCaseBusinessRules({ caseType, notes });
@@ -310,7 +311,7 @@ exports.getAllCases = async (req, res) => {
 
     // Resolve doctor identity when JWT is present (optional auth on GET /)
     let doctorFullName = '';
-    let isDoctor = req.user?.role === 'doctor';
+    let isClientPortal = isClientPortalRole(req.user?.role);
     if (req.user?.userId || req.user?.id) {
       const uid = req.user.id || req.user.userId;
       if (!req.user.fullName || !req.user.role) {
@@ -318,14 +319,14 @@ exports.getAllCases = async (req, res) => {
         if (u) {
           req.user.fullName = u.fullName;
           req.user.role = u.role;
-          isDoctor = u.role === 'doctor';
+          isClientPortal = isClientPortalRole(u.role);
         }
       }
-      if (isDoctor) doctorFullName = String(req.user.fullName || '').trim();
+      if (isClientPortal) doctorFullName = String(req.user.fullName || '').trim();
     }
 
-    // Doctor portal: filter by indexed referringDoctor (+ legacy notes match)
-    if (isDoctor && doctorFullName) {
+    // Client portal: filter by indexed referringDoctor (+ legacy notes match)
+    if (isClientPortal && doctorFullName) {
       const doctorClause = {
         $or: [
           { referringDoctor: new RegExp(`^${escapeRegex(doctorFullName)}$`, 'i') },
@@ -643,7 +644,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const role = req.user?.role;
     let doctorName = '';
 
-    if (role === 'doctor') {
+    if (isClientPortalRole(role)) {
       doctorName = String(req.user.fullName || '').trim();
     } else if (role === 'admin') {
       doctorName = String(req.query.doctor || '').trim();
@@ -804,7 +805,7 @@ exports.getDoctorExitedMaterials = async (req, res) => {
     const role = req.user?.role;
     let doctorName = '';
 
-    if (role === 'doctor') {
+    if (isClientPortalRole(role)) {
       doctorName = String(req.user.fullName || '').trim();
     } else if (role === 'admin') {
       doctorName = String(req.query.doctor || '').trim();
@@ -1878,7 +1879,7 @@ exports.updateCase = async (req, res) => {
 
     // Doctor may edit only their own cases before design starts
     // Exception: doctors may set priority (urgent/normal) on their cases at any stage
-    if (req.user.role === 'doctor') {
+    if (isClientPortalRole(req.user.role)) {
       const meta = parseNotesMeta(dentalCase.notes || '');
       const doctorName = String(meta.doctor || meta.doctorName || dentalCase.referringDoctor || '')
         .trim()

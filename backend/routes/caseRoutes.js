@@ -12,7 +12,7 @@ const createCaseValidation = [
   body('patientName').trim().notEmpty(),
   body('patientEmail').isEmail(),
   body('patientPhone').trim().notEmpty(),
-  body('requesterType').optional().isIn(['doctor', 'student']),
+  body('requesterType').optional().isIn(['doctor', 'student', 'lab']),
   body('salaryAmount').optional().isFloat({ min: 0 }),
   body('caseType').trim().notEmpty(),
   body('priority').isIn(['low', 'normal', 'high', 'urgent']),
@@ -24,7 +24,7 @@ const updateCaseValidation = [
   body('patientName').optional().trim().notEmpty(),
   body('patientEmail').optional().isEmail(),
   body('patientPhone').optional().trim().notEmpty(),
-  body('requesterType').optional().isIn(['doctor', 'student']),
+  body('requesterType').optional().isIn(['doctor', 'student', 'lab']),
   body('salaryAmount').optional().isFloat({ min: 0 }),
   body('notes').optional().isString(),
   body('caseType').optional().trim().notEmpty(),
@@ -55,7 +55,7 @@ router.use(authenticate);
 // Create case - Secretary, Admin, Requester, Doctor
 router.post(
   '/',
-  authorize('admin', 'secretary', 'requester', 'doctor'),
+  authorize('admin', 'secretary', 'requester', 'doctor', 'student', 'lab'),
   createCaseValidation,
   caseController.createCase
 );
@@ -64,12 +64,12 @@ router.get('/financial-report', authorize('admin'), caseController.getFinancialR
 router.get('/material-stats', authorize('admin'), caseController.getExitedMaterialStats);
 router.get(
   '/doctor-account-summary',
-  authorize('doctor', 'admin'),
+  authorize('doctor', 'student', 'lab', 'admin'),
   caseController.getDoctorAccountSummary
 );
 router.get(
   '/doctor-exited-materials',
-  authorize('doctor', 'admin'),
+  authorize('doctor', 'student', 'lab', 'admin'),
   caseController.getDoctorExitedMaterials
 );
 
@@ -136,14 +136,14 @@ const plyUploadMiddleware = (req, res, next) => {
 
 router.post(
   '/:id/upload-ply',
-  authorize('admin', 'secretary', 'doctor'),
+  authorize('admin', 'secretary', 'doctor', 'student', 'lab'),
   plyUploadMiddleware,
   caseController.uploadCasePly
 );
 
 router.put(
   '/:id/ply-link',
-  authorize('admin', 'secretary', 'doctor'),
+  authorize('admin', 'secretary', 'doctor', 'student', 'lab'),
   caseController.setCasePlyLink
 );
 

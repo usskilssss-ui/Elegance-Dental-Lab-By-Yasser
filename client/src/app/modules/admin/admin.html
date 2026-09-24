@@ -16,6 +16,14 @@
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       {{ 'admin.nav.doctors' | t }}
     </div>
+    <div class="nav-item" [class.active]="activeNav === 'students'" (click)="setNav('students')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      {{ 'admin.nav.students' | t }}
+    </div>
+    <div class="nav-item" [class.active]="activeNav === 'labs'" (click)="setNav('labs')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      {{ 'admin.nav.labs' | t }}
+    </div>
     <div class="nav-item" [class.active]="activeNav === 'financials'" (click)="setNav('financials')">
       <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
       {{ 'admin.nav.financials' | t }}
@@ -382,26 +390,26 @@
       </div>
       </ng-container>
 
-      <!-- DOCTORS VIEW -->
-      <ng-container *ngIf="activeNav === 'doctors'">
+      <!-- DOCTORS / STUDENTS / LABS DIRECTORY -->
+      <ng-container *ngIf="isClientDirectoryNav()">
       <div class="page-header">
         <div>
-          <div class="page-label">{{ 'admin.doctors.label' | t }}</div>
-          <div class="page-title">{{ 'admin.doctors.title' | t }}</div>
+          <div class="page-label">{{ tDir('label') | t }}</div>
+          <div class="page-title">{{ tDir('title') | t }}</div>
         </div>
         <button type="button" class="export-btn" (click)="openAddDoctorModal()">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          {{ 'admin.doctors.addAccount' | t }}
+          {{ tDir('addAccount') | t }}
         </button>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;grid-template-columns:repeat(auto-fit,minmax(180px,240px));">
         <div class="stat-card" style="border-top:4px solid #0f766e;">
           <div class="stat-top">
-            <span class="stat-label" style="font-size:13px;font-weight:600;color:#0f766e;">{{ 'admin.doctors.countLabel' | t }}</span>
+            <span class="stat-label" style="font-size:13px;font-weight:600;color:#0f766e;">{{ tDir('countLabel') | t }}</span>
           </div>
           <div class="stat-val" style="font-size:2.5rem;font-weight:800;color:#0f766e;">{{ doctorAccountsCount }}</div>
-          <div class="stat-sub">{{ 'admin.doctors.countSub' | t }}</div>
+          <div class="stat-sub">{{ tDir('countSub') | t }}</div>
         </div>
       </div>
 
@@ -413,7 +421,7 @@
           type="search"
           name="doctorDirectoryFilter"
           autocomplete="off"
-          [attr.placeholder]="'admin.doctors.searchPh' | t"
+          [attr.placeholder]="tDir('searchPh') | t"
           [(ngModel)]="doctorSearchTerm"
         />
       </div>
@@ -421,10 +429,10 @@
       <div class="staff-grid">
         <div
           class="staff-card staff-card--clickable"
-          *ngFor="let doc of filteredDoctors"
+          *ngFor="let doc of filteredDirectoryMembers"
           role="button"
           tabindex="0"
-          [attr.title]="'admin.doctors.openAccount' | t"
+          [attr.title]="tDir('openAccount') | t"
           (click)="openDoctorAccountPage(doc)"
           (keydown.enter)="openDoctorAccountPage(doc)"
           (keydown.space)="$event.preventDefault(); openDoctorAccountPage(doc)"
@@ -435,7 +443,7 @@
           </div>
           <div class="staff-body">
             <h3 class="staff-name">{{ doc.name }}</h3>
-            <p class="staff-position">{{ 'admin.doctors.roleDoctor' | t }}</p>
+            <p class="staff-position">{{ tDir('role') | t }}</p>
             <div class="staff-contact">
               <small>{{ doc.email }}</small><br>
               <small>{{ doc.phone }}</small>
@@ -500,18 +508,18 @@
       <div class="modal-overlay" *ngIf="showDoctorModal" (click)="closeDoctorModal()">
         <div class="modal-content" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h2>{{ isDoctorEditMode ? ('admin.doctors.editTitle' | t) : ('admin.doctors.addTitle' | t) }}</h2>
+            <h2>{{ isDoctorEditMode ? (tDir('editTitle') | t) : (tDir('addTitle') | t) }}</h2>
             <button type="button" class="modal-close-btn" (click)="closeDoctorModal()">
               <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <form class="modal-body" autocomplete="off" (submit)="$event.preventDefault()">
             <p class="staff-form-hint" style="font-size:12px;color:#64748b;margin:0 0 12px;">
-              {{ 'admin.doctors.formHint' | t }}
+              {{ tDir('formHint') | t }}
             </p>
             <div class="form-group">
-              <label>{{ 'admin.doctors.nameLabel' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
-              <input type="text" name="doctorFullName" [(ngModel)]="currentDoctor.name" [attr.placeholder]="'admin.doctors.namePh' | t" required />
+              <label>{{ tDir('nameLabel') | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
+              <input type="text" name="doctorFullName" [(ngModel)]="currentDoctor.name" [attr.placeholder]="tDir('namePh') | t" required />
             </div>
             <div class="form-group">
               <label>{{ 'login.email' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></label>
@@ -520,7 +528,7 @@
                 name="doctorWorkEmail"
                 autocomplete="off"
                 [(ngModel)]="currentDoctor.email"
-                [attr.placeholder]="'admin.doctors.emailPh' | t"
+                [attr.placeholder]="tDir('emailPh') | t"
                 [attr.readonly]="isDoctorEditMode ? '' : null"
                 [required]="!isDoctorEditMode"
               />
