@@ -1899,15 +1899,22 @@ exports.updateCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
-    // Exited cases: only admin may edit (financials use dedicated endpoint)
-    if (isExitedCase(dentalCase) && req.user.role !== 'admin') {
+    const incoming = req.body && typeof req.body === 'object' ? req.body : {};
+    const providedKeys = Object.keys(incoming).filter((k) => incoming[k] !== undefined);
+    const requesterRetagOnly =
+      providedKeys.includes('requesterType') &&
+      providedKeys.every((k) => ['requesterType', 'referringDoctor', 'notes'].includes(k));
+
+    // Exited cases: only admin may edit (financials use dedicated endpoint).
+    // Secretary may still retag doctor/student/lab on exited cards.
+    if (isExitedCase(dentalCase) && req.user.role !== 'admin' && !requesterRetagOnly) {
       return res.status(403).json({
         success: false,
         message: 'لا يمكن تعديل حالة خارجة — راجع الإدارة',
       });
     }
 
-    if (req.user.role === 'secretary') {
+    if (req.user.role === 'secretary' && !requesterRetagOnly) {
       const createdBy = normalizeDocId(dentalCase.createdBy);
       if (createdBy && createdBy !== String(req.user.id)) {
         return res.status(403).json({

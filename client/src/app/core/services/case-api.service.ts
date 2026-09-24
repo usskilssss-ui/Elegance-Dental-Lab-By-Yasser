@@ -1,13 +1,19 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { apiBaseUrl } from '../api/api.config';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CaseApiService {
-  private apiUrl = `${environment.apiUrl}/cases`;
+  private get apiUrl(): string {
+    return `${apiBaseUrl()}/cases`;
+  }
+
+  private get rootApiUrl(): string {
+    return apiBaseUrl();
+  }
 
   constructor(private http: HttpClient) {}
 
@@ -167,22 +173,22 @@ export class CaseApiService {
   }
 
   getDoctorPricings(): Observable<any> {
-    return this.http.get(`${environment.apiUrl}/doctor-pricing`);
+    return this.http.get(`${this.rootApiUrl}/doctor-pricing`);
   }
 
   updateDoctorPricing(doctorName: string, prices: any): Observable<any> {
-    return this.http.put(`${environment.apiUrl}/doctor-pricing`, { doctorName, prices });
+    return this.http.put(`${this.rootApiUrl}/doctor-pricing`, { doctorName, prices });
   }
 
   getDoctorPayments(doctorName?: string): Observable<any> {
     const url = doctorName 
-      ? `${environment.apiUrl}/doctor-payments?doctor=${encodeURIComponent(doctorName)}` 
-      : `${environment.apiUrl}/doctor-payments`;
+      ? `${this.rootApiUrl}/doctor-payments?doctor=${encodeURIComponent(doctorName)}` 
+      : `${this.rootApiUrl}/doctor-payments`;
     return this.http.get(url);
   }
 
   addDoctorPayment(doctorName: string, amount: number, notes: string = '', paymentDate?: string): Observable<any> {
-    return this.http.post(`${environment.apiUrl}/doctor-payments`, {
+    return this.http.post(`${this.rootApiUrl}/doctor-payments`, {
       doctorName,
       amount,
       notes,
@@ -191,6 +197,6 @@ export class CaseApiService {
   }
 
   deleteDoctorPayment(id: string): Observable<any> {
-    return this.http.delete(`${environment.apiUrl}/doctor-payments/${id}`);
+    return this.http.delete(`${this.rootApiUrl}/doctor-payments/${id}`);
   }
 }
