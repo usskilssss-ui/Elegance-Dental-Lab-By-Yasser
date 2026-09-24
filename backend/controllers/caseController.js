@@ -37,6 +37,46 @@ const {
   applyRequesterTypeFromNotes,
 } = require('../services/clientAccountEnsure');
 
+const URGENT_PRIORITIES = ['urgent', 'high'];
+
+function caseIsLab(doc) {
+  if (!doc) return false;
+  const overlaid = applyRequesterTypeFromNotes(doc);
+  return String(overlaid.requesterType || '').toLowerCase() === 'lab';
+}
+
+function priorityForRequester(requesterType, priority) {
+  if (String(requesterType || '').toLowerCase() === 'lab') return 'normal';
+  return priority;
+}
+
+function presentCase(row) {
+  const next = applyRequesterTypeFromNotes(row);
+  const plain = next && typeof next.toObject === 'function' ? next.toObject() : { ...next };
+  if (caseIsLab(plain) && URGENT_PRIORITIES.includes(String(plain.priority || '').toLowerCase())) {
+    plain.priority = 'normal';
+  }
+  return plain;
+}
+
+let labUrgentSweep = null;
+async function sweepUrgentLabCases() {
+  if (labUrgentSweep) return labUrgentSweep;
+  labUrgentSweep = (async () => {
+    const rows = await DentalCase.find({ priority: { $in: URGENT_PRIORITIES } })
+      .select('_id requesterType notes priority')
+      .lean();
+    const ids = rows.filter((row) => caseIsLab(row)).map((row) => row._id);
+    if (ids.length) {
+      await DentalCase.collection.updateMany({ _id: { $in: ids } }, { $set: { priority: 'normal' } });
+    }
+  })().catch((err) => {
+    labUrgentSweep = null;
+    throw err;
+  });
+  return labUrgentSweep;
+}
+
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
   try {
@@ -218,6 +258,7 @@ exports.createCase = async (req, res) => {
 
     const normalizedRequesterType =
       requesterType === 'student' ? 'student' : requesterType === 'lab' ? 'lab' : 'doctor';
+    priority = priorityForRequester(normalizedRequesterType, priority);
     const isStudentCase = normalizedRequesterType === 'student';
     const notesFinal = notes ?? '';
     const referringDoctor = referringDoctorFromNotes(notesFinal);
@@ -380,6 +421,7 @@ exports.retagRequesterByName = async (req, res) => {
 // Get all cases with pagination and filtering
 exports.getAllCases = async (req, res) => {
   try {
+    await sweepUrgentLabCases().catch(() => {});
     const { page = 1, limit = 10, stage, status, priority, search } = req.query;
 
     const filter = {};
@@ -467,7 +509,7 @@ exports.getAllCases = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: cases.map((row) => applyRequesterTypeFromNotes(row)),
+      data: cases.map((row) => presentCase(row)),
       pagination: {
         total,
         page: pageNum,
@@ -985,7 +1027,7 @@ exports.getCaseById = async (req, res) => {
     dentalCase.notes = sanitizeNotesMetaString(dentalCase.notes);
     res.status(200).json({
       success: true,
-      case: applyRequesterTypeFromNotes(dentalCase),
+      case: presentCase(dentalCase),
     });
   } catch (error) {
     res.status(500).json({
@@ -2113,6 +2155,13 @@ exports.updateCase = async (req, res) => {
       }
       dentalCase.priority = p;
     }
+    if (
+      caseIsLab(dentalCase) ||
+      req.user?.role === 'lab' ||
+      String(dentalCase.requesterType || '').toLowerCase() === 'lab'
+    ) {
+      dentalCase.priority = 'normal';
+    }
     if (dueDate !== undefined) dentalCase.dueDate = new Date(dueDate);
 
     if (stageTimestamps !== undefined && typeof stageTimestamps === 'object' && stageTimestamps !== null) {
@@ -2212,7 +2261,7 @@ exports.updateCase = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Case updated successfully',
-      case: dentalCase,
+      case: presentCase(dentalCase),
       accountEnsure: accountEnsure
         ? {
             action: accountEnsure.action,

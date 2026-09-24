@@ -198,9 +198,11 @@
       <button class="filter-tab" [class.active]="activeFilter() === 'all'" (click)="setFilter('all')">
         {{ 'filter.all' | t }} <span class="tab-count">{{ filterCounts().all }}</span>
       </button>
-      <button class="filter-tab filter-important" [class.active]="activeFilter() === 'important'" (click)="setFilter('important')">
-        {{ 'filter.urgent' | t }} <span class="tab-count">{{ filterCounts().important }}</span>
-      </button>
+      @if (!isLabPortal()) {
+        <button class="filter-tab filter-important" [class.active]="activeFilter() === 'important'" (click)="setFilter('important')">
+          {{ 'filter.urgent' | t }} <span class="tab-count">{{ filterCounts().important }}</span>
+        </button>
+      }
       <button class="filter-tab filter-pending" [class.active]="activeFilter() === 'pending'" (click)="setFilter('pending')">
         {{ 'filter.pending' | t }} <span class="tab-count">{{ filterCounts().pending }}</span>
       </button>
@@ -254,6 +256,7 @@
           <div class="case-main">
             <div class="case-head">
               <div class="case-head-left">
+                @if (!isLabPortal()) {
                 <button
                   type="button"
                   class="important-star"
@@ -266,9 +269,10 @@
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </button>
+                }
                 <span class="case-id">{{ c.caseNumber }}</span>
                 <app-case-barcode [value]="c.caseNumber"></app-case-barcode>
-                @if (c.priority === 'emergency') {
+                @if (!isLabPortal() && c.priority === 'emergency') {
                   <span class="urgent-pill">{{ 'common.urgent' | t }}</span>
                 }
               </div>
@@ -370,6 +374,7 @@
         <div class="detail-modal-head">
           <h2 class="modal-title">{{ lang.t('doctor.detailTitle').replace('{n}', dc.caseNumber) }}</h2>
           <div class="detail-head-actions">
+            @if (!isLabPortal()) {
             <button
               type="button"
               class="important-star"
@@ -381,16 +386,19 @@
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
             </button>
+            }
             <span class="case-phase-badge" [ngClass]="getCasePhase(dc).color">{{ getCasePhase(dc).label }}</span>
           </div>
         </div>
         <div class="detail-grid">
           <div class="detail-row"><span>{{ 'common.patient' | t }}</span><strong>{{ dc.patient | patientLabel }}</strong></div>
           <div class="detail-row"><span>{{ 'common.stage' | t }}</span><strong>{{ getCasePhase(dc).label }}</strong></div>
+          @if (!isLabPortal()) {
           <div class="detail-row">
             <span>{{ 'common.priority' | t }}</span>
             <strong>{{ dc.priority === 'emergency' ? ('common.urgent' | t) : ('common.normal' | t) }}</strong>
           </div>
+          }
           <div class="detail-row"><span>{{ 'common.workType' | t }}</span><strong>{{ formatWorkTypeForDisplay(dc.workType) }}</strong></div>
           <div class="detail-row">
             <span>{{ 'intake.label' | t }}</span>
@@ -536,10 +544,12 @@
             </label>
           }
 
+          @if (!isLabPortal()) {
           <label class="urgent-check">
             <input type="checkbox" name="urgent" [(ngModel)]="formDraft.urgent" />
             <span>{{ 'doctor.urgentCheck' | t }}</span>
           </label>
+          }
 
           <label class="form-field">
             <span>{{ 'secretary.caseType' | t }} <abbr [attr.title]="'common.required' | t">*</abbr></span>
