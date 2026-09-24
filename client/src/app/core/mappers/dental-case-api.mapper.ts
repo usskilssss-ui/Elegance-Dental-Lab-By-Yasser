@@ -360,12 +360,14 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     else if (createdByRole === 'requester') entrySource = 'print';
   }
   const fieldRequester = String(doc['requesterType'] || '').trim().toLowerCase();
-  const metaRequester = String(meta['requesterType'] || '').trim().toLowerCase();
+  const metaRequester = String(meta['requesterType'] || meta['clientKind'] || '')
+    .trim()
+    .toLowerCase();
   const requesterType = normalizeRequesterType(
-    fieldRequester === 'student' || fieldRequester === 'lab'
-      ? fieldRequester
-      : metaRequester === 'student' || metaRequester === 'lab'
-        ? metaRequester
+    metaRequester === 'student' || metaRequester === 'lab'
+      ? metaRequester
+      : fieldRequester === 'student' || fieldRequester === 'lab'
+        ? fieldRequester
         : fieldRequester || metaRequester
   );
   const teethRaw = meta['teeth'];

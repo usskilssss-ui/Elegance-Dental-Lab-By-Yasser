@@ -47,7 +47,7 @@ function setRequesterTypeInNotes(notes, requesterType, extra = {}) {
   const normalized = raw.replace(/^\uFEFF/, '');
   const hasMetaPrefix = normalized.startsWith('__META__');
   const meta = parseMetaLenient(raw);
-  const next = { ...meta, ...extra, requesterType };
+  const next = { ...meta, ...extra, requesterType, clientKind: requesterType };
   const encoded = `${prefix}${JSON.stringify(next)}`;
   if (!hasMetaPrefix && raw.trim() && !parseJsonObject(normalized)) {
     return `${encoded}\n${raw}`;
@@ -75,24 +75,36 @@ function caseMatchesClientName(dentalCase, name) {
   return new RegExp(escapeRegex(wanted), 'i').test(String(dentalCase.notes || ''));
 }
 
-async function persistRequesterType(id, requesterType, notes, referringDoctor) {
-  const $set = {
-    notes,
-    ...(referringDoctor ? { referringDoctor } : {}),
-  };
-  try {
-    await DentalCase.updateOne({ _id: id }, { $set: { ...$set, requesterType } });
-    return true;
-  } catch (err) {
-    try {
-      // Atlas / older validators may reject requesterType=lab; notes still win in the UI mapper.
-      await DentalCase.updateOne({ _id: id }, { $set });
-      return true;
-    } catch (err2) {
-      console.error('[retagCasesForClientName]', String(id), err2?.message || err?.message || err2);
-      return false;
-    }
+function notesRequesterType(notes) {
+  const meta = parseMetaLenient(notes || '');
+  const value = String(meta.requesterType || meta.clientKind || '').trim().toLowerCase();
+  return value === 'student' || value === 'lab' ? value : '';
+}
+
+function applyRequesterTypeFromNotes(doc) {
+  if (!doc) return doc;
+  const fromNotes = notesRequesterType(doc.notes);
+  if (!fromNotes) return doc;
+  if (doc.toObject) {
+    const plain = doc.toObject();
+    return { ...plain, requesterType: fromNotes };
   }
+  return { ...doc, requesterType: fromNotes };
+}
+
+async function persistRequesterType(id, requesterType, notes, referringDoctor) {
+  const _id = id && id._id ? id._id : id;
+  const $notes = { notes };
+  if (referringDoctor) $notes.referringDoctor = referringDoctor;
+  // Notes first via the native driver so a rejected requesterType=lab field
+  // cannot roll back the only copy the UI can read after refresh.
+  await DentalCase.collection.updateOne({ _id }, { $set: $notes });
+  try {
+    await DentalCase.collection.updateOne({ _id }, { $set: { requesterType } });
+  } catch (err) {
+    console.error('[retagCasesForClientName] field', err?.message || err);
+  }
+  return true;
 }
 
 async function retagCasesForClientName(fullName, role, extraIds = []) {
@@ -149,11 +161,10 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
     const nextNotes = setRequesterTypeInNotes(notesText, requesterType, {
       doctor: displayName,
     });
-    const changed =
-      dentalCase.requesterType !== requesterType ||
-      notesText !== nextNotes ||
-      (displayName && dentalCase.referringDoctor !== displayName);
-    if (!changed) {
+    const alreadyPersisted =
+      dentalCase.requesterType === requesterType &&
+      notesRequesterType(notesText) === requesterType;
+    if (alreadyPersisted && notesText === nextNotes) {
       updated += 1;
       continue;
     }
@@ -267,4 +278,6 @@ module.exports = {
   ensureClientAccount,
   retagCasesForClientName,
   setRequesterTypeInNotes,
+  persistRequesterType,
+  applyRequesterTypeFromNotes,
 };

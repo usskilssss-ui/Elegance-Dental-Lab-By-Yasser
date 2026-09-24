@@ -2390,7 +2390,7 @@ export class Secretary implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (res) => {
+        next: () => {
           this.convertingCaseName = '';
           this.reloadCasesFromBackend(true, () => {
             const persisted = this.sharedCases
@@ -2400,12 +2400,16 @@ export class Secretary implements OnInit, OnDestroy {
                   this.namesMatch(String(row.doctor || ''), name) &&
                   normalizeRequesterType(row.requesterType) === kind
               ).length;
-            this.applyRequesterOverrides();
-            this.flash(
-              this.lang
-                .t('secretary.clients.convertDone')
-                .replace('{n}', String(Math.max(Number(res?.updatedCases || 0), persisted)))
-            );
+            if (persisted > 0) {
+              this.applyRequesterOverrides();
+              this.flash(
+                this.lang.t('secretary.clients.convertDone').replace('{n}', String(persisted))
+              );
+            } else {
+              this.requesterOverrides.delete(name);
+              this.reloadCasesFromBackend(true);
+              this.flash('السيرفر مرجعش التحويل. حدّث بعد دقيقة وحاول تاني.');
+            }
             this.loadAccountDoctors();
           });
         },
