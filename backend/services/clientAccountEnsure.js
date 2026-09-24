@@ -97,6 +97,7 @@ async function persistRequesterType(id, requesterType, notes, referringDoctor) {
   const _id = id && id._id ? id._id : id;
   const $notes = { notes };
   if (referringDoctor) $notes.referringDoctor = referringDoctor;
+  if (requesterType === 'lab') $notes.priority = 'normal';
   // Notes first via the native driver so a rejected requesterType=lab field
   // cannot roll back the only copy the UI can read after refresh.
   await DentalCase.collection.updateOne({ _id }, { $set: $notes });

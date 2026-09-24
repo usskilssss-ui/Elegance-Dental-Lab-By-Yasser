@@ -407,7 +407,10 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
   return {
     id,
     caseNumber,
-    priority: mapPriorityFromApi(String(doc['priority'] ?? 'normal')),
+    priority:
+      requesterType === 'lab'
+        ? 'normal'
+        : mapPriorityFromApi(String(doc['priority'] ?? 'normal')),
     patient: patientName,
     doctor,
     clinic: String(meta['branch'] ?? ''),

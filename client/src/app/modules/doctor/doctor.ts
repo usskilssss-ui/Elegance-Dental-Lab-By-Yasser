@@ -170,6 +170,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (kind === 'student' || kind === 'lab') return false;
     return true;
   }
+
+  /** Labs cannot mark cases urgent — doctors and students still can. */
+  isLabPortal(): boolean {
+    if (this.viewingClientKind() === 'lab') return true;
+    return this.auth.getSession()?.role === 'lab';
+  }
+
+  private portalRequesterType(): ClientAccountKind {
+    const kind = this.viewingClientKind();
+    if (kind) return kind;
+    const role = this.auth.getSession()?.role;
+    return isClientAccountKind(role) ? role : 'doctor';
+  }
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
@@ -277,9 +290,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return c.priority === 'emergency';
   }
 
-  toggleImportant(c: DentalCase, ev?: Event): void {
-    ev?.stopPropagation();
-    const makeUrgent = c.priority !== 'emergency';
+    toggleImportant(c: DentalCase, ev?: Event): void {
+      ev?.stopPropagation();
+      if (this.isLabPortal()) return;
+      const makeUrgent = c.priority !== 'emergency';
     const prev = c.priority;
     const optimistic: DentalCase = {
       ...c,
@@ -800,7 +814,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
       quantity: c.quantity || 1,
       date: todayYmd(),
       caseType,
-      urgent: c.priority === 'emergency',
+      urgent: this.isLabPortal() ? false : c.priority === 'emergency',
     };
     this.selectedWorkTypes = new Set();
     this.workTypeQuantities = {};
@@ -1200,17 +1214,18 @@ export class DoctorComponent implements OnInit, OnDestroy {
       color: (d.color || '').trim(),
       quantity: d.caseType === 'Empty' ? 0 : d.quantity || 1,
       date: todayYmd(),
-      urgent: !!d.urgent,
+      urgent: this.isLabPortal() ? false : !!d.urgent,
       intakeType: (this.intakeType === 'scan' || this.intakeType === 'impression'
         ? this.intakeType
         : undefined) as 'impression' | 'scan' | undefined,
       teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
 
-    const sessionRole = this.auth.getSession()?.role;
+    const requesterType = this.portalRequesterType();
+    const allowUrgent = !this.isLabPortal() && !!d.urgent;
     const casePayload = buildCasePayloadFromPrintForm(draft, {
-      requesterType: isClientAccountKind(sessionRole) ? sessionRole : 'doctor',
-      priority: d.urgent ? 'urgent' : isEdit ? 'normal' : undefined,
+      requesterType,
+      priority: allowUrgent ? 'urgent' : isEdit || this.isLabPortal() ? 'normal' : undefined,
       entrySource: 'doctor',
     });
 
@@ -1271,7 +1286,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
         next: () => {
           this.saveInProgress.set(false);
           this.flash(
-            d.urgent
+            draft.urgent
               ? this.lang.t('doctor.toast.savedUrgent')
               : this.lang.t('doctor.toast.saved')
           );
