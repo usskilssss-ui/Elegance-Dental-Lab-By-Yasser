@@ -55,45 +55,77 @@ function setRequesterTypeInNotes(notes, requesterType, extra = {}) {
   return encoded;
 }
 
-function caseNameFromDoc(dentalCase) {
+function caseNamesFromDoc(dentalCase) {
   const meta = parseMetaLenient(dentalCase.notes || '');
-  return String(dentalCase.referringDoctor || meta.doctor || meta.doctorName || '').trim();
+  return [
+    dentalCase.referringDoctor,
+    meta.doctor,
+    meta.doctorName,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
 }
 
-async function retagCasesForClientName(fullName, role) {
+function caseMatchesClientName(dentalCase, name) {
+  const wanted = String(name || '').trim();
+  if (!wanted) return false;
+  if (caseNamesFromDoc(dentalCase).some((value) => doctorKeysMatch(value, wanted))) {
+    return true;
+  }
+  return new RegExp(escapeRegex(wanted), 'i').test(String(dentalCase.notes || ''));
+}
+
+async function retagCasesForClientName(fullName, role, extraIds = []) {
   const name = String(fullName || '').trim();
   const requesterType = requesterTypeForRole(role);
-  if (!name) return 0;
+  if (!name && !extraIds.length) return 0;
 
-  const looseRe = new RegExp(escapeRegex(name), 'i');
-  let candidates = await DentalCase.find({
-    $or: [{ referringDoctor: looseRe }, { notes: looseRe }],
-  }).limit(8000);
+  const looseRe = name ? new RegExp(escapeRegex(name), 'i') : null;
+  const idList = (Array.isArray(extraIds) ? extraIds : [])
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
 
-  if (!candidates.length) {
-    candidates = await DentalCase.find({ notes: /__META__/ }).limit(8000);
+  const [byName, byId] = await Promise.all([
+    name
+      ? DentalCase.find({
+          $or: [{ referringDoctor: looseRe }, { notes: looseRe }],
+        }).limit(20000)
+      : Promise.resolve([]),
+    idList.length ? DentalCase.find({ _id: { $in: idList } }) : Promise.resolve([]),
+  ]);
+
+  const seen = new Map();
+  for (const dentalCase of [...byId, ...byName]) {
+    seen.set(String(dentalCase._id), dentalCase);
+  }
+
+  if (!seen.size && name) {
+    const fallback = await DentalCase.find({ notes: /__META__/ }).limit(20000);
+    for (const dentalCase of fallback) {
+      if (caseMatchesClientName(dentalCase, name)) {
+        seen.set(String(dentalCase._id), dentalCase);
+      }
+    }
   }
 
   let updated = 0;
-  for (const dentalCase of candidates) {
-    const caseName = caseNameFromDoc(dentalCase);
-    const notesText = String(dentalCase.notes || '');
-    const matched =
-      (caseName && doctorKeysMatch(caseName, name)) ||
-      (!caseName && looseRe.test(notesText));
-    if (!matched) continue;
+  for (const dentalCase of seen.values()) {
+    const forced = idList.includes(String(dentalCase._id));
+    if (!forced && name && !caseMatchesClientName(dentalCase, name)) continue;
 
+    const notesText = String(dentalCase.notes || '');
+    const displayName = name || caseNamesFromDoc(dentalCase)[0];
     const nextNotes = setRequesterTypeInNotes(notesText, requesterType, {
-      doctor: caseName || name,
+      doctor: displayName,
     });
     const changed =
-      dentalCase.requesterType !== requesterType || notesText !== nextNotes;
+      dentalCase.requesterType !== requesterType ||
+      notesText !== nextNotes ||
+      (displayName && dentalCase.referringDoctor !== displayName);
     if (!changed) continue;
     dentalCase.requesterType = requesterType;
     dentalCase.notes = nextNotes;
-    if (!dentalCase.referringDoctor) {
-      dentalCase.referringDoctor = caseName || name;
-    }
+    if (displayName) dentalCase.referringDoctor = displayName;
     await dentalCase.save();
     updated += 1;
   }

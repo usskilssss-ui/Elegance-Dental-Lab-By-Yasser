@@ -257,7 +257,7 @@ export function formatTimeTo12Hour(timeStr: string): string {
 export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase {
   const id = String(doc['_id'] ?? doc['id'] ?? '');
   const meta = parseMeta(String(doc['notes'] ?? ''));
-  const doctor = String(meta['doctor'] ?? '');
+  const doctor = String(meta['doctor'] || meta['doctorName'] || doc['referringDoctor'] || '').trim();
   const workDetail = String(meta['workDetail'] ?? '');
   const color = String(meta['color'] ?? '');
   const size = String(meta['size'] ?? '');
@@ -359,7 +359,15 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     else if (createdByRole === 'secretary') entrySource = 'secretary';
     else if (createdByRole === 'requester') entrySource = 'print';
   }
-  const requesterType = normalizeRequesterType(meta['requesterType'] ?? doc['requesterType']);
+  const fieldRequester = String(doc['requesterType'] || '').trim().toLowerCase();
+  const metaRequester = String(meta['requesterType'] || '').trim().toLowerCase();
+  const requesterType = normalizeRequesterType(
+    fieldRequester === 'student' || fieldRequester === 'lab'
+      ? fieldRequester
+      : metaRequester === 'student' || metaRequester === 'lab'
+        ? metaRequester
+        : fieldRequester || metaRequester
+  );
   const teethRaw = meta['teeth'];
   const teeth = Array.isArray(teethRaw)
     ? teethRaw
