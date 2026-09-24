@@ -222,6 +222,8 @@ export class Secretary implements OnInit, OnDestroy {
 
   accountKind: ClientAccountKind = 'doctor';
   convertingAccountId = '';
+  requesterMenuCaseId: string | null = null;
+  convertingCaseName = '';
   newDoctor = { name: '', email: '', phone: '', password: '' };
   createDoctorError = '';
   createDoctorSaving = false;
@@ -2198,6 +2200,49 @@ export class Secretary implements OnInit, OnDestroy {
     return this.dialogRequesterType() === 'lab';
   }
 
+  toggleRequesterMenu(caseId: string, ev: Event): void {
+    ev.stopPropagation();
+    this.requesterMenuCaseId = this.requesterMenuCaseId === caseId ? null : caseId;
+  }
+
+  convertCaseRequester(c: { id: string; doctor?: string; requesterType?: string }, kind: ClientAccountKind): void {
+    const name = String(c.doctor || '').trim();
+    if (!name || this.convertingCaseName) return;
+    const current = normalizeRequesterType(c.requesterType);
+    if (current === kind) {
+      this.requesterMenuCaseId = null;
+      return;
+    }
+    const kindLabel =
+      kind === 'student'
+        ? this.lang.t('secretary.clients.toStudent')
+        : kind === 'lab'
+          ? this.lang.t('secretary.clients.toLab')
+          : this.lang.t('secretary.clients.toDoctor');
+    const ok = confirm(
+      this.lang
+        .t('secretary.clients.convertConfirm')
+        .replace('{name}', name)
+        .replace('{kind}', kindLabel)
+    );
+    if (!ok) return;
+    this.convertingCaseName = name;
+    this.userApi.ensureClientAccount(name, kind).subscribe({
+      next: (res) => {
+        this.convertingCaseName = '';
+        this.requesterMenuCaseId = null;
+        const n = Number(res?.updatedCases ?? 0);
+        this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
+        this.loadAccountDoctors();
+        this.reloadCasesFromBackend();
+      },
+      error: (err) => {
+        this.convertingCaseName = '';
+        this.flash(this.convertAccountError(err));
+      },
+    });
+  }
+
   requesterLabel(type: unknown): string {
     const kind = normalizeRequesterType(type);
     if (kind === 'student') return this.lang.t('common.student');
@@ -2405,6 +2450,9 @@ export class Secretary implements OnInit, OnDestroy {
     this.menuOpenId.set(null);
     this.notificationsOpen.set(false);
     this.filterOpen.set(false);
+    if (!el.closest('.requester-switch')) {
+      this.requesterMenuCaseId = null;
+    }
   }
 
   toggleNotifications(ev: Event): void {
