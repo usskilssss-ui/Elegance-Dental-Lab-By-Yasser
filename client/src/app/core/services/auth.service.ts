@@ -29,7 +29,9 @@ export interface RegisterStaffPayload {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly apiUrl = `${apiBaseUrl()}/auth`;
+  private get apiUrl(): string {
+    return `${apiBaseUrl()}/auth`;
+  }
 
   private readonly isAuthenticated$ = new BehaviorSubject<boolean>(false);
   private readonly currentUser$ = new BehaviorSubject<AuthSession | null>(null);

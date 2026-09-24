@@ -2275,6 +2275,20 @@ export class Secretary implements OnInit, OnDestroy {
     return status === 404 || /route not found/i.test(raw);
   }
 
+  private retagVisibleCases(name: string, kind: ClientAccountKind): Observable<{ updatedCases?: number }> {
+    const matches = this.sharedCases
+      .cases()
+      .filter((row) => this.namesMatch(String(row.doctor || ''), name));
+    if (!matches.length) return of({ updatedCases: 0 });
+    return forkJoin(
+      matches.map((row) =>
+        this.caseApi
+          .updateCase(row.id, { requesterType: kind, referringDoctor: name })
+          .pipe(catchError(() => of(null)))
+      )
+    ).pipe(map((rows) => ({ updatedCases: rows.filter(Boolean).length })));
+  }
+
   private convertCaseRequesterFallback(
     name: string,
     kind: ClientAccountKind
@@ -2297,11 +2311,15 @@ export class Secretary implements OnInit, OnDestroy {
                 switchMap(() => this.findClientUser(name)),
                 switchMap((created) => {
                   if (created) return this.userApi.convertClientRole(created.id, kind);
-                  return of({ updatedCases: 0 });
+                  return this.retagVisibleCases(name, kind);
                 })
               );
           })
         );
+      }),
+      catchError((err) => {
+        if (!this.isMissingRoute(err)) throw err;
+        return this.retagVisibleCases(name, kind);
       })
     );
   }
@@ -2349,7 +2367,6 @@ export class Secretary implements OnInit, OnDestroy {
         error: (err) => {
           this.convertingCaseName = '';
           this.flash(this.convertAccountError(err));
-          this.reloadCasesFromBackend();
         },
       });
   }

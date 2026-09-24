@@ -3,6 +3,10 @@
   "outputDirectory": "client/dist/client/browser",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://elegance-dental-lab-by-yasser-production-da7c.up.railway.app/api/:path*"
+    },
+    {
       "source": "/((?!.*\\.).*)",
       "destination": "/index.html"
     }
