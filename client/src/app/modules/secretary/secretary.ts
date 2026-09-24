@@ -226,6 +226,7 @@ export class Secretary implements OnInit, OnDestroy {
   requesterMenuCase: { id: string; doctor?: string; requesterType?: string } | null = null;
   requesterMenuPos = { top: 0, left: 0 };
   convertingCaseName = '';
+  private readonly requesterOverrides = new Map<string, ClientAccountKind>();
   newDoctor = { name: '', email: '', phone: '', password: '' };
   createDoctorError = '';
   createDoctorSaving = false;
@@ -1462,6 +1463,7 @@ export class Secretary implements OnInit, OnDestroy {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];
         this.sharedCases.setCasesFromServer(mapped);
+        this.applyRequesterOverrides();
         this.casesLoading.set(false);
         after?.();
       },
@@ -2324,6 +2326,12 @@ export class Secretary implements OnInit, OnDestroy {
     );
   }
 
+  private applyRequesterOverrides(): void {
+    for (const [name, kind] of this.requesterOverrides) {
+      this.sharedCases.patchRequesterTypeByDoctor(name, kind);
+    }
+  }
+
   convertCaseRequester(c: { id: string; doctor?: string; requesterType?: string }, kind: ClientAccountKind): void {
     const name = String(c.doctor || '').trim();
     if (!name || this.convertingCaseName) return;
@@ -2345,11 +2353,17 @@ export class Secretary implements OnInit, OnDestroy {
         .replace('{kind}', kindLabel)
     );
     if (!ok) return;
+    this.requesterOverrides.set(name, kind);
     const localN = this.sharedCases.patchRequesterTypeByDoctor(name, kind);
+    const caseIds = this.sharedCases
+      .cases()
+      .filter((row) => this.namesMatch(String(row.doctor || ''), name))
+      .map((row) => row.id)
+      .filter(Boolean);
     this.closeRequesterMenu();
     this.convertingCaseName = name;
     this.caseApi
-      .retagRequester(name, kind)
+      .retagRequester(name, kind, caseIds)
       .pipe(
         catchError((err) => {
           if (!this.isMissingRoute(err)) throw err;
@@ -2362,11 +2376,13 @@ export class Secretary implements OnInit, OnDestroy {
           const n = Math.max(Number(res?.updatedCases || 0), localN);
           this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
           this.loadAccountDoctors();
-          this.reloadCasesFromBackend();
+          this.applyRequesterOverrides();
+          this.reloadCasesFromBackend(true, () => this.applyRequesterOverrides());
         },
         error: (err) => {
           this.convertingCaseName = '';
           this.flash(this.convertAccountError(err));
+          this.applyRequesterOverrides();
         },
       });
   }

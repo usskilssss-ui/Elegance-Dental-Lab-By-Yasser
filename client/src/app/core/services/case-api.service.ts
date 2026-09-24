@@ -85,8 +85,12 @@ export class CaseApiService {
   }
 
   /** Secretary/admin: convert a name and retag all cases. */
-  retagRequester(fullName: string, requesterType: 'doctor' | 'student' | 'lab'): Observable<any> {
-    return this.http.post(`${this.apiUrl}/retag-requester`, { fullName, requesterType });
+  retagRequester(
+    fullName: string,
+    requesterType: 'doctor' | 'student' | 'lab',
+    caseIds: string[] = []
+  ): Observable<any> {
+    return this.http.post(`${this.apiUrl}/retag-requester`, { fullName, requesterType, caseIds });
   }
 
   updateCaseFinancials(
