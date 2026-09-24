@@ -2679,6 +2679,39 @@ export class Admin implements OnInit, OnDestroy {
     this.doctorSaving = false;
   }
 
+  convertingAccountId = '';
+
+  convertDirectoryAccount(doc: StaffMember, kind: ClientAccountKind): void {
+    if (!doc.id || kind === this.clientDirectoryKind || this.convertingAccountId) return;
+    const kindLabel =
+      kind === 'student'
+        ? this.lang.t('secretary.clients.toStudent')
+        : kind === 'lab'
+          ? this.lang.t('secretary.clients.toLab')
+          : this.lang.t('secretary.clients.toDoctor');
+    const ok = confirm(
+      this.lang
+        .t('secretary.clients.convertConfirm')
+        .replace('{name}', doc.name)
+        .replace('{kind}', kindLabel)
+    );
+    if (!ok) return;
+    this.convertingAccountId = doc.id;
+    this.userApi.convertClientRole(doc.id, kind).subscribe({
+      next: (res) => {
+        this.convertingAccountId = '';
+        const n = Number(res?.updatedCases ?? 0);
+        this.doctorLoadError = '';
+        this.loadStaffFromApi();
+        alert(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
+      },
+      error: (err) => {
+        this.convertingAccountId = '';
+        this.doctorLoadError = err?.error?.message || 'تعذر تحويل الحساب';
+      },
+    });
+  }
+
   toggleDoctorActive(doc: StaffMember): void {
     if (!doc.id) return;
     const targetActive = doc.status !== 'active';

@@ -51,6 +51,14 @@ router.patch(
   userController.resetDoctorPassword
 );
 
+// Convert doctor/student/lab account and retag cases by name
+router.patch(
+  '/:id/convert-client-role',
+  authorize('admin', 'secretary'),
+  body('role').isIn(['doctor', 'student', 'lab']),
+  userController.convertClientRole
+);
+
 // Update user (admin — staff management / role / password / active)
 router.put('/:id', authorize('admin'), updateUserValidation, userController.updateUser);
 
