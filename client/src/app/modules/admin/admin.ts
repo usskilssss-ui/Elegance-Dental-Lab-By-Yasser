@@ -4,6 +4,8 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { AppRole } from '../../core/auth/auth.types';
+import { type ClientAccountKind } from '../../core/auth/client-account';
+import type { TranslationKey } from '../../core/i18n/translations';
 import { AdminDashboardService } from '../../core/services/admin-dashboard.service';
 import { AuthService } from '../../core/services/auth.service';
 import { UserApiService } from '../../core/services/user-api.service';
@@ -419,6 +421,8 @@ export class Admin implements OnInit, OnDestroy {
 
   staffMembers: StaffMember[] = [];
   doctorMembers: StaffMember[] = [];
+  studentMembers: StaffMember[] = [];
+  labMembers: StaffMember[] = [];
   doctorSearchTerm = '';
   doctorLoadError = '';
   showDoctorModal = false;
@@ -456,7 +460,9 @@ export class Admin implements OnInit, OnDestroy {
   ] as const;
 
   get filteredStaff(): StaffMember[] {
-    const staffOnly = this.staffMembers.filter((s) => s.position !== 'دكتور');
+    const staffOnly = this.staffMembers.filter(
+      (s) => s.position !== 'دكتور' && s.position !== 'طالب' && s.position !== 'معمل'
+    );
     if (!this.searchTerm.trim()) return staffOnly;
     const search = this.searchTerm.toLowerCase();
     return staffOnly.filter(
@@ -468,9 +474,41 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   get filteredDoctors(): StaffMember[] {
-    if (!this.doctorSearchTerm.trim()) return this.doctorMembers;
+    return this.filteredDirectoryMembers;
+  }
+
+  isClientDirectoryNav(): boolean {
+    return this.activeNav === 'doctors' || this.activeNav === 'students' || this.activeNav === 'labs';
+  }
+
+  get clientDirectoryKind(): ClientAccountKind {
+    if (this.activeNav === 'students') return 'student';
+    if (this.activeNav === 'labs') return 'lab';
+    return 'doctor';
+  }
+
+  private clientDirPrefix(): 'admin.doctors' | 'admin.students' | 'admin.labs' {
+    if (this.clientDirectoryKind === 'student') return 'admin.students';
+    if (this.clientDirectoryKind === 'lab') return 'admin.labs';
+    return 'admin.doctors';
+  }
+
+  tDir(suffix: string): TranslationKey {
+    const mapped = suffix === 'role' && this.clientDirectoryKind === 'doctor' ? 'roleDoctor' : suffix;
+    return `${this.clientDirPrefix()}.${mapped}` as TranslationKey;
+  }
+
+  private directoryMembers(): StaffMember[] {
+    if (this.clientDirectoryKind === 'student') return this.studentMembers;
+    if (this.clientDirectoryKind === 'lab') return this.labMembers;
+    return this.doctorMembers;
+  }
+
+  get filteredDirectoryMembers(): StaffMember[] {
+    const members = this.directoryMembers();
+    if (!this.doctorSearchTerm.trim()) return members;
     const search = this.doctorSearchTerm.toLowerCase();
-    return this.doctorMembers.filter(
+    return members.filter(
       (d) =>
         d.name.toLowerCase().includes(search) ||
         d.email.toLowerCase().includes(search) ||
@@ -480,7 +518,13 @@ export class Admin implements OnInit, OnDestroy {
 
   /** إجمالي أكونتات الدكاترة المسجّلة */
   get doctorAccountsCount(): number {
-    return this.doctorMembers.length;
+    return this.directoryMembers().length;
+  }
+
+  private clientPositionLabel(): string {
+    if (this.clientDirectoryKind === 'student') return 'طالب';
+    if (this.clientDirectoryKind === 'lab') return 'معمل';
+    return 'دكتور';
   }
 
   get filteredCases(): AdminCaseRow[] {
@@ -1905,7 +1949,7 @@ export class Admin implements OnInit, OnDestroy {
     }
     this.activeNav = nav;
     this.persistActiveNav();
-    if (nav === 'staff' || nav === 'doctors') {
+    if (nav === 'staff' || nav === 'doctors' || nav === 'students' || nav === 'labs') {
       this.loadStaffFromApi();
     } else if (nav === 'reports' || nav === 'financials') {
       this.loadFinancialReportFromApi();
@@ -2438,14 +2482,20 @@ export class Admin implements OnInit, OnDestroy {
         const list = (res?.data ?? res?.users ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(list) ? list.map((u) => this.mapApiUserToStaff(u)) : [];
         this.doctorMembers = mapped.filter((m) => m.position === 'دكتور');
-        this.staffMembers = mapped.filter((m) => m.position !== 'دكتور');
+        this.studentMembers = mapped.filter((m) => m.position === 'طالب');
+        this.labMembers = mapped.filter((m) => m.position === 'معمل');
+        this.staffMembers = mapped.filter(
+          (m) => m.position !== 'دكتور' && m.position !== 'طالب' && m.position !== 'معمل'
+        );
       },
       error: (err) => {
         console.error(err);
         this.staffLoadError = 'تعذر تحميل قائمة الموظفين من الخادم';
-        this.doctorLoadError = 'تعذر تحميل قائمة الدكاترة من الخادم';
+        this.doctorLoadError = 'تعذر تحميل قائمة الحسابات من الخادم';
         this.staffMembers = [];
         this.doctorMembers = [];
+        this.studentMembers = [];
+        this.labMembers = [];
       },
     });
   }
@@ -2510,6 +2560,8 @@ export class Admin implements OnInit, OnDestroy {
     if (r === 'finisher') return 'مسؤول الطباعة';
     if (r === 'requester') return 'ريكويست';
     if (r === 'doctor') return 'دكتور';
+    if (r === 'student') return 'طالب';
+    if (r === 'lab') return 'معمل';
     if (r === 'scanner1') return 'سكان 1';
     if (r === 'scanner2') return 'سكان 2';
     if (r === 'scanner3') return 'سكان 3';
@@ -2524,6 +2576,8 @@ export class Admin implements OnInit, OnDestroy {
     if (p === 'finisher' || p === 'مسؤول الطباعة' || p === 'فني تشطيب') return 'finisher';
     if (p === 'requester' || p === 'ريكويست') return 'requester';
     if (p === 'doctor' || p === 'دكتور') return 'doctor';
+    if (p === 'student' || p === 'طالب') return 'student';
+    if (p === 'lab' || p === 'معمل') return 'lab';
     if (p === 'scanner1' || p === 'سكان 1' || p === 'سكان١') return 'scanner1';
     if (p === 'scanner2' || p === 'سكان 2' || p === 'سكان٢') return 'scanner2';
     if (p === 'scanner3' || p === 'سكان 3' || p === 'سكان٣') return 'scanner3';
@@ -2540,7 +2594,7 @@ export class Admin implements OnInit, OnDestroy {
       email: '',
       password: '',
       phone: '',
-      position: 'دكتور',
+      position: this.clientPositionLabel(),
       status: 'active',
       joinDate: new Date().toISOString().split('T')[0],
     };
@@ -2551,16 +2605,17 @@ export class Admin implements OnInit, OnDestroy {
     this.isDoctorEditMode = true;
     this.doctorModalError = '';
     this.showDoctorPassword = true;
-    this.currentDoctor = { ...doc, password: '', position: 'دكتور' };
+    this.currentDoctor = { ...doc, password: '', position: this.clientPositionLabel() };
     this.showDoctorModal = true;
   }
 
-  /** From doctors directory → open that doctor's request portal (same URL as doctors use). */
+  /** From doctors/students/labs directory → open that account's portal. */
   openDoctorAccountPage(doc: StaffMember): void {
     const name = (doc?.name || '').trim();
     if (!name) return;
+    const kind = this.clientDirectoryKind;
     this.router.navigate(['/doctor/dashboard'], {
-      queryParams: { as: name },
+      queryParams: kind === 'doctor' ? { as: name } : { as: name, kind },
     });
   }
 
@@ -2585,7 +2640,8 @@ export class Admin implements OnInit, OnDestroy {
 
   deleteDoctor(doc: StaffMember): void {
     if (!doc.id) return;
-    const ok = confirm(`هل أنت متأكد من حذف حساب دكتور ${doc.name} نهائياً؟`);
+    const kindLabel = this.clientPositionLabel();
+    const ok = confirm(`هل أنت متأكد من حذف حساب ${kindLabel} ${doc.name} نهائياً؟`);
     if (!ok) return;
     this.userApi.deleteUser(doc.id).subscribe({
       next: () => this.loadStaffFromApi(),
@@ -2602,7 +2658,12 @@ export class Admin implements OnInit, OnDestroy {
     const email = (this.currentDoctor.email || '').trim();
     const phone = (this.currentDoctor.phone || '').trim() || '0000000000';
     if (!name) {
-      this.doctorModalError = 'يرجى إدخال اسم الدكتور';
+      this.doctorModalError =
+        this.clientDirectoryKind === 'student'
+          ? 'يرجى إدخال اسم الطالب'
+          : this.clientDirectoryKind === 'lab'
+            ? 'يرجى إدخال اسم المعمل'
+            : 'يرجى إدخال اسم الدكتور';
       return;
     }
     if (!email) {
@@ -2615,8 +2676,8 @@ export class Admin implements OnInit, OnDestroy {
       const patch: Record<string, unknown> = {
         fullName: name,
         phone,
-        role: 'doctor',
-        department: 'دكتور',
+        role: this.clientDirectoryKind,
+        department: this.clientPositionLabel(),
         isActive: this.currentDoctor.status === 'active',
       };
       if (this.currentDoctor.password?.trim()) {
@@ -2653,8 +2714,8 @@ export class Admin implements OnInit, OnDestroy {
         email: email.toLowerCase(),
         phone,
         password: this.currentDoctor.password,
-        role: 'doctor',
-        department: 'دكتور',
+        role: this.clientDirectoryKind,
+        department: this.clientPositionLabel(),
       })
       .subscribe({
         next: () => {
@@ -2769,6 +2830,8 @@ export class Admin implements OnInit, OnDestroy {
       'dashboard',
       'staff',
       'doctors',
+      'students',
+      'labs',
       'financials',
       'reports',
       'archive',

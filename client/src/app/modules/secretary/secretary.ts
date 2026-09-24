@@ -3,8 +3,9 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, of, Subscription, switchMap } from 'rxjs';
+import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
+import { type ClientAccountKind } from '../../core/auth/client-account';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService } from '../../core/services/shared-cases.service';
 import { UserApiService } from '../../core/services/user-api.service';
@@ -163,17 +164,47 @@ export class Secretary implements OnInit, OnDestroy {
     {
       id: 'create-doctor',
       labelKey: 'menu.createDoctor',
-      action: () => this.openCreateDoctorModal(),
+      action: () => this.openCreateAccountModal('doctor'),
     },
     {
       id: 'doctor-list',
       labelKey: 'menu.doctorList',
-      action: () => this.openDoctorListModal(),
+      action: () => this.openAccountListModal('doctor'),
     },
     {
       id: 'reset-doctor-password',
       labelKey: 'menu.resetDoctorPassword',
-      action: () => this.openResetDoctorPasswordModal(),
+      action: () => this.openResetAccountPasswordModal('doctor'),
+    },
+    {
+      id: 'create-student',
+      labelKey: 'menu.createStudent',
+      action: () => this.openCreateAccountModal('student'),
+    },
+    {
+      id: 'student-list',
+      labelKey: 'menu.studentList',
+      action: () => this.openAccountListModal('student'),
+    },
+    {
+      id: 'reset-student-password',
+      labelKey: 'menu.resetStudentPassword',
+      action: () => this.openResetAccountPasswordModal('student'),
+    },
+    {
+      id: 'create-lab',
+      labelKey: 'menu.createLab',
+      action: () => this.openCreateAccountModal('lab'),
+    },
+    {
+      id: 'lab-list',
+      labelKey: 'menu.labList',
+      action: () => this.openAccountListModal('lab'),
+    },
+    {
+      id: 'reset-lab-password',
+      labelKey: 'menu.resetLabPassword',
+      action: () => this.openResetAccountPasswordModal('lab'),
     },
     {
       id: 'change-my-password',
@@ -187,6 +218,7 @@ export class Secretary implements OnInit, OnDestroy {
   readonly resetDoctorPasswordOpen = signal(false);
   readonly changeMyPasswordOpen = signal(false);
 
+  accountKind: ClientAccountKind = 'doctor';
   newDoctor = { name: '', email: '', phone: '', password: '' };
   createDoctorError = '';
   createDoctorSaving = false;
@@ -373,14 +405,20 @@ export class Secretary implements OnInit, OnDestroy {
   readonly dialogOpen = signal(false);
   readonly dialogMode = signal<'create' | 'edit'>('create');
   createRequesterType: RequesterType = 'doctor';
+  readonly formRequesterType = signal<RequesterType>('doctor');
   editingId: string | null = null;
   formDraft: any = emptyDraft();
 
-  // Autocomplete Doctor logic — فقط دكاترة لهم أكونت نشط على السيستم
+  // Autocomplete — أسماء الحسابات حسب نوع الحالة (دكتور / طالب / معمل)
   readonly accountDoctors = signal<string[]>([]);
+  readonly accountStudents = signal<string[]>([]);
+  readonly accountLabs = signal<string[]>([]);
 
   readonly uniqueDoctors = computed(() => {
-    return [...this.accountDoctors()].sort((a, b) => a.localeCompare(b, 'ar'));
+    const kind = this.formRequesterType();
+    const source =
+      kind === 'student' ? this.accountStudents() : kind === 'lab' ? this.accountLabs() : this.accountDoctors();
+    return [...source].sort((a, b) => a.localeCompare(b, 'ar'));
   });
 
   readonly doctorSearchQuery = signal('');
@@ -400,19 +438,44 @@ export class Secretary implements OnInit, OnDestroy {
       .replace(/\s+/g, ' ');
   }
 
+  private namesFromUserResponse(res: unknown): string[] {
+    const raw = res as { data?: unknown } | unknown[] | null;
+    const rows = Array.isArray((raw as { data?: unknown })?.data)
+      ? (raw as { data: unknown[] }).data
+      : Array.isArray(raw)
+        ? raw
+        : [];
+    const names = rows
+      .map((u: unknown) => String((u as { fullName?: string })?.fullName || '').trim())
+      .filter((n: string) => !!n);
+    return Array.from(new Set(names));
+  }
+
   private loadAccountDoctors(): void {
-    this.userApi.getUsersByRole('doctor').subscribe({
+    const empty = of({ data: [] });
+    forkJoin({
+      doctor: this.userApi.getUsersByRole('doctor').pipe(catchError(() => empty)),
+      student: this.userApi.getUsersByRole('student').pipe(catchError(() => empty)),
+      lab: this.userApi.getUsersByRole('lab').pipe(catchError(() => empty)),
+    }).subscribe({
       next: (res) => {
-        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-        const names = rows
-          .map((u: any) => String(u?.fullName || '').trim())
-          .filter((n: string) => !!n);
-        this.accountDoctors.set(Array.from(new Set(names)));
+        this.accountDoctors.set(this.namesFromUserResponse(res.doctor));
+        this.accountStudents.set(this.namesFromUserResponse(res.student));
+        this.accountLabs.set(this.namesFromUserResponse(res.lab));
       },
       error: () => {
         this.accountDoctors.set([]);
+        this.accountStudents.set([]);
+        this.accountLabs.set([]);
       },
     });
+  }
+
+  requesterNameLabelKey(): string {
+    const kind = this.formRequesterType();
+    if (kind === 'student') return 'secretary.studentName';
+    if (kind === 'lab') return 'secretary.labName';
+    return 'secretary.doctorName';
   }
 
   setIntakeType(type: 'impression' | 'scan'): void {
@@ -948,11 +1011,76 @@ export class Secretary implements OnInit, OnDestroy {
     this.auth.performLogout(this.router);
   }
 
-  openCreateDoctorModal(): void {
+  openCreateAccountModal(kind: ClientAccountKind): void {
+    this.accountKind = kind;
     this.newDoctor = { name: '', email: '', phone: '', password: '' };
     this.createDoctorError = '';
     this.showNewDoctorPassword = false;
     this.createDoctorOpen.set(true);
+  }
+
+  openCreateDoctorModal(): void {
+    this.openCreateAccountModal('doctor');
+  }
+
+  accountCreateTitleKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.createTitle';
+    if (this.accountKind === 'lab') return 'secretary.labs.createTitle';
+    return 'secretary.doctors.createTitle';
+  }
+
+  accountCreateHintKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.createHint';
+    if (this.accountKind === 'lab') return 'secretary.labs.createHint';
+    return 'secretary.doctors.createHint';
+  }
+
+  accountNameLabelKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.nameLabel';
+    if (this.accountKind === 'lab') return 'secretary.labs.nameLabel';
+    return 'secretary.doctors.nameLabel';
+  }
+
+  accountCreatedKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.created';
+    if (this.accountKind === 'lab') return 'secretary.labs.created';
+    return 'secretary.doctors.created';
+  }
+
+  accountListTitleKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.listTitle';
+    if (this.accountKind === 'lab') return 'secretary.labs.listTitle';
+    return 'secretary.doctors.listTitle';
+  }
+
+  accountListEmptyKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.listEmpty';
+    if (this.accountKind === 'lab') return 'secretary.labs.listEmpty';
+    return 'secretary.doctors.listEmpty';
+  }
+
+  accountSearchPlaceholderKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.searchPlaceholder';
+    if (this.accountKind === 'lab') return 'secretary.labs.searchPlaceholder';
+    return 'secretary.doctors.searchPlaceholder';
+  }
+
+  accountSearchEmptyKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.searchEmpty';
+    if (this.accountKind === 'lab') return 'secretary.labs.searchEmpty';
+    return 'secretary.doctors.searchEmpty';
+  }
+
+  accountResetTitleKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.resetTitle';
+    if (this.accountKind === 'lab') return 'secretary.labs.resetTitle';
+    return 'secretary.doctors.resetTitle';
+  }
+
+  accountSelectLabelKey(): string {
+    if (this.accountKind === 'student') return 'secretary.students.selectStudent';
+    if (this.accountKind === 'lab') return 'secretary.labs.selectLab';
+    return 'secretary.doctors.selectDoctor';
   }
 
   closeCreateDoctorModal(): void {
@@ -976,12 +1104,12 @@ export class Secretary implements OnInit, OnDestroy {
     }
     this.createDoctorSaving = true;
     this.auth
-      .registerDoctor({ fullName: name, email, phone, password })
+      .registerDoctor({ fullName: name, email, phone, password, role: this.accountKind })
       .subscribe({
         next: () => {
           this.createDoctorSaving = false;
           this.createDoctorOpen.set(false);
-          this.flash(this.lang.t('secretary.doctors.created'));
+          this.flash(this.lang.t(this.accountCreatedKey()));
           this.loadAccountDoctors();
           this.loadDoctorRows();
         },
@@ -993,10 +1121,15 @@ export class Secretary implements OnInit, OnDestroy {
       });
   }
 
-  openDoctorListModal(): void {
+  openAccountListModal(kind: ClientAccountKind): void {
+    this.accountKind = kind;
     this.doctorListSearchQuery.set('');
     this.doctorListOpen.set(true);
     this.loadDoctorRows();
+  }
+
+  openDoctorListModal(): void {
+    this.openAccountListModal('doctor');
   }
 
   closeDoctorListModal(): void {
@@ -1015,7 +1148,7 @@ export class Secretary implements OnInit, OnDestroy {
   private loadDoctorRows(): void {
     this.doctorListLoading = true;
     this.doctorListError = '';
-    this.userApi.getUsersByRole('doctor').subscribe({
+    this.userApi.getUsersByRole(this.accountKind).subscribe({
       next: (res) => {
         const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
         this.doctorRows = rows
@@ -1057,15 +1190,19 @@ export class Secretary implements OnInit, OnDestroy {
     return `${location.origin}/login`;
   }
 
-  openResetDoctorPasswordModal(): void {
+  openResetAccountPasswordModal(kind: ClientAccountKind): void {
+    this.accountKind = kind;
     this.resetDoctorId = '';
     this.resetDoctorPassword = '';
     this.resetDoctorError = '';
     this.showResetDoctorPassword = false;
     this.resetDoctorPasswordOpen.set(true);
-    if (!this.doctorRows.length) {
-      this.loadDoctorRows();
-    }
+    this.doctorRows = [];
+    this.loadDoctorRows();
+  }
+
+  openResetDoctorPasswordModal(): void {
+    this.openResetAccountPasswordModal('doctor');
   }
 
   closeResetDoctorPasswordModal(): void {
@@ -1076,7 +1213,7 @@ export class Secretary implements OnInit, OnDestroy {
   saveResetDoctorPassword(): void {
     this.resetDoctorError = '';
     if (!this.resetDoctorId) {
-      this.resetDoctorError = this.lang.t('secretary.doctors.selectDoctor');
+      this.resetDoctorError = this.lang.t(this.accountSelectLabelKey());
       return;
     }
     if (!this.resetDoctorPassword || this.resetDoctorPassword.length < 6) {
@@ -1263,6 +1400,7 @@ export class Secretary implements OnInit, OnDestroy {
   openCreateDialog(type: RequesterType = 'doctor'): void {
     this.dialogMode.set('create');
     this.createRequesterType = normalizeRequesterType(type);
+    this.formRequesterType.set(this.createRequesterType);
     this.editingId = null;
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
@@ -1294,6 +1432,7 @@ export class Secretary implements OnInit, OnDestroy {
   proceedWithEdit(c: any): void {
     this.dialogMode.set('edit');
     this.createRequesterType = normalizeRequesterType(c.requesterType);
+    this.formRequesterType.set(this.createRequesterType);
     this.editingId = c.id;
     this.existingPlyFileName = c.plyFileName || null;
     this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))

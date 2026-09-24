@@ -214,8 +214,10 @@ export class AuthService {
       );
   }
 
-  /** POST /auth/register-doctor — admin or secretary. */
-  registerDoctor(payload: Omit<RegisterStaffPayload, 'role' | 'department'>): Observable<void> {
+  /** POST /auth/register-doctor — admin or secretary. Optional role: doctor | student | lab. */
+  registerDoctor(
+    payload: Omit<RegisterStaffPayload, 'role' | 'department'> & { role?: 'doctor' | 'student' | 'lab' }
+  ): Observable<void> {
     return this.http
       .post<{ success?: boolean; message?: string }>(`${this.apiUrl}/register-doctor`, payload)
       .pipe(
@@ -391,6 +393,8 @@ export class AuthService {
       v === 'finisher' ||
       v === 'requester' ||
       v === 'doctor' ||
+      v === 'student' ||
+      v === 'lab' ||
       v === 'scanner1' ||
       v === 'scanner2' ||
       v === 'scanner3'

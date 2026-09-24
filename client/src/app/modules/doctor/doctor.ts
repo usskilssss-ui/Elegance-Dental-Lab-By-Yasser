@@ -39,6 +39,7 @@ import { LabConfigService } from '../../core/services/lab-config.service';
 import { ToothChartComponent } from '../../shared/tooth-chart/tooth-chart';
 import { ToothAssignment, countByMaterial } from '../../shared/tooth-chart/tooth-chart.types';
 import { AppOverflowMenuComponent, type AppMenuItem } from '../../shared/app-overflow-menu/app-overflow-menu';
+import { isClientAccountKind, type ClientAccountKind } from '../../core/auth/client-account';
 
 function todayYmd(): string {
   const d = new Date();
@@ -113,6 +114,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   /** Admin viewing a specific doctor's portal via ?as=Name */
   readonly viewingAsDoctor = signal<string | null>(null);
+  readonly viewingClientKind = signal<ClientAccountKind | null>(null);
   readonly isAdminView = computed(() => {
     const role = this.auth.getSession()?.role;
     return role === 'admin' && !!this.viewingAsDoctor();
@@ -138,23 +140,36 @@ export class DoctorComponent implements OnInit, OnDestroy {
   readonly activeFilter = signal<DoctorFilter>('all');
   readonly searchQuery = signal('');
 
-  readonly portalMenuItems: AppMenuItem[] = [
-    {
-      id: 'accounts',
-      labelKey: 'menu.accounts',
-      action: () => this.openAccountsFromMenu(),
-    },
-    {
-      id: 'request-rep',
-      labelKey: 'menu.requestRep',
-      action: () => this.requestRepFromMenu(),
-    },
-    {
+  get portalMenuItems(): AppMenuItem[] {
+    const items: AppMenuItem[] = [
+      {
+        id: 'accounts',
+        labelKey: 'menu.accounts',
+        action: () => this.openAccountsFromMenu(),
+      },
+    ];
+    if (this.showRequestRepMenu()) {
+      items.push({
+        id: 'request-rep',
+        labelKey: 'menu.requestRep',
+        action: () => this.requestRepFromMenu(),
+      });
+    }
+    items.push({
       id: 'exited-materials',
       labelKey: 'menu.exitedMaterials',
       action: () => this.openExitedMaterialsFromMenu(),
-    },
-  ];
+    });
+    return items;
+  }
+
+  showRequestRepMenu(): boolean {
+    const role = this.auth.getSession()?.role;
+    if (role === 'student' || role === 'lab') return false;
+    const kind = this.viewingClientKind();
+    if (kind === 'student' || kind === 'lab') return false;
+    return true;
+  }
   editingId: string | null = null;
   formDraft = emptyDraft();
   patientNameError = '';
@@ -367,11 +382,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
     this.socketSubs.push(
       this.route.queryParamMap.subscribe((params) => {
         const as = (params.get('as') || '').trim();
+        const kindRaw = (params.get('kind') || '').trim();
         const role = this.auth.getSession()?.role;
         if (role === 'admin' && as) {
           this.viewingAsDoctor.set(as);
+          this.viewingClientKind.set(isClientAccountKind(kindRaw) ? kindRaw : 'doctor');
         } else {
           this.viewingAsDoctor.set(null);
+          this.viewingClientKind.set(isClientAccountKind(role) ? role : null);
         }
         this.loadNotificationsFromStorage();
         this.loadCases();
@@ -416,18 +434,22 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   private doctorNavQueryParams(): Record<string, string> {
     const as = this.viewingAsDoctor()?.trim();
-    if (as && this.auth.getSession()?.role === 'admin') return { as };
+    if (as && this.auth.getSession()?.role === 'admin') {
+      const kind = this.viewingClientKind();
+      return kind && kind !== 'doctor' ? { as, kind } : { as };
+    }
     return {};
+  }
+
+  requestRepFromMenu(): void {
+    if (!this.showRequestRepMenu()) return;
+    this.notificationsOpen.set(false);
+    this.router.navigate(['/doctor/request-rep'], { queryParams: this.doctorNavQueryParams() });
   }
 
   openAccountsFromMenu(): void {
     this.notificationsOpen.set(false);
     this.router.navigate(['/doctor/accounts'], { queryParams: this.doctorNavQueryParams() });
-  }
-
-  requestRepFromMenu(): void {
-    this.notificationsOpen.set(false);
-    this.router.navigate(['/doctor/request-rep'], { queryParams: this.doctorNavQueryParams() });
   }
 
   openExitedMaterialsFromMenu(): void {
@@ -703,7 +725,7 @@ export class DoctorComponent implements OnInit, OnDestroy {
   private maybeOfferPinSetup(): void {
     if (this.isAdminView()) return;
     const session = this.auth.getSession();
-    if (!session || session.role !== 'doctor') return;
+    if (!session || !isClientAccountKind(session.role)) return;
     if (session.hasPin) return;
     try {
       if (localStorage.getItem(`pin_setup_skip_${session.id}`) === '1') return;
@@ -1185,8 +1207,9 @@ export class DoctorComponent implements OnInit, OnDestroy {
       teeth: this.toothAssignments.length ? this.toothAssignments : undefined,
     };
 
+    const sessionRole = this.auth.getSession()?.role;
     const casePayload = buildCasePayloadFromPrintForm(draft, {
-      requesterType: 'doctor',
+      requesterType: isClientAccountKind(sessionRole) ? sessionRole : 'doctor',
       priority: d.urgent ? 'urgent' : isEdit ? 'normal' : undefined,
       entrySource: 'doctor',
     });

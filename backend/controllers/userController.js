@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
+const { isClientPortalRole } = require('../utils/clientRoles');
 
 // Get all users (admin). Pass includeInactive=true to list deactivated accounts too.
 exports.getAllUsers = async (req, res) => {
@@ -84,7 +85,7 @@ exports.updateUser = async (req, res) => {
         return res.status(403).json({ message: 'Only admin can set passwords' });
       }
       user.password = password;
-      if ((role || user.role) === 'doctor') {
+      if (isClientPortalRole(role || user.role)) {
         user.loginPasswordVisible = password;
       }
     }
@@ -235,7 +236,16 @@ exports.getUsersByRole = async (req, res) => {
   try {
     const { role } = req.params;
 
-    const validRoles = ['admin', 'secretary', 'designer', 'finisher', 'requester', 'doctor'];
+    const validRoles = [
+      'admin',
+      'secretary',
+      'designer',
+      'finisher',
+      'requester',
+      'doctor',
+      'student',
+      'lab',
+    ];
 
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });

@@ -2,6 +2,11 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../config/jwt');
 const { validationResult } = require('express-validator');
+const {
+  isClientPortalRole,
+  departmentForClientRole,
+  normalizeClientRole,
+} = require('../utils/clientRoles');
 
 // Login
 exports.login = async (req, res) => {
@@ -73,7 +78,7 @@ async function createStaffUser({ fullName, email, phone, password, role, departm
     department,
     isActive: true,
   });
-  if (role === 'doctor') {
+  if (isClientPortalRole(role)) {
     user.loginPasswordVisible = password;
   }
 
@@ -127,19 +132,23 @@ exports.registerDoctor = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { fullName, email, phone, password } = req.body;
+    const { fullName, email, phone, password, role: rawRole } = req.body;
+    const role = normalizeClientRole(rawRole);
     const user = await createStaffUser({
       fullName,
       email,
       phone,
       password,
-      role: 'doctor',
-      department: 'دكتور',
+      role,
+      department: departmentForClientRole(role),
     });
+
+    const createdLabel =
+      role === 'student' ? 'تم إنشاء حساب الطالب' : role === 'lab' ? 'تم إنشاء حساب المعمل' : 'تم إنشاء حساب الدكتور';
 
     res.status(201).json({
       success: true,
-      message: 'تم إنشاء حساب الدكتور',
+      message: createdLabel,
       user: {
         id: user._id,
         fullName: user.fullName,
@@ -226,8 +235,8 @@ exports.setPin = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    if (!['doctor', 'admin'].includes(user.role)) {
-      return res.status(403).json({ success: false, message: 'PIN متاح لحسابات الدكاترة' });
+    if (!isClientPortalRole(user.role) && user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'PIN متاح لحسابات الدكاترة والطلاب والمعامل' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -260,8 +269,8 @@ exports.loginWithPin = async (req, res) => {
     if (!user || !user.pinHash) {
       return res.status(401).json({ message: 'الرقم السري غير صحيح أو غير مفعّل' });
     }
-    if (!['doctor', 'admin'].includes(user.role)) {
-      return res.status(403).json({ message: 'الدخول بالرقم السري متاح للدكاترة فقط' });
+    if (!isClientPortalRole(user.role) && user.role !== 'admin') {
+      return res.status(403).json({ message: 'الدخول بالرقم السري متاح للدكاترة والطلاب والمعامل فقط' });
     }
 
     const ok = await user.comparePin(pin);
@@ -304,7 +313,7 @@ exports.pinStatus = async (req, res) => {
     const user = await User.findOne({ email, isActive: true }).select('+pinHash role');
     return res.json({
       success: true,
-      hasPin: !!(user?.pinHash && ['doctor', 'admin'].includes(user.role)),
+      hasPin: !!(user?.pinHash && (isClientPortalRole(user.role) || user.role === 'admin')),
     });
   } catch (error) {
     return res.json({ success: true, hasPin: false });
@@ -333,7 +342,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = String(newPassword);
-    if (user.role === 'doctor') {
+    if (isClientPortalRole(user.role)) {
       user.loginPasswordVisible = String(newPassword);
     }
     await user.save();

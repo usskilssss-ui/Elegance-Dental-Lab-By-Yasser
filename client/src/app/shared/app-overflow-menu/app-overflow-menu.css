@@ -47,7 +47,9 @@
   animation: app-menu-in 0.14s ease;
   text-align: left;
   direction: ltr;
-  overflow: visible;
+  max-height: min(80vh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
   white-space: normal;
   box-sizing: border-box;
 }

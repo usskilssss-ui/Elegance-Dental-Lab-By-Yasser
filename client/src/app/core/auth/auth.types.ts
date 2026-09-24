@@ -6,6 +6,8 @@ export type AppRole =
   | 'finisher'
   | 'requester'
   | 'doctor'
+  | 'student'
+  | 'lab'
   | 'scanner1'
   | 'scanner2'
   | 'scanner3';
