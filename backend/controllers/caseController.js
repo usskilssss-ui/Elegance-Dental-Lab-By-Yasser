@@ -33,6 +33,8 @@ const {
   ensureClientAccount,
   retagCasesForClientName,
   setRequesterTypeInNotes,
+  persistRequesterType,
+  applyRequesterTypeFromNotes,
 } = require('../services/clientAccountEnsure');
 
 async function maybeEnsureClientAccount(req, name, requesterType) {
@@ -465,7 +467,7 @@ exports.getAllCases = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: cases,
+      data: cases.map((row) => applyRequesterTypeFromNotes(row)),
       pagination: {
         total,
         page: pageNum,
@@ -983,7 +985,7 @@ exports.getCaseById = async (req, res) => {
     dentalCase.notes = sanitizeNotesMetaString(dentalCase.notes);
     res.status(200).json({
       success: true,
-      case: dentalCase,
+      case: applyRequesterTypeFromNotes(dentalCase),
     });
   } catch (error) {
     res.status(500).json({
@@ -1938,14 +1940,24 @@ exports.updateCase = async (req, res) => {
         nextType,
         displayName ? { doctor: displayName } : {}
       );
-      const $set = { requesterType: nextType, notes: nextNotes };
-      if (displayName) $set.referringDoctor = displayName;
+      await persistRequesterType(
+        dentalCase._id,
+        nextType,
+        nextNotes,
+        displayName
+      );
       if (nextType === 'student') {
-        $set.paymentStatus = 'paid';
-        $set.paidAt = new Date();
-        $set.paidBy = req.user.id;
+        await DentalCase.collection.updateOne(
+          { _id: dentalCase._id },
+          {
+            $set: {
+              paymentStatus: 'paid',
+              paidAt: new Date(),
+              paidBy: req.user.id,
+            },
+          }
+        );
       }
-      await DentalCase.updateOne({ _id: dentalCase._id }, { $set });
       const fresh = await DentalCase.findById(dentalCase._id).populate(
         'createdBy',
         'fullName email role'
