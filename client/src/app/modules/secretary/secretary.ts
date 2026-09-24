@@ -232,13 +232,26 @@ export class Secretary implements OnInit, OnDestroy {
   createDoctorSaving = false;
   showNewDoctorPassword = false;
 
-  doctorRows: { id: string; fullName: string; email: string; phone: string }[] = [];
+  /** Visible rows for the open list. Backed by three isolated caches. */
+  doctorRows: { id: string; fullName: string; email: string; phone: string; role: string }[] = [];
+  private readonly rowsByKind: Record<
+    ClientAccountKind,
+    { id: string; fullName: string; email: string; phone: string; role: string }[]
+  > = {
+    doctor: [],
+    student: [],
+    lab: [],
+  };
   readonly doctorListSearchQuery = signal('');
+  private readonly accountListTick = signal(0);
   readonly filteredDoctorRows = computed(() => {
+    this.accountListTick();
+    const kind = this.accountKind;
+    const rows = this.rowsByKind[kind];
     const q = this.normalizeSearchText(this.doctorListSearchQuery());
-    if (!q) return this.doctorRows;
+    if (!q) return rows;
     const tokens = q.split(' ').filter(Boolean);
-    return this.doctorRows.filter((doc) => {
+    return rows.filter((doc) => {
       const name = this.normalizeSearchText(doc.fullName);
       return tokens.every((token) => name.includes(token));
     });
@@ -1171,11 +1184,10 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openAccountListModal(kind: ClientAccountKind): void {
-    this.accountKind = kind;
+    this.showAccountKind(kind);
     this.doctorListSearchQuery.set('');
-    this.doctorRows = [];
     this.doctorListOpen.set(true);
-    this.loadDoctorRows();
+    this.loadDoctorRows(kind);
   }
 
   openDoctorListModal(): void {
@@ -1288,22 +1300,37 @@ export class Secretary implements OnInit, OnDestroy {
     this.doctorListSearchQuery.set(value);
   }
 
-  private loadDoctorRows(): void {
-    const kind = this.accountKind;
+  private showAccountKind(kind: ClientAccountKind): void {
+    this.accountKind = kind;
+    this.doctorRows = this.rowsByKind[kind];
+    this.accountListTick.update((n) => n + 1);
+  }
+
+  private setKindRows(
+    kind: ClientAccountKind,
+    rows: { id: string; fullName: string; email: string; phone: string; role: string }[]
+  ): void {
+    this.rowsByKind[kind] = rows;
+    if (this.accountKind === kind) {
+      this.doctorRows = rows;
+      this.accountListTick.update((n) => n + 1);
+    }
+  }
+
+  private loadDoctorRows(kind: ClientAccountKind = this.accountKind): void {
     this.doctorListLoading = true;
     this.doctorListError = '';
-    this.doctorRows = [];
+    this.setKindRows(kind, []);
     this.userApi.getUsersByRole(kind).subscribe({
       next: (res) => {
-        if (this.accountKind !== kind) return;
-        this.doctorRows = this.rowsFromUserResponse(res, kind);
-        this.doctorListLoading = false;
+        this.setKindRows(kind, this.rowsFromUserResponse(res, kind));
+        if (this.accountKind === kind) this.doctorListLoading = false;
       },
       error: () => {
+        this.setKindRows(kind, []);
         if (this.accountKind !== kind) return;
         this.doctorListLoading = false;
         this.doctorListError = this.lang.t('secretary.toast.loadFail');
-        this.doctorRows = [];
       },
     });
   }
@@ -1330,14 +1357,13 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openResetAccountPasswordModal(kind: ClientAccountKind): void {
-    this.accountKind = kind;
+    this.showAccountKind(kind);
     this.resetDoctorId = '';
     this.resetDoctorPassword = '';
     this.resetDoctorError = '';
     this.showResetDoctorPassword = false;
     this.resetDoctorPasswordOpen.set(true);
-    this.doctorRows = [];
-    this.loadDoctorRows();
+    this.loadDoctorRows(kind);
   }
 
   openResetDoctorPasswordModal(): void {
