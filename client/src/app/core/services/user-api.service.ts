@@ -49,4 +49,9 @@ export class UserApiService {
   resetDoctorPassword(id: string, password: string): Observable<any> {
     return this.http.patch(`${this.apiUrl}/${id}/reset-doctor-password`, { password });
   }
+
+  /** Admin or secretary: convert doctor/student/lab and retag cases by name. */
+  convertClientRole(id: string, role: 'doctor' | 'student' | 'lab'): Observable<any> {
+    return this.http.patch(`${this.apiUrl}/${id}/convert-client-role`, { role });
+  }
 }

@@ -414,6 +414,7 @@
       </div>
 
       <p *ngIf="doctorLoadError" style="margin:0 0 12px;color:#dc2626;font-size:14px;">{{ doctorLoadError }}</p>
+      <p style="margin:0 0 12px;font-size:13px;opacity:.8;">{{ 'secretary.clients.convertHint' | t }}</p>
 
       <div class="staff-search">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -453,6 +454,33 @@
             <p class="staff-joined">{{ 'common.joined' | t }}: {{ doc.joinDate }}</p>
           </div>
           <div class="staff-actions" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+            <button
+              *ngIf="clientDirectoryKind !== 'doctor'"
+              type="button"
+              class="staff-btn"
+              [disabled]="convertingAccountId === doc.id"
+              (click)="convertDirectoryAccount(doc, 'doctor')"
+            >
+              {{ 'secretary.clients.toDoctor' | t }}
+            </button>
+            <button
+              *ngIf="clientDirectoryKind !== 'student'"
+              type="button"
+              class="staff-btn"
+              [disabled]="convertingAccountId === doc.id"
+              (click)="convertDirectoryAccount(doc, 'student')"
+            >
+              {{ 'secretary.clients.toStudent' | t }}
+            </button>
+            <button
+              *ngIf="clientDirectoryKind !== 'lab'"
+              type="button"
+              class="staff-btn"
+              [disabled]="convertingAccountId === doc.id"
+              (click)="convertDirectoryAccount(doc, 'lab')"
+            >
+              {{ 'secretary.clients.toLab' | t }}
+            </button>
             <button type="button" class="staff-btn edit-btn" (click)="openEditDoctorModal(doc)" [attr.title]="'common.edit' | t">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>

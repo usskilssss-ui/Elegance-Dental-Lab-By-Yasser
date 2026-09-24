@@ -220,6 +220,7 @@ export class Secretary implements OnInit, OnDestroy {
   readonly changeMyPasswordOpen = signal(false);
 
   accountKind: ClientAccountKind = 'doctor';
+  convertingAccountId = '';
   newDoctor = { name: '', email: '', phone: '', password: '' };
   createDoctorError = '';
   createDoctorSaving = false;
@@ -1153,6 +1154,37 @@ export class Secretary implements OnInit, OnDestroy {
   closeDoctorListModal(): void {
     this.doctorListOpen.set(false);
     this.doctorListSearchQuery.set('');
+  }
+
+  convertAccountKind(doc: { id: string; fullName: string }, kind: ClientAccountKind): void {
+    if (!doc.id || kind === this.accountKind || this.convertingAccountId) return;
+    const kindLabel =
+      kind === 'student'
+        ? this.lang.t('secretary.clients.toStudent')
+        : kind === 'lab'
+          ? this.lang.t('secretary.clients.toLab')
+          : this.lang.t('secretary.clients.toDoctor');
+    const ok = confirm(
+      this.lang
+        .t('secretary.clients.convertConfirm')
+        .replace('{name}', doc.fullName)
+        .replace('{kind}', kindLabel)
+    );
+    if (!ok) return;
+    this.convertingAccountId = doc.id;
+    this.userApi.convertClientRole(doc.id, kind).subscribe({
+      next: (res) => {
+        this.convertingAccountId = '';
+        const n = Number(res?.updatedCases ?? 0);
+        this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
+        this.loadDoctorRows();
+        this.loadAccountDoctors();
+      },
+      error: (err) => {
+        this.convertingAccountId = '';
+        this.flash(err?.error?.message || this.lang.t('secretary.toast.saveGeneric'));
+      },
+    });
   }
 
   get doctorListSearchQueryValue(): string {
