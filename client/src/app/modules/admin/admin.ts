@@ -59,7 +59,7 @@ export interface AdminCaseRow {
   caseNumber: string;
   patientName: string;
   assignedTo: string | null;
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   doctor?: string;
   doctorName?: string;
   clinic?: string;
@@ -1704,7 +1704,12 @@ export class Admin implements OnInit, OnDestroy {
       caseNumber: String(doc['caseNumber'] ?? ''),
       patientName: String(doc['patientName'] ?? ''),
       assignedTo: assignedTo && assignedTo['fullName'] ? String(assignedTo['fullName']) : null,
-      requesterType: String(doc['requesterType'] ?? 'doctor') === 'student' ? 'student' : 'doctor',
+      requesterType:
+        String(doc['requesterType'] ?? 'doctor') === 'student'
+          ? 'student'
+          : String(doc['requesterType'] ?? '') === 'lab'
+            ? 'lab'
+            : 'doctor',
       doctor: String(parsedMeta['doctor'] ?? ''),
       doctorName: String(parsedMeta['doctor'] ?? ''),
       clinic: '',
@@ -1757,7 +1762,12 @@ export class Admin implements OnInit, OnDestroy {
       caseNumber: String(row['caseNumber'] ?? ''),
       patientName: String(row['patientName'] ?? ''),
       assignedTo: String(row['assignedTo'] ?? '') || null,
-      requesterType: String(row['requesterType'] ?? 'doctor') === 'student' ? 'student' : 'doctor',
+      requesterType:
+        String(row['requesterType'] ?? 'doctor') === 'student'
+          ? 'student'
+          : String(row['requesterType'] ?? '') === 'lab'
+            ? 'lab'
+            : 'doctor',
       doctor: String(row['doctorName'] ?? ''),
       doctorName: String(row['doctorName'] ?? ''),
       clinic: '',

@@ -11,7 +11,9 @@ import { UserApiService } from '../../core/services/user-api.service';
 import {
   buildCreateCasePayload,
   mapApiCaseToDentalCase,
+  normalizeRequesterType,
   toStoredCaseImagePath,
+  type RequesterType,
 } from '../../core/mappers/dental-case-api.mapper';
 import { buildPrintData } from '../../core/utils/print-job.util';
 import { formatCaseWorkflowError } from '../../core/utils/api-error';
@@ -370,6 +372,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly dialogOpen = signal(false);
   readonly dialogMode = signal<'create' | 'edit'>('create');
+  createRequesterType: RequesterType = 'doctor';
   editingId: string | null = null;
   formDraft: any = emptyDraft();
 
@@ -1257,8 +1260,9 @@ export class Secretary implements OnInit, OnDestroy {
     }, 50);
   }
 
-  openCreateDialog(): void {
+  openCreateDialog(type: RequesterType = 'doctor'): void {
     this.dialogMode.set('create');
+    this.createRequesterType = normalizeRequesterType(type);
     this.editingId = null;
     this.formDraft = emptyDraft();
     this.selectedWorkTypes.clear();
@@ -1289,6 +1293,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   proceedWithEdit(c: any): void {
     this.dialogMode.set('edit');
+    this.createRequesterType = normalizeRequesterType(c.requesterType);
     this.editingId = c.id;
     this.existingPlyFileName = c.plyFileName || null;
     this.plyScanLink = /^https?:\/\//i.test(String(c.plyScanUrl || ''))
@@ -1458,7 +1463,9 @@ export class Secretary implements OnInit, OnDestroy {
       this.dialogMode() === 'edit' && this.editingId
         ? this.sharedCases.getCaseById(this.editingId)
         : undefined;
-    const isStudentCase = existing?.requesterType === 'student';
+    const requesterType = normalizeRequesterType(
+      this.dialogMode() === 'edit' ? existing?.requesterType : this.createRequesterType
+    );
 
     if (!d.doctor.trim()) {
       this.flash(this.lang.t('secretary.toast.needDoctor'));
@@ -1491,17 +1498,12 @@ export class Secretary implements OnInit, OnDestroy {
       this.flash(this.lang.t('secretary.toast.needWorkPhase'));
       return;
     }
-    if (isStudentCase && (!Number.isFinite(Number(d.studentPrice)) || Number(d.studentPrice) <= 0)) {
-      this.flash(this.lang.t('secretary.toast.needStudentPrice'));
-      return;
-    }
-
     let patientName = d.patient.trim();
     const docName = d.doctor.trim();
 
     const formPayload = {
-      requesterType: isStudentCase ? ('student' as const) : ('doctor' as const),
-      studentPrice: isStudentCase ? Number(d.studentPrice || 0) : 0,
+      requesterType,
+      studentPrice: requesterType === 'student' ? Number(d.studentPrice || 0) : 0,
       doctor: docName,
       patient: patientName,
       patientEmail: existing?.patientEmail?.trim() || undefined,
@@ -1664,11 +1666,38 @@ export class Secretary implements OnInit, OnDestroy {
     }
   }
 
-  isStudentDialog(): boolean {
+  dialogRequesterType(): RequesterType {
     if (this.dialogMode() === 'edit' && this.editingId) {
-      return this.sharedCases.getCaseById(this.editingId)?.requesterType === 'student';
+      return normalizeRequesterType(this.sharedCases.getCaseById(this.editingId)?.requesterType);
     }
-    return false;
+    return normalizeRequesterType(this.createRequesterType);
+  }
+
+  isStudentDialog(): boolean {
+    return this.dialogRequesterType() === 'student';
+  }
+
+  isLabDialog(): boolean {
+    return this.dialogRequesterType() === 'lab';
+  }
+
+  requesterLabel(type: unknown): string {
+    const kind = normalizeRequesterType(type);
+    if (kind === 'student') return this.lang.t('common.student');
+    if (kind === 'lab') return this.lang.t('common.lab');
+    return this.lang.t('common.doctorCase');
+  }
+
+  dialogTitleKey(): string {
+    const kind = this.dialogRequesterType();
+    if (this.dialogMode() === 'edit') {
+      if (kind === 'student') return 'secretary.editStudentCase';
+      if (kind === 'lab') return 'secretary.editLabCase';
+      return 'secretary.editCase';
+    }
+    if (kind === 'student') return 'secretary.addStudentCase';
+    if (kind === 'lab') return 'secretary.addLabCase';
+    return 'secretary.addDoctorCase';
   }
 
   private formatCaseApiError(err: unknown): string {
@@ -1774,7 +1803,7 @@ export class Secretary implements OnInit, OnDestroy {
     const dateYmd = `${yyyy}-${mm}-${dd}`;
 
     const formPayload = {
-      requesterType: (c.requesterType === 'student' ? 'student' : 'doctor') as 'student' | 'doctor',
+      requesterType: normalizeRequesterType(c.requesterType),
       studentPrice: Number(c.salaryAmount || 0),
       doctor: String(c.doctor || '').trim(),
       patient: String(c.patient || '').trim(),

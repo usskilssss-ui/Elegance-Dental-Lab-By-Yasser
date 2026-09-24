@@ -24,7 +24,7 @@ const dentalCaseSchema = new mongoose.Schema(
     },
     requesterType: {
       type: String,
-      enum: ['doctor', 'student'],
+      enum: ['doctor', 'student', 'lab'],
       default: 'doctor',
       index: true,
     },

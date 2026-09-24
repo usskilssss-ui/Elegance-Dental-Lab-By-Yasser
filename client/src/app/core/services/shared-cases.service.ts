@@ -13,7 +13,7 @@ export interface DentalCase {
   receivedDate: string;
   deliveryDate: string;
   enteredBy: string;
-  requesterType?: 'doctor' | 'student';
+  requesterType?: 'doctor' | 'student' | 'lab';
   instructions: string;
   status:
     | 'pending'

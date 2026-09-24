@@ -52,8 +52,17 @@ export function sanitizeCaseImageListForStorage(images: string[] | undefined): s
   return Array.from(unique);
 }
 
+export type RequesterType = 'doctor' | 'student' | 'lab';
+
+export function normalizeRequesterType(value: unknown): RequesterType {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'student') return 'student';
+  if (v === 'lab' || v === 'laboratory' || v === 'معمل') return 'lab';
+  return 'doctor';
+}
+
 export type CaseMeta = {
-  requesterType?: 'doctor' | 'student';
+  requesterType?: RequesterType;
   studentPrice?: number;
   doctor?: string;
   branch?: string;
@@ -87,7 +96,7 @@ export type CaseMeta = {
 };
 
 export type SecretaryCaseFormPayload = {
-  requesterType?: 'doctor' | 'student';
+  requesterType?: RequesterType;
   studentPrice?: number;
   doctor: string;
   patient: string;
@@ -130,7 +139,7 @@ export function buildSecretaryNotes(
   plyPreserve?: { plyScanPath: string; plyFileName?: string }
 ): string {
   const meta: CaseMeta = {
-    requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType: normalizeRequesterType(form.requesterType),
     studentPrice: Number(form.studentPrice || 0),
     doctor: form.doctor,
     branch: (form.branch || '').trim(),
@@ -196,7 +205,7 @@ export function buildCreateCasePayload(
     patientName: (form.patient || '').trim() || 'غير محدد',
     patientEmail: email,
     patientPhone: phone,
-    requesterType: form.requesterType === 'student' ? 'student' : 'doctor',
+    requesterType: normalizeRequesterType(form.requesterType),
     salaryAmount: Number(form.studentPrice || 0),
     caseType: (form.workType || '').trim(),
     priority: 'normal',
@@ -329,9 +338,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     else if (createdByRole === 'secretary') entrySource = 'secretary';
     else if (createdByRole === 'requester') entrySource = 'print';
   }
-  const requesterTypeRaw = String(meta['requesterType'] ?? doc['requesterType'] ?? 'doctor');
-  const requesterType: 'doctor' | 'student' =
-    requesterTypeRaw === 'student' ? 'student' : 'doctor';
+  const requesterType = normalizeRequesterType(meta['requesterType'] ?? doc['requesterType']);
   const teethRaw = meta['teeth'];
   const teeth = Array.isArray(teethRaw)
     ? teethRaw
