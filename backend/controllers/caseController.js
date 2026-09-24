@@ -1914,6 +1914,44 @@ exports.updateCase = async (req, res) => {
       });
     }
 
+    if (requesterRetagOnly) {
+      const nextType =
+        incoming.requesterType === 'student'
+          ? 'student'
+          : incoming.requesterType === 'lab'
+            ? 'lab'
+            : 'doctor';
+      const displayName = String(
+        incoming.referringDoctor ||
+          dentalCase.referringDoctor ||
+          referringDoctorFromNotes(dentalCase.notes) ||
+          ''
+      ).trim();
+      const nextNotes = setRequesterTypeInNotes(
+        dentalCase.notes || '',
+        nextType,
+        displayName ? { doctor: displayName } : {}
+      );
+      const $set = { requesterType: nextType, notes: nextNotes };
+      if (displayName) $set.referringDoctor = displayName;
+      if (nextType === 'student') {
+        $set.paymentStatus = 'paid';
+        $set.paidAt = new Date();
+        $set.paidBy = req.user.id;
+      }
+      await DentalCase.updateOne({ _id: dentalCase._id }, { $set });
+      const fresh = await DentalCase.findById(dentalCase._id).populate(
+        'createdBy',
+        'fullName email role'
+      );
+      emitCaseUpdated(fresh, req.user);
+      return res.status(200).json({
+        success: true,
+        message: 'Case updated successfully',
+        case: fresh,
+      });
+    }
+
     if (req.user.role === 'secretary' && !requesterRetagOnly) {
       const createdBy = normalizeDocId(dentalCase.createdBy);
       if (createdBy && createdBy !== String(req.user.id)) {

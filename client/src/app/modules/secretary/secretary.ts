@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, forkJoin, map, of, Subscription, switchMap, tap } from 'rxjs';
+import { catchError, concatMap, forkJoin, from, map, of, Subscription, switchMap, tap, toArray } from 'rxjs';
 import type { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
@@ -2282,13 +2282,23 @@ export class Secretary implements OnInit, OnDestroy {
       .cases()
       .filter((row) => this.namesMatch(String(row.doctor || ''), name));
     if (!matches.length) return of({ updatedCases: 0 });
-    return forkJoin(
-      matches.map((row) =>
-        this.caseApi
-          .updateCase(row.id, { requesterType: kind, referringDoctor: name })
-          .pipe(catchError(() => of(null)))
-      )
-    ).pipe(map((rows) => ({ updatedCases: rows.filter(Boolean).length })));
+    const chunks: (typeof matches)[] = [];
+    for (let i = 0; i < matches.length; i += 8) {
+      chunks.push(matches.slice(i, i + 8));
+    }
+    return from(chunks).pipe(
+      concatMap((chunk) =>
+        forkJoin(
+          chunk.map((row) =>
+            this.caseApi
+              .updateCase(row.id, { requesterType: kind, referringDoctor: name })
+              .pipe(catchError(() => of(null)))
+          )
+        )
+      ),
+      toArray(),
+      map((batches) => ({ updatedCases: batches.flat().filter(Boolean).length }))
+    );
   }
 
   private convertCaseRequesterFallback(
@@ -2368,16 +2378,27 @@ export class Secretary implements OnInit, OnDestroy {
         catchError((err) => {
           if (!this.isMissingRoute(err)) throw err;
           return this.convertCaseRequesterFallback(name, kind);
-        })
+        }),
+        switchMap((res) =>
+          this.retagVisibleCases(name, kind).pipe(
+            map((visible) => ({
+              updatedCases: Math.max(
+                Number(res?.updatedCases || 0),
+                Number(visible?.updatedCases || 0),
+                localN
+              ),
+            }))
+          )
+        )
       )
       .subscribe({
         next: (res) => {
           this.convertingCaseName = '';
-          const n = Math.max(Number(res?.updatedCases || 0), localN);
-          this.flash(this.lang.t('secretary.clients.convertDone').replace('{n}', String(n)));
+          this.flash(
+            this.lang.t('secretary.clients.convertDone').replace('{n}', String(res.updatedCases || 0))
+          );
           this.loadAccountDoctors();
           this.applyRequesterOverrides();
-          this.reloadCasesFromBackend(true, () => this.applyRequesterOverrides());
         },
         error: (err) => {
           this.convertingCaseName = '';

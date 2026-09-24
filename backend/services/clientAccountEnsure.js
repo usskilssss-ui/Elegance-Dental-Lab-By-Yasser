@@ -123,11 +123,21 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
       notesText !== nextNotes ||
       (displayName && dentalCase.referringDoctor !== displayName);
     if (!changed) continue;
-    dentalCase.requesterType = requesterType;
-    dentalCase.notes = nextNotes;
-    if (displayName) dentalCase.referringDoctor = displayName;
-    await dentalCase.save();
-    updated += 1;
+    try {
+      await DentalCase.updateOne(
+        { _id: dentalCase._id },
+        {
+          $set: {
+            requesterType,
+            notes: nextNotes,
+            ...(displayName ? { referringDoctor: displayName } : {}),
+          },
+        }
+      );
+      updated += 1;
+    } catch (err) {
+      console.error('[retagCasesForClientName]', String(dentalCase._id), err?.message || err);
+    }
   }
   return updated;
 }
