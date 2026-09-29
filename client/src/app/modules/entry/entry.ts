@@ -98,6 +98,10 @@ export class EntryComponent implements OnInit, OnDestroy {
   readonly jobsLoading = signal(true);
   readonly showReceptionHub = signal(false);
 
+  isAdminUser(): boolean {
+    return this.auth.getSession()?.role === 'admin';
+  }
+
   // Today's print jobs list
   readonly printJobs = signal<PrintJobCard[]>([]);
 

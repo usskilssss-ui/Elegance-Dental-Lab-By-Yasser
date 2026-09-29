@@ -155,6 +155,104 @@ body.dark-theme .hub-link:hover,
   text-align: center;
 }
 
+/* Match cases / print screens when opened from reception hub */
+.station-scan.hub-layout .scan-main {
+  width: min(1200px, 100%);
+  text-align: start;
+  padding: 20px 20px 40px;
+}
+
+.station-scan.hub-layout .page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.station-scan.hub-layout .page-header-text h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+}
+
+.station-scan.hub-layout .page-header-text p {
+  margin: 6px 0 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.95rem;
+}
+
+.station-scan.hub-layout .scan-station-picker {
+  width: 100%;
+  margin: 0 0 14px;
+  text-align: start;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-card, #fff);
+}
+
+.station-scan.hub-layout .scan-panel {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-card, #fff);
+}
+
+.station-scan.hub-layout .scan-form {
+  margin: 0 auto 12px;
+  width: 100%;
+  max-width: none;
+}
+
+.station-scan.hub-layout .scan-idle,
+.station-scan.hub-layout .scan-result {
+  margin-inline: 0;
+}
+
+.hub-back-admin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #0f766e;
+  color: #0f766e;
+  background: color-mix(in srgb, #0f766e 12%, transparent);
+  white-space: nowrap;
+}
+
+.hub-back-admin:hover {
+  background: #0f766e;
+  color: #fff;
+}
+
+body.dark-theme .hub-back-admin,
+.dark-theme .hub-back-admin {
+  border-color: #14b8a6;
+  color: #5eead4;
+  background: color-mix(in srgb, #14b8a6 16%, transparent);
+}
+
+body.dark-theme .hub-back-admin:hover,
+.dark-theme .hub-back-admin:hover {
+  background: #0d9488;
+  color: #fff;
+}
+
+body.dark-theme .station-scan.hub-layout .scan-station-picker,
+body.dark-theme .station-scan.hub-layout .scan-panel,
+.dark-theme .station-scan.hub-layout .scan-station-picker,
+.dark-theme .station-scan.hub-layout .scan-panel {
+  background: var(--bg-secondary, #1e293b);
+  border-color: var(--border-primary, #334155);
+}
+
 .scan-kicker {
   text-transform: uppercase;
   letter-spacing: 0.12em;

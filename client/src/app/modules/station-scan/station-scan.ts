@@ -78,6 +78,10 @@ export class StationScanComponent implements OnInit, OnDestroy {
   readonly showReceptionHub = signal(false);
   /** Cases currently at this station — shown as cards under the scanner */
   readonly queueCases = signal<DentalCase[]>([]);
+
+  isAdminUser(): boolean {
+    return this.auth.getSession()?.role === 'admin';
+  }
   readonly queueLoading = signal(false);
   readonly queueSearch = signal('');
 
@@ -116,8 +120,9 @@ export class StationScanComponent implements OnInit, OnDestroy {
       if (role === 'admin' || role === 'designer' || role === 'finisher') {
         this.unauthorized.set(false);
         this.canPickStation.set(true);
-        this.titleKey.set('scan.title.demo');
-        this.subtitleKey.set('scan.subtitle.demo');
+        // Admin via reception hub: same chrome as cases/print (not "demo scan")
+        this.titleKey.set(role === 'admin' ? 'scan.title.default' : 'scan.title.demo');
+        this.subtitleKey.set(role === 'admin' ? 'scan.subtitle.toDesign' : 'scan.subtitle.demo');
         this.station.set(role === 'finisher' ? 'finishing' : 'design');
       } else {
         this.unauthorized.set(true);
