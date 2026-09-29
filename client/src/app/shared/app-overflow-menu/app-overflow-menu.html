@@ -21,14 +21,15 @@
       [class.app-menu-panel--rtl]="lang.isArabic()"
       role="menu"
       (click)="$event.stopPropagation()"
-    >      @for (item of items; track item.id) {
+    >
+      @for (item of items; track item.id) {
         <button
           type="button"
           class="app-menu-item"
           role="menuitem"
           (click)="onItem(item, $event)"
         >
-          {{ item.labelKey | t: item.labelFallback }}
+          <span class="app-menu-lang-label">{{ item.labelKey | t: item.labelFallback }}</span>
         </button>
       }
 
@@ -45,7 +46,7 @@
         [class.active]="lang.isArabic()"
         (click)="setArabic($event)"
       >
-        <span>{{ 'menu.language.ar' | t }}</span>
+        <span class="app-menu-lang-label">العربية</span>
         @if (lang.isArabic()) {
           <span class="app-menu-check" aria-hidden="true">✓</span>
         }
@@ -59,7 +60,7 @@
         [class.active]="lang.isEnglish()"
         (click)="setEnglish($event)"
       >
-        <span>{{ 'menu.language.en' | t }}</span>
+        <span class="app-menu-lang-label">English</span>
         @if (lang.isEnglish()) {
           <span class="app-menu-check" aria-hidden="true">✓</span>
         }

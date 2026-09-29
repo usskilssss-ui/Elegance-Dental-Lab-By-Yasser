@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, Input, inject, signal } from '@angular/core';
+import { Component, HostListener, Input, ViewEncapsulation, inject, signal } from '@angular/core';
 import { LanguageService } from '../../core/i18n/language.service';
 import { TPipe } from '../../core/i18n/t.pipe';
 import type { TranslationKey } from '../../core/i18n/translations';
@@ -17,6 +17,7 @@ export type AppMenuItem = {
   imports: [CommonModule, TPipe],
   templateUrl: './app-overflow-menu.html',
   styleUrl: './app-overflow-menu.css',
+  encapsulation: ViewEncapsulation.None,
 })
 export class AppOverflowMenuComponent {
   readonly lang = inject(LanguageService);
