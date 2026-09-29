@@ -47,20 +47,24 @@ exports.addPayment = async (req, res) => {
     }
 
     const rawType = String(entryType || 'payment').toLowerCase().trim();
-    if (rawType !== 'payment' && rawType !== 'charge') {
+    if (rawType && rawType !== 'payment' && rawType !== 'charge') {
       return res.status(400).json({ success: false, message: 'entryType must be payment or charge' });
     }
-    const type = rawType === 'charge' ? 'charge' : 'payment';
 
-    let normalizedNotes = notes || '';
+    let normalizedNotes = String(notes || '').trim();
+    // Notes marker alone is enough to request a charge (older clients / stripped body fields)
+    const type =
+      rawType === 'charge' || isChargeEntry({ notes: normalizedNotes, entryType: rawType })
+        ? 'charge'
+        : 'payment';
+
     if (type === 'charge') {
-      const n = String(normalizedNotes || '').trim();
-      if (!n.startsWith('[CHARGE]') && !n.startsWith('[زيادة]')) {
-        normalizedNotes = n ? `[CHARGE] ${n}` : '[CHARGE]';
+      if (!normalizedNotes.startsWith('[CHARGE]') && !normalizedNotes.startsWith('[زيادة]')) {
+        normalizedNotes = normalizedNotes ? `[CHARGE] ${normalizedNotes}` : '[CHARGE]';
       }
     }
 
-    const payment = await DoctorPayment.create({
+    let payment = await DoctorPayment.create({
       doctorName: normalizedName,
       amount: Number(amount),
       paymentDate: paymentDate || new Date(),
@@ -68,8 +72,16 @@ exports.addPayment = async (req, res) => {
       entryType: type,
     });
 
-    // Guard: if schema somehow dropped entryType, fail loudly instead of misfiling as payment
-    if (type === 'charge' && String(payment.entryType || '') !== 'charge') {
+    // Force-repair if schema/default left it as payment despite charge intent
+    if (type === 'charge' && !isChargeEntry(payment)) {
+      payment = await DoctorPayment.findByIdAndUpdate(
+        payment._id,
+        { $set: { entryType: 'charge', notes: normalizedNotes } },
+        { new: true }
+      );
+    }
+
+    if (type === 'charge' && payment && !isChargeEntry(payment)) {
       await DoctorPayment.findByIdAndDelete(payment._id);
       return res.status(500).json({
         success: false,
@@ -77,8 +89,9 @@ exports.addPayment = async (req, res) => {
       });
     }
 
-    const data = typeof payment.toObject === 'function' ? payment.toObject() : payment;
+    const data = typeof payment.toObject === 'function' ? payment.toObject() : { ...payment };
     data.entryType = type;
+    data.notes = normalizedNotes;
 
     res.status(201).json({ success: true, data });
   } catch (error) {
