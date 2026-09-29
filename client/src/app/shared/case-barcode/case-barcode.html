@@ -1,4 +1,4 @@
-@if (ready) {
+@if (value) {
   <button
     type="button"
     class="case-qr-trigger"
@@ -18,7 +18,7 @@
     </svg>
   </button>
 
-  @if (open) {
+  @if (open && ready) {
     <div #overlay class="case-barcode-overlay" role="presentation" (click)="close($event)">
       <div
         class="case-barcode-panel"

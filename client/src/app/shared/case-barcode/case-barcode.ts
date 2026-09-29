@@ -3,7 +3,6 @@ import {
   ElementRef,
   HostListener,
   Input,
-  OnChanges,
   OnDestroy,
   ViewChild,
   inject,
@@ -18,7 +17,7 @@ import { code128SvgPath } from '../../core/utils/code128';
   templateUrl: './case-barcode.html',
   styleUrl: './case-barcode.css',
 })
-export class CaseBarcodeComponent implements OnChanges, OnDestroy {
+export class CaseBarcodeComponent implements OnDestroy {
   /** Encoded value — must be the human caseNumber (CASE-YYYY-NNNNN). */
   @Input({ required: true }) value = '';
   /** Kept for API compat; trigger is always compact. */
@@ -34,10 +33,6 @@ export class CaseBarcodeComponent implements OnChanges, OnDestroy {
   label = '';
   ready = false;
   open = false;
-
-  ngOnChanges(): void {
-    this.render();
-  }
 
   ngOnDestroy(): void {
     const el = this.overlayRef?.nativeElement;
@@ -55,6 +50,7 @@ export class CaseBarcodeComponent implements OnChanges, OnDestroy {
   openBarcode(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
+    this.ensureRendered();
     if (!this.ready) return;
     this.open = true;
     this.lockBodyScroll();
@@ -82,7 +78,8 @@ export class CaseBarcodeComponent implements OnChanges, OnDestroy {
     this.document.body.style.overflow = '';
   }
 
-  private render(): void {
+  /** Build Code128 only when the user opens the overlay — not for every card in a long list. */
+  private ensureRendered(): void {
     const text = String(this.value || '').trim();
     this.label = text;
     if (!text) {
@@ -90,6 +87,7 @@ export class CaseBarcodeComponent implements OnChanges, OnDestroy {
       this.path = '';
       return;
     }
+    if (this.ready && this.path) return;
     const svg = code128SvgPath(text, 64, 2);
     if (!svg) {
       this.ready = false;

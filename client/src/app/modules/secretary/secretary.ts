@@ -277,6 +277,12 @@ export class Secretary implements OnInit, OnDestroy {
   >('all');
   readonly casesLoading = signal(false);
   readonly saveInProgress = signal(false);
+  /** Debounced search text — avoids re-scoring hundreds of exited cases on every keystroke */
+  readonly debouncedSearchQuery = signal('');
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** How many filtered cases to render (pagination for large exited lists) */
+  readonly listVisibleCount = signal(40);
+  private readonly LIST_PAGE_SIZE = 40;
 
   /** Same stage buckets as the doctor portal filters/dashboard */
   private caseBucket(
@@ -300,7 +306,7 @@ export class Secretary implements OnInit, OnDestroy {
   readonly cases = computed(() => {
     const allCases = this.sharedCases.cases();
     const selectedFilter = this.activeFilter();
-    const q = this.normalizeSearchText(this.searchQuery());
+    const q = this.normalizeSearchText(this.debouncedSearchQuery());
 
     let baseCases =
       selectedFilter === 'all'
@@ -311,8 +317,8 @@ export class Secretary implements OnInit, OnDestroy {
 
     if (selectedFilter === 'exited') {
       baseCases = [...baseCases].sort((a, b) => {
-        const timeA = a.exitedAtRaw ? new Date(a.exitedAtRaw).getTime() : 0;
-        const timeB = b.exitedAtRaw ? new Date(b.exitedAtRaw).getTime() : 0;
+        const timeA = a.exitedAtRaw ? Date.parse(a.exitedAtRaw) || 0 : 0;
+        const timeB = b.exitedAtRaw ? Date.parse(b.exitedAtRaw) || 0 : 0;
         return timeB - timeA;
       });
     } else if (!q) {
@@ -326,6 +332,16 @@ export class Secretary implements OnInit, OnDestroy {
 
     if (!q) return baseCases;
 
+    // Fast path: case-number / short queries — prefer includes over full fuzzy score for large exited lists
+    if (selectedFilter === 'exited' || baseCases.length > 200) {
+      return baseCases.filter((c) => {
+        const doctor = this.normalizeSearchText(c.doctor);
+        const patient = this.normalizeSearchText(c.patient);
+        const caseNumber = this.normalizeSearchText(c.caseNumber);
+        return caseNumber.includes(q) || doctor.includes(q) || patient.includes(q);
+      });
+    }
+
     const scored = baseCases
       .map((c) => ({ caseItem: c, score: this.searchScore(c, q) }))
       .filter((item) => item.score >= 0)
@@ -333,6 +349,15 @@ export class Secretary implements OnInit, OnDestroy {
 
     return scored.map((item) => item.caseItem);
   });
+
+  /** Slice of `cases()` actually rendered — keeps DOM light for 800+ exited cards */
+  readonly displayedCases = computed(() => this.cases().slice(0, this.listVisibleCount()));
+
+  readonly hasMoreCases = computed(() => this.cases().length > this.listVisibleCount());
+
+  readonly hiddenCasesCount = computed(() =>
+    Math.max(0, this.cases().length - this.listVisibleCount())
+  );
 
   /** حالات لم تخرج خلال 4 أيام من تاريخ الدخول */
   readonly overdueCases = computed(() => {
@@ -420,7 +445,21 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   set searchQueryValue(value: string) {
+    this.applySearchQuery(value);
+  }
+
+  private applySearchQuery(value: string, immediate = false): void {
     this.searchQuery.set(value);
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    if (immediate) {
+      this.debouncedSearchQuery.set(value);
+      this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+      return;
+    }
+    this.searchDebounceTimer = setTimeout(() => {
+      this.debouncedSearchQuery.set(value);
+      this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+    }, 180);
   }
 
   readonly dialogOpen = signal(false);
@@ -1068,7 +1107,7 @@ export class Secretary implements OnInit, OnDestroy {
   private highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   onSearchInput(value: string): void {
-    this.searchQuery.set(value);
+    this.applySearchQuery(value);
   }
 
   logout(): void {
@@ -1532,6 +1571,11 @@ export class Secretary implements OnInit, OnDestroy {
     filter: 'all' | 'urgent' | 'pending' | 'design' | 'finishing' | 'finished' | 'exited'
   ): void {
     this.activeFilter.set(filter);
+    this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+  }
+
+  loadMoreCases(): void {
+    this.listVisibleCount.update((n) => n + this.LIST_PAGE_SIZE);
   }
 
   goToOverdueCase(caseId: string): void {
@@ -1542,7 +1586,7 @@ export class Secretary implements OnInit, OnDestroy {
     }
 
     this.notificationsOpen.set(false);
-    this.searchQuery.set('');
+    this.applySearchQuery('', true);
 
     const bucket = this.caseBucket(target);
     if (bucket === 'exited') {
@@ -1562,7 +1606,7 @@ export class Secretary implements OnInit, OnDestroy {
         return;
       }
       this.activeFilter.set('all');
-      this.searchQuery.set(target.caseNumber || target.patient || '');
+      this.applySearchQuery(target.caseNumber || target.patient || '', true);
       setTimeout(() => {
         document
           .querySelector(`[data-case-id="${caseId}"]`)
@@ -2746,6 +2790,8 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   getCasePhase(caseId: string): { label: string; status: string; color: string } {
+    const dentalCase = this.sharedCases.getCaseById(caseId);
+    if (dentalCase) return this.casePhaseBadge(dentalCase);
     const phase = this.svc.getCasePhase(caseId);
     const phaseKeyMap: Record<string, string> = {
       pending: 'phase.pending',
@@ -2758,6 +2804,35 @@ export class Secretary implements OnInit, OnDestroy {
     };
     const key = phaseKeyMap[phase.color] || 'phase.pending';
     return { ...phase, label: this.lang.t(key) };
+  }
+
+  /** Cheap badge from the row itself — no extra service lookup per card */
+  casePhaseBadge(c: DentalCase): { label: string; status: string; color: string } {
+    const status = String(c.status || '');
+    const colorMap: Record<string, string> = {
+      pending: 'pending',
+      'in-progress': 'design',
+      'under-khart': 'khart',
+      'needs-revision': 'revision',
+      'ready-for-finishing': 'finishing',
+      finished: 'finished',
+      exited: 'exited',
+    };
+    const color = colorMap[status] || (c.status === 'exited' ? 'exited' : 'pending');
+    const phaseKeyMap: Record<string, string> = {
+      pending: 'phase.pending',
+      design: 'phase.design',
+      khart: 'phase.khart',
+      revision: 'phase.revision',
+      finishing: 'phase.finishing',
+      finished: 'phase.finished',
+      exited: 'phase.exited',
+    };
+    return {
+      status,
+      color,
+      label: this.lang.t(phaseKeyMap[color] || 'phase.pending'),
+    };
   }
 
   private searchScore(
