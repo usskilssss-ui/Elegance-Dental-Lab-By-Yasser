@@ -145,10 +145,10 @@ function parseNotesMeta(notes) {
   }
 }
 
-/** Keep pricing aligned with try-in phase labels (before / after). */
+/** Keep pricing aligned with try-in phase labels (before / after). Case-insensitive. */
 function normalizeMaterialPartForPricing(lowerPart) {
   let lower = String(lowerPart || '').toLowerCase();
-  if (/try\s*in\s+before|tray\s*in\s+before/.test(lower)) {
+  if (/try\s*in\s+before|tray\s*in\s+before|tary\s*in\s+before/.test(lower)) {
     return 'try in';
   }
   return lower
@@ -158,15 +158,38 @@ function normalizeMaterialPartForPricing(lowerPart) {
     .trim();
 }
 
+function isTryInPricingPart(lowerPart) {
+  const s = String(lowerPart || '').toLowerCase();
+  if (/\bafter\s+try\s*in\b|\bafter\s+tray\s*in\b|\bafter\s+tary\s*in\b/.test(s)) {
+    return false;
+  }
+  return /try\s*in|tryin|tray\s*in|tary\s*in/.test(s);
+}
+
 /**
  * Match a caseType part against material keywords (longest keyword first).
+ * Try-in / "try in before X" always bills at tryIn — never the embedded final material.
  */
 function resolvePartUnitPrice(lowerPart, prices, materials) {
   const mats = materials || DEFAULT_MATERIALS;
-  const normalized = normalizeMaterialPartForPricing(lowerPart);
+  const raw = String(lowerPart || '').toLowerCase();
+
+  if (isTryInPricingPart(raw)) {
+    const tryIn =
+      mats.find((m) => String(m.key).toLowerCase() === 'tryin') ||
+      DEFAULT_MATERIALS.find((m) => String(m.key).toLowerCase() === 'tryin');
+    if (tryIn) {
+      const unitPrice = lookupPrice(prices, tryIn.key, Number(tryIn.defaultPrice) || 0);
+      return { label: tryIn.label || 'Try in', key: tryIn.key, unitPrice };
+    }
+    return { label: 'Try in', key: 'tryIn', unitPrice: lookupPrice(prices, 'tryIn', 0) };
+  }
+
+  const normalized = normalizeMaterialPartForPricing(raw);
   let best = null;
   let bestLen = -1;
   for (const m of mats) {
+    if (String(m.key).toLowerCase() === 'tryin') continue;
     const keywords = (m.matchKeywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
     for (const kw of keywords) {
       if (normalized.includes(kw) && kw.length > bestLen) {
