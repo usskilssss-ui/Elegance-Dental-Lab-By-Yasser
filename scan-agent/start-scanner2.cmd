@@ -17,6 +17,8 @@ if not exist "config.scanner2.json" (
   exit /b 1
 )
 
-echo Starting Scan Agent — سكان 2 (ديزاين)...
-node agent.js config.scanner2.json
-pause
+echo Starting Scan Agent — سكان 2 (ديزاين) in background...
+echo After login the window minimizes. Scan without focusing it.
+echo Log: "%~dp0scan-agent.log"
+start "Elegance Scan 2" /MIN /D "%~dp0" cmd /k "node agent.js config.scanner2.json"
+exit /b 0

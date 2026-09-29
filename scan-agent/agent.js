@@ -3,7 +3,7 @@
  * Runs on a lab Windows PC next to a USB barcode scanner (keyboard wedge).
  * Logs in as scanner1 / scanner2 / scanner3 and POSTs scanned codes to /api/cases/scan.
  *
- * Primary capture: local Capture page (auto-focused). Console stdin as backup.
+ * Default on Windows: global background listener — scan without focusing CMD/browser.
  *
  * Usage:
  *   node agent.js config.scanner2.json
@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const { execFile, exec } = require('child_process');
+const { execFile, exec, spawn } = require('child_process');
 const readline = require('readline');
 
 // Never crash the agent on optional hook / spawn noise
@@ -45,7 +45,15 @@ const TOKEN_REFRESH_MS = Number(config.TOKEN_REFRESH_MS) || 6 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = Number(config.REQUEST_TIMEOUT_MS) || 60000;
 const LOGIN_RETRIES = Number(config.LOGIN_RETRIES) || 8;
 const CAPTURE_PORT = Number(config.CAPTURE_PORT) || 3921;
-const OPEN_CAPTURE_UI = config.OPEN_CAPTURE_UI !== false;
+const OPEN_CAPTURE_UI = config.OPEN_CAPTURE_UI === true;
+/** Listen for barcode globally (no need to focus CMD). Default ON for Windows. */
+const BACKGROUND_SCAN =
+  config.BACKGROUND_SCAN !== undefined
+    ? config.BACKGROUND_SCAN === true
+    : process.platform === 'win32';
+/** Hide/minimize console after ready. Default ON when background scan is on. */
+const HIDE_CONSOLE =
+  config.HIDE_CONSOLE !== undefined ? config.HIDE_CONSOLE === true : BACKGROUND_SCAN;
 
 if (!SERVER_URL || !EMAIL || !PASSWORD) {
   console.error('❌ Config needs SERVER_URL, EMAIL, PASSWORD');
@@ -56,12 +64,28 @@ let authToken = '';
 let authRole = '';
 let busy = false;
 const MIN_CODE_LEN = 6;
+const LOG_FILE = path.join(path.dirname(configPath), 'scan-agent.log');
 
-console.log('📷 Elegance Scan Agent starting...');
-console.log(`   Config : ${configPath}`);
-console.log(`   Label  : ${LABEL}`);
-console.log(`   Server : ${SERVER_URL}`);
-console.log(`   Email  : ${EMAIL}`);
+function appendLog(line) {
+  try {
+    fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${line}\n`, 'utf8');
+  } catch {
+    /* ignore */
+  }
+}
+
+function say(...parts) {
+  const line = parts.join(' ');
+  console.log(...parts);
+  appendLog(line);
+}
+
+say('📷 Elegance Scan Agent starting...');
+say(`   Config : ${configPath}`);
+say(`   Label  : ${LABEL}`);
+say(`   Server : ${SERVER_URL}`);
+say(`   Email  : ${EMAIL}`);
+say(`   Log    : ${LOG_FILE}`);
 
 function beep(ok) {
   if (process.platform !== 'win32') return;
@@ -136,10 +160,10 @@ async function loginOnce() {
   authToken = res.data.token;
   authRole = String(res.data.user?.role || '');
   const name = res.data.user?.fullName || EMAIL;
-  console.log(`✅ Logged in as ${name} (role: ${authRole})`);
+  say(`✅ Logged in as ${name} (role: ${authRole})`);
   if (!/^scanner[123]$/.test(authRole)) {
-    console.warn('⚠️  Account role is not scanner1/2/3 — station may not lock correctly');
-    console.warn('   Fix the employee position in Admin to سكان 1 / 2 / 3');
+    say('⚠️  Account role is not scanner1/2/3 — station may not lock correctly');
+    say('   Fix the employee position in Admin to سكان 1 / 2 / 3');
   }
 }
 
@@ -182,7 +206,7 @@ async function scanCode(rawCode) {
   }
 
   busy = true;
-  console.log(`\n📷 Scan: ${code}`);
+  say(`\n📷 Scan: ${code}`);
   try {
     await ensureAuth();
     let res = await httpJson(
@@ -193,7 +217,7 @@ async function scanCode(rawCode) {
     );
 
     if (res.status === 401) {
-      console.log('🔄 Token expired — re-login...');
+      say('🔄 Token expired — re-login...');
       authToken = '';
       await login();
       res = await httpJson(
@@ -206,20 +230,20 @@ async function scanCode(rawCode) {
 
     if (res.status >= 200 && res.status < 300 && res.data?.success) {
       const message = res.data.message || 'OK';
-      console.log(`✅ ${message}`);
+      say(`✅ ${message}`);
       if (res.data.case?.currentStage) {
-        console.log(`   → stage: ${res.data.case.currentStage}`);
+        say(`   → stage: ${res.data.case.currentStage}`);
       }
       beep(true);
       return { ok: true, message, stage: res.data.case?.currentStage };
     }
 
     const message = res.data?.message || res.data?.error || `HTTP ${res.status}`;
-    console.error(`❌ ${message}`);
+    say(`❌ ${message}`);
     beep(false);
     return { ok: false, message };
   } catch (err) {
-    console.error(`❌ ${err.message}`);
+    say(`❌ ${err.message}`);
     beep(false);
     return { ok: false, message: err.message };
   } finally {
@@ -228,11 +252,138 @@ async function scanCode(rawCode) {
 }
 
 function startStdinFallback() {
-  console.log('⌨️  Console input ON — click this black window, then scan (backup)');
+  say('⌨️  Console input ON (backup if you focus this window)');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.on('line', (line) => {
     void scanCode(line);
   });
+}
+
+function keyNameToChar(name) {
+  const n = String(name || '').toUpperCase();
+  if (/^[0-9]$/.test(n)) return n;
+  if (/^[A-Z]$/.test(n)) return n;
+  if (n === 'MINUS' || n === 'OEM_MINUS' || n === 'DASH' || n === 'SUBTRACT') return '-';
+  if (n === 'PERIOD' || n === 'OEM_PERIOD' || n === 'DECIMAL') return '.';
+  return '';
+}
+
+/**
+ * Primary Windows background capture: US-QWERTY VK map via PowerShell hook.
+ * Works even when Arabic keyboard is active and CMD is hidden/unfocused.
+ */
+function startUsLayoutBarcodeHook() {
+  if (!BACKGROUND_SCAN || process.platform !== 'win32') return false;
+  const hookScript = path.join(__dirname, 'win-us-barcode-hook.ps1');
+  if (!fs.existsSync(hookScript)) {
+    say('⚠️  Missing win-us-barcode-hook.ps1');
+    return false;
+  }
+
+  try {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', hookScript],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+
+    let buf = '';
+    const onData = (chunk) => {
+      buf += String(chunk || '');
+      const lines = buf.split(/\r?\n/);
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t) continue;
+        if (t === 'HOOK_READY') {
+          say('🎧 US-layout background hook READY (no focus needed)');
+          continue;
+        }
+        if (t.startsWith('SCAN:')) {
+          void scanCode(t.slice(5));
+        }
+      }
+    };
+
+    child.stdout.on('data', onData);
+    child.stderr.on('data', (c) => say(`⚠️  Hook stderr: ${String(c).trim()}`));
+    child.on('exit', (code) => say(`⚠️  Background hook exited (${code})`));
+    child.on('error', (err) => say(`⚠️  Background hook error: ${err.message}`));
+
+    process.on('exit', () => {
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+    });
+
+    say('🎧 Starting US-layout barcode hook (works with Arabic keyboard)...');
+    return true;
+  } catch (err) {
+    say(`⚠️  Could not start US-layout hook: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Secondary listener (npm package). Kept as extra safety net.
+ */
+function startGlobalBarcodeListener() {
+  if (!BACKGROUND_SCAN || process.platform !== 'win32') return false;
+  let GlobalKeyboardListener;
+  try {
+    ({ GlobalKeyboardListener } = require('node-global-key-listener'));
+  } catch (err) {
+    return false;
+  }
+
+  const listener = new GlobalKeyboardListener();
+  let buf = '';
+  let lastTs = 0;
+  const MAX_GAP_MS = 140;
+
+  listener.addListener((e) => {
+    if (e.state !== 'DOWN') return;
+
+    const now = Date.now();
+    if (lastTs && now - lastTs > MAX_GAP_MS) buf = '';
+    lastTs = now;
+
+    if (e.name === 'RETURN' || e.name === 'ENTER') {
+      const code = buf;
+      buf = '';
+      if (code.length >= MIN_CODE_LEN) void scanCode(code);
+      return;
+    }
+
+    const ch = keyNameToChar(e.name);
+    if (ch) buf += ch;
+  });
+
+  say('🎧 Secondary npm key listener ON');
+  return true;
+}
+
+function hideConsoleWindow() {
+  if (!HIDE_CONSOLE || process.platform !== 'win32') return;
+  const ps = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class ScanAgentWin {
+  [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+$h = [ScanAgentWin]::GetConsoleWindow()
+if ($h -ne [IntPtr]::Zero) { [ScanAgentWin]::ShowWindow($h, 2) | Out-Null }
+`;
+  // 2 = SW_SHOWMINIMIZED — stays in taskbar so you can open it if needed, no focus required to scan
+  execFile('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], {
+    windowsHide: true,
+  }, () => {});
+  say('👻 Console minimized — scan works in background (taskbar: Elegance Scan)');
 }
 
 function escapeHtml(value) {
@@ -387,26 +538,44 @@ async function main() {
       await login();
       break;
     } catch (err) {
-      console.error(`❌ Cannot reach server yet: ${err.message}`);
-      console.log('   Waiting 10s then trying again... (check internet / Railway)');
+      say(`❌ Cannot reach server yet: ${err.message}`);
+      say('   Waiting 10s then trying again... (check internet / Railway)');
       await sleep(10000);
     }
   }
 
   setInterval(() => {
-    loginOnce().catch((err) => console.warn('⚠️  Re-login failed:', err.message));
+    loginOnce().catch((err) => say(`⚠️  Re-login failed: ${err.message}`));
   }, TOKEN_REFRESH_MS);
 
+  const usHookOk = startUsLayoutBarcodeHook();
+  const npmHookOk = startGlobalBarcodeListener();
+  const backgroundOk = usHookOk || npmHookOk;
   startStdinFallback();
-  await startCaptureUi();
 
-  console.log('\n✅ Ready');
-  console.log('   1) Use the Capture page that opened');
-  console.log('   2) Scan the barcode there');
-  console.log('   3) Keep that page selected (in front)\n');
+  if (OPEN_CAPTURE_UI) {
+    await startCaptureUi();
+  }
+
+  say('\n✅ Ready — waiting for barcode scans');
+  if (backgroundOk) {
+    say('   Scan anytime — no need to open or focus CMD');
+    say('   Works with Arabic keyboard (US key mapping)');
+    say('   Case stage updates on the server automatically');
+  } else if (OPEN_CAPTURE_UI) {
+    say('   Use the Capture page, or focus this window and scan');
+  } else {
+    say('   Focus this black window, then scan');
+  }
+  say('');
+
+  if (backgroundOk && HIDE_CONSOLE) {
+    await sleep(2500);
+    hideConsoleWindow();
+  }
 }
 
 main().catch((err) => {
-  console.error('❌ Fatal:', err.message);
+  say(`❌ Fatal: ${err.message}`);
   process.exit(1);
 });

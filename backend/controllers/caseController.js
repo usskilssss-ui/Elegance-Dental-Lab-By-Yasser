@@ -674,7 +674,12 @@ exports.getAllCases = async (req, res) => {
       DentalCase.countDocuments(filter),
     ]);
 
-    const createdAudits = await loadCreatedAudits(cases.map((row) => row._id));
+    const needAuditBackfill = cases.some((row) => !normalizeOriginalEntry(row.originalEntry));
+    const createdAudits = needAuditBackfill
+      ? await loadCreatedAudits(
+          cases.filter((row) => !normalizeOriginalEntry(row.originalEntry)).map((row) => row._id)
+        )
+      : new Map();
     const persistOps = [];
     const data = cases.map((row) => {
       const presented = presentCaseWithOriginal(row, createdAudits.get(String(row._id)));
@@ -1446,25 +1451,31 @@ exports.moveStage = async (req, res) => {
 
     await dentalCase.save();
 
-    // Create audit log
-    await AuditLog.create({
+    const payload = {
+      success: true,
+      message: 'Case moved to next stage',
+      case: dentalCase,
+    };
+    res.status(200).json(payload);
+
+    // Side effects after response — don't block the client
+    void AuditLog.create({
       caseId: dentalCase._id,
       caseNumber: dentalCase.caseNumber,
       action: 'moved_stage',
       performedBy: req.user.id,
       performedByName: req.user.fullName,
       details: { oldValue: oldStage, newValue: stage },
-    });
+    }).catch((err) => console.error('moveStage audit failed:', err.message));
 
-    // Create notification
-    await Notification.create({
+    void Notification.create({
       type: 'case_moved',
       title: 'Case Stage Updated',
       message: `Case ${dentalCase.caseNumber} has moved from ${oldStage} to ${stage}`,
       caseId: dentalCase._id,
       caseNumber: dentalCase.caseNumber,
       targetAudience: ['all'],
-    });
+    }).catch((err) => console.error('moveStage notification failed:', err.message));
 
     emitToAll('case:moved-stage', {
       caseId: String(dentalCase._id),
@@ -1472,12 +1483,6 @@ exports.moveStage = async (req, res) => {
       oldStage,
       newStage: stage,
       timestamp: new Date(),
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Case moved to next stage',
-      case: dentalCase,
     });
   } catch (error) {
     res.status(500).json({
@@ -1569,18 +1574,31 @@ async function findCaseByScanCode(raw) {
   const candidates = caseNumberCandidates(raw);
   if (!candidates.length) return null;
 
-  const or = candidates.map((cn) => ({
+  // Prefer exact indexed lookups (unique caseNumber) before regex $or
+  const exact = [
+    ...new Set(
+      candidates
+        .map((c) => String(c || '').trim())
+        .filter(Boolean)
+        .flatMap((c) => [c, c.toUpperCase()])
+    ),
+  ];
+  let dentalCase = await DentalCase.findOne({ caseNumber: { $in: exact } });
+  if (dentalCase) return dentalCase;
+
+  const or = exact.slice(0, 12).map((cn) => ({
     caseNumber: new RegExp(`^${escapeRegex(cn)}$`, 'i'),
   }));
-
-  let dentalCase = await DentalCase.findOne({ $or: or });
-  if (dentalCase) return dentalCase;
+  if (or.length) {
+    dentalCase = await DentalCase.findOne({ $or: or });
+    if (dentalCase) return dentalCase;
+  }
 
   // Last resort: YEAR-SEQ → CASE-YYYY-NNNNN
   const ys = extractYearSeq(normalizeScanCode(raw));
   if (ys) {
     dentalCase = await DentalCase.findOne({
-      caseNumber: new RegExp(`^CASE-${escapeRegex(ys.year)}-${escapeRegex(ys.seq)}$`, 'i'),
+      caseNumber: `CASE-${ys.year}-${ys.seq}`,
     });
   }
   return dentalCase;
@@ -1691,36 +1709,53 @@ exports.scanAtStation = async (req, res) => {
 
     await dentalCase.save();
 
-    try {
-      await AuditLog.create({
-        caseId: dentalCase._id,
-        caseNumber: dentalCase.caseNumber,
-        action: 'moved_stage',
-        performedBy: req.user.id,
-        performedByName: req.user.fullName,
-        details: {
-          oldValue: oldStage,
-          newValue: targetStage,
-          notes: `station-scan:${station}`,
-        },
-      });
-    } catch (auditErr) {
-      console.error('scanAtStation audit log failed:', auditErr.message);
-    }
+    const responseCase = {
+      id: dentalCase._id,
+      _id: dentalCase._id,
+      caseNumber: dentalCase.caseNumber,
+      patientName: dentalCase.patientName,
+      currentStage: targetStage,
+      previousStage: oldStage,
+      status: dentalCase.status,
+      caseType: dentalCase.caseType,
+      notes: dentalCase.notes,
+      referringDoctor: dentalCase.referringDoctor,
+      plyScanPath: dentalCase.plyScanPath,
+      plyFileName: dentalCase.plyFileName,
+      createdAt: dentalCase.createdAt,
+      stageTimestamps: dentalCase.stageTimestamps,
+    };
 
-    try {
-      await Notification.create({
-        type: 'case_moved',
-        title: 'Station Scan',
-        message: `Case ${dentalCase.caseNumber} scanned at ${station}: ${oldStage} → ${targetStage}`,
-        caseId: dentalCase._id,
-        caseNumber: dentalCase.caseNumber,
-        targetAudience: ['all'],
-      });
-    } catch (notifErr) {
-      console.error('scanAtStation notification failed:', notifErr.message);
-    }
+    res.status(200).json({
+      success: true,
+      message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
+      case: responseCase,
+    });
 
+    // Side effects after response — keep scan snappy
+    void AuditLog.create({
+      caseId: dentalCase._id,
+      caseNumber: dentalCase.caseNumber,
+      action: 'moved_stage',
+      performedBy: req.user.id,
+      performedByName: req.user.fullName,
+      details: {
+        oldValue: oldStage,
+        newValue: targetStage,
+        notes: `station-scan:${station}`,
+      },
+    }).catch((err) => console.error('scanAtStation audit log failed:', err.message));
+
+    void Notification.create({
+      type: 'case_moved',
+      title: 'Station Scan',
+      message: `Case ${dentalCase.caseNumber} scanned at ${station}: ${oldStage} → ${targetStage}`,
+      caseId: dentalCase._id,
+      caseNumber: dentalCase.caseNumber,
+      targetAudience: ['all'],
+    }).catch((err) => console.error('scanAtStation notification failed:', err.message));
+
+    // Single socket event (avoid case:updated + moved-stage double refetch storms)
     emitToAll('case:moved-stage', {
       caseId: String(dentalCase._id),
       caseNumber: dentalCase.caseNumber,
@@ -1729,7 +1764,6 @@ exports.scanAtStation = async (req, res) => {
       station,
       timestamp: new Date(),
     });
-    emitCaseUpdated(dentalCase, req.user);
 
     if (targetStage === 'completed' || targetStage === 'exited') {
       try {
@@ -1751,27 +1785,6 @@ exports.scanAtStation = async (req, res) => {
         );
       }
     }
-
-    return res.status(200).json({
-      success: true,
-      message: `تم نقل ${dentalCase.caseNumber} إلى ${STATION_LABEL_AR[station]}`,
-      case: {
-        id: dentalCase._id,
-        _id: dentalCase._id,
-        caseNumber: dentalCase.caseNumber,
-        patientName: dentalCase.patientName,
-        currentStage: targetStage,
-        previousStage: oldStage,
-        status: dentalCase.status,
-        caseType: dentalCase.caseType,
-        notes: dentalCase.notes,
-        referringDoctor: dentalCase.referringDoctor,
-        plyScanPath: dentalCase.plyScanPath,
-        plyFileName: dentalCase.plyFileName,
-        createdAt: dentalCase.createdAt,
-        stageTimestamps: dentalCase.stageTimestamps,
-      },
-    });
   } catch (error) {
     console.error('scanAtStation failed:', error);
     return res.status(500).json({

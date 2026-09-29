@@ -17,6 +17,6 @@ if not exist "config.scanner1.json" (
   exit /b 1
 )
 
-echo Starting Scan Agent — سكان 1 (منتهية)...
-node agent.js config.scanner1.json
-pause
+echo Starting Scan Agent — سكان 1 in background...
+start "Elegance Scan 1" /MIN /D "%~dp0" cmd /k "node agent.js config.scanner1.json"
+exit /b 0

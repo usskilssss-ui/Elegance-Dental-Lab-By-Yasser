@@ -320,14 +320,18 @@ export class StationScanComponent implements OnInit, OnDestroy {
               this.queueCases.update((list) => {
                 const id = mapped.id || String(c._id || c.id || '');
                 const without = list.filter((x) => x.id !== id && x.caseNumber !== mapped.caseNumber);
-                return this.sortNewestFirst([mapped, ...without]);
+                // Case left this station after scan — keep it out of the queue
+                const stillHere =
+                  String(mapped.currentStage || c.currentStage || '').toLowerCase() ===
+                  this.stationApiStage();
+                return stillHere ? this.sortNewestFirst([mapped, ...without]) : without;
               });
             }
           }
         } catch {
-          /* ignore map errors — reloadQueue still runs */
+          /* ignore map errors */
         }
-        this.reloadQueue();
+        // No full queue refetch — local patch is enough for snappy scans
         this.focusScanner();
       },
       error: (err) => {

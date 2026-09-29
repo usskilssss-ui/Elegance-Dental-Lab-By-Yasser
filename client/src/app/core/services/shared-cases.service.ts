@@ -166,6 +166,52 @@ export class SharedCasesService {
     this.emitCases();
   }
 
+  /** Fast local stage patch from socket — avoids full 1500-case refetch on every scan/move */
+  patchCaseStage(
+    caseId: string | undefined,
+    caseNumber: string | undefined,
+    newStage: string,
+    backendStatus?: string
+  ): boolean {
+    const id = String(caseId || '').trim();
+    const cn = String(caseNumber || '').trim().toLowerCase();
+    const stage = String(newStage || '').trim().toLowerCase();
+    if (!stage || (!id && !cn)) return false;
+
+    let hit = false;
+    this._cases.update((rows) =>
+      rows.map((row) => {
+        const match =
+          (id && row.id === id) ||
+          (cn && String(row.caseNumber || '').trim().toLowerCase() === cn);
+        if (!match) return row;
+        hit = true;
+        return {
+          ...row,
+          currentStage: stage,
+          status: this.uiStatusFromStage(stage, backendStatus, row.status),
+        };
+      })
+    );
+    if (hit) this.emitCases();
+    return hit;
+  }
+
+  private uiStatusFromStage(
+    stage: string,
+    backendStatus: string | undefined,
+    fallback: DentalCase['status']
+  ): DentalCase['status'] {
+    const s = String(backendStatus || '').toLowerCase();
+    if (s === 'exited' || stage === 'exited') return 'exited';
+    if (stage === 'completed' || s === 'completed') return 'finished';
+    if (stage === 'finishing') return 'ready-for-finishing';
+    if (stage === 'khart') return 'under-khart';
+    if (stage === 'design') return 'in-progress';
+    if (stage === 'waiting' || stage === 'secretary') return 'pending';
+    return fallback;
+  }
+
   // حذف حالة
   deleteCase(id: string): void {
     this._cases.update((cases) => cases.filter((c) => c.id !== id));
