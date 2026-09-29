@@ -19,6 +19,39 @@
   background: color-mix(in srgb, var(--bg-secondary, #f1f5f9) 70%, transparent);
 }
 
+.hub-back-admin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #0f766e;
+  color: #0f766e;
+  background: color-mix(in srgb, #0f766e 12%, transparent);
+  white-space: nowrap;
+}
+
+.hub-back-admin:hover {
+  background: #0f766e;
+  color: #fff;
+}
+
+body.dark-theme .hub-back-admin,
+.dark-theme .hub-back-admin {
+  border-color: #14b8a6;
+  color: #5eead4;
+  background: color-mix(in srgb, #14b8a6 16%, transparent);
+}
+
+body.dark-theme .hub-back-admin:hover,
+.dark-theme .hub-back-admin:hover {
+  background: #0d9488;
+  color: #fff;
+}
+
 .hub-link {
   text-decoration: none;
   color: var(--text-primary, #0f172a);

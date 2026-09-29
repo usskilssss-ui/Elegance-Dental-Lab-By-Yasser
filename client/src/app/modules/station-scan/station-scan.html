@@ -1,4 +1,9 @@
-<div class="station-scan" [attr.dir]="lang.dir()" (click)="focusScanner()">
+<div
+  class="station-scan"
+  [class.hub-layout]="showReceptionHub()"
+  [attr.dir]="lang.dir()"
+  (click)="focusScanner()"
+>
   <header class="scan-topbar">
     <div class="scan-brand">
       <app-overflow-menu (click)="$event.stopPropagation()"></app-overflow-menu>
@@ -11,6 +16,16 @@
       </div>
     </div>
     <div class="scan-top-actions">
+      @if (isAdminUser()) {
+        <a
+          routerLink="/admin"
+          class="hub-back-admin"
+          [attr.title]="'hub.backAdmin' | t"
+          (click)="$event.stopPropagation()"
+        >
+          {{ 'hub.backAdmin' | t }}
+        </a>
+      }
       <button type="button" class="icon-btn scan-theme-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme(); $event.stopPropagation()" [attr.title]="'common.theme' | t">
         @if (!themeService.isDarkMode()) {
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
@@ -47,10 +62,14 @@
       <h1>{{ 'scan.unauthorized' | t }}</h1>
       <p class="scan-sub">{{ 'scan.unauthorizedHint' | t }}</p>
     } @else {
-      <p class="scan-kicker">{{ 'scan.kicker' | t }}</p>
-      <h1>{{ title() }}</h1>
-      <p class="scan-sub">{{ subtitle() }}</p>
-      <p class="scan-hint">{{ 'scan.hint' | t }}</p>
+      <div class="page-header" (click)="$event.stopPropagation()">
+        <div class="page-header-text">
+          <h1>{{ title() }}</h1>
+          @if (subtitle()) {
+            <p>{{ subtitle() }}</p>
+          }
+        </div>
+      </div>
 
       @if (canPickStation()) {
         <div class="scan-station-picker" role="group" [attr.aria-label]="'scan.pickStation' | t" (click)="$event.stopPropagation()">
@@ -69,44 +88,46 @@
         </div>
       }
 
-      <form class="scan-form" (submit)="onScanSubmit($event)">
-        <input
-          #scanInput
-          class="scan-input"
-          type="text"
-          name="scanCode"
-          lang="en"
-          dir="ltr"
-          inputmode="latin"
-          autocomplete="off"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-          [(ngModel)]="scanBuffer"
-          [disabled]="busy()"
-          (keydown)="onScanKeydown()"
-          [placeholder]="'scan.placeholder' | t"
-          [attr.aria-label]="'scan.inputAria' | t"
-        />
-        <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
-          {{ busy() ? ('scan.busy' | t) : ('scan.execute' | t) }}
-        </button>
-      </form>
+      <div class="scan-panel">
+        <form class="scan-form" (submit)="onScanSubmit($event)">
+          <input
+            #scanInput
+            class="scan-input"
+            type="text"
+            name="scanCode"
+            lang="en"
+            dir="ltr"
+            inputmode="latin"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            [(ngModel)]="scanBuffer"
+            [disabled]="busy()"
+            (keydown)="onScanKeydown()"
+            [placeholder]="'scan.placeholder' | t"
+            [attr.aria-label]="'scan.inputAria' | t"
+          />
+          <button type="submit" class="scan-submit" [disabled]="busy() || !scanBuffer.trim()">
+            {{ busy() ? ('scan.busy' | t) : ('scan.execute' | t) }}
+          </button>
+        </form>
 
-      @if (feedback(); as fb) {
-        <div class="scan-result" [class.ok]="fb.ok" [class.err]="!fb.ok" role="status">
-          <div class="scan-result-title">{{ fb.title }}</div>
-          <div class="scan-result-detail">{{ fb.detail }}</div>
-          @if (fb.stage) {
-            <div class="scan-result-stage">{{ 'scan.stage' | t }}: {{ fb.stage }}</div>
-          }
-        </div>
-      } @else {
-        <div class="scan-idle">
-          <div class="scan-pulse" aria-hidden="true"></div>
-          <span>{{ 'scan.waiting' | t }}</span>
-        </div>
-      }
+        @if (feedback(); as fb) {
+          <div class="scan-result" [class.ok]="fb.ok" [class.err]="!fb.ok" role="status">
+            <div class="scan-result-title">{{ fb.title }}</div>
+            <div class="scan-result-detail">{{ fb.detail }}</div>
+            @if (fb.stage) {
+              <div class="scan-result-stage">{{ 'scan.stage' | t }}: {{ fb.stage }}</div>
+            }
+          </div>
+        } @else {
+          <div class="scan-idle">
+            <div class="scan-pulse" aria-hidden="true"></div>
+            <span>{{ 'scan.waiting' | t }}</span>
+          </div>
+        }
+      </div>
 
       <section class="scan-queue" [attr.aria-label]="'scan.queueAria' | t" (click)="$event.stopPropagation()">
         <div class="scan-queue-head">
