@@ -164,11 +164,6 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly secretaryMenuItems: AppMenuItem[] = [
     {
-      id: 'create-doctor',
-      labelKey: 'menu.createDoctor',
-      action: () => this.openCreateAccountModal('doctor'),
-    },
-    {
       id: 'doctor-list',
       labelKey: 'menu.doctorList',
       action: () => this.openAccountListModal('doctor'),
@@ -179,11 +174,6 @@ export class Secretary implements OnInit, OnDestroy {
       action: () => this.openResetAccountPasswordModal('doctor'),
     },
     {
-      id: 'create-student',
-      labelKey: 'menu.createStudent',
-      action: () => this.openCreateAccountModal('student'),
-    },
-    {
       id: 'student-list',
       labelKey: 'menu.studentList',
       action: () => this.openAccountListModal('student'),
@@ -192,11 +182,6 @@ export class Secretary implements OnInit, OnDestroy {
       id: 'reset-student-password',
       labelKey: 'menu.resetStudentPassword',
       action: () => this.openResetAccountPasswordModal('student'),
-    },
-    {
-      id: 'create-lab',
-      labelKey: 'menu.createLab',
-      action: () => this.openCreateAccountModal('lab'),
     },
     {
       id: 'lab-list',
