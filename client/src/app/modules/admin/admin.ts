@@ -720,14 +720,14 @@ export class Admin implements OnInit, OnDestroy {
         (p) => this.doctorGroupKey(p.doctorName) === key
       );
       const paidFromPayments = ledger
-        .filter((p) => String(p.entryType || 'payment') !== 'charge')
+        .filter((p) => this.isDoctorLedgerPayment(p))
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const charges = ledger
-        .filter((p) => String(p.entryType || '') === 'charge')
+        .filter((p) => this.isDoctorLedgerCharge(p))
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       docObj.totalDue += charges;
-      // Unified rule: ledger wins if any payments exist; else case-paid flags
-      docObj.totalPaid = paidFromPayments > 0 ? paidFromPayments : docObj.paidFromCases;
+      // Case confirm-payment + account ledger payments both count (settling remaining must not wipe case-paid)
+      docObj.totalPaid = docObj.paidFromCases + paidFromPayments;
       docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
     });
 
@@ -3352,21 +3352,31 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
+  /** Ledger payment (reduces due) — not an invoice charge. */
+  private isDoctorLedgerPayment(p: any): boolean {
+    return !this.isDoctorLedgerCharge(p);
+  }
+
+  /** Invoice increase — must never count as received payment. */
+  private isDoctorLedgerCharge(p: any): boolean {
+    const type = String(p?.entryType || '').toLowerCase().trim();
+    if (type === 'charge') return true;
+    // Safety net if an older API stripped entryType but kept the charge marker in notes
+    const notes = String(p?.notes || '');
+    return notes.startsWith('[CHARGE]') || notes.startsWith('[زيادة]');
+  }
+
   getDoctorPaymentsList(doctorName: string): any[] {
     const key = this.doctorGroupKey(doctorName);
     return this.doctorPayments.filter(
-      (p) =>
-        this.doctorGroupKey(p.doctorName) === key &&
-        String(p.entryType || 'payment') !== 'charge'
+      (p) => this.doctorGroupKey(p.doctorName) === key && this.isDoctorLedgerPayment(p)
     );
   }
 
   getDoctorChargesList(doctorName: string): any[] {
     const key = this.doctorGroupKey(doctorName);
     return this.doctorPayments.filter(
-      (p) =>
-        this.doctorGroupKey(p.doctorName) === key &&
-        String(p.entryType || '') === 'charge'
+      (p) => this.doctorGroupKey(p.doctorName) === key && this.isDoctorLedgerCharge(p)
     );
   }
 
@@ -3375,16 +3385,45 @@ export class Admin implements OnInit, OnDestroy {
     this.chargeSaving = true;
     this.chargeError = '';
 
+    const rawNotes = String(this.newChargeNotes || '').trim();
+    const notesWithMarker = rawNotes
+      ? rawNotes.startsWith('[CHARGE]') || rawNotes.startsWith('[زيادة]')
+        ? rawNotes
+        : `[CHARGE] ${rawNotes}`
+      : '[CHARGE]';
+
     this.caseApi
       .addDoctorPayment(
         this.reportDoctorFilter,
         this.newChargeAmount,
-        this.newChargeNotes,
+        notesWithMarker,
         undefined,
         'charge'
       )
       .subscribe({
-        next: () => {
+        next: (res) => {
+          const saved = res?.data;
+          const savedType = String(saved?.entryType || '').toLowerCase().trim();
+          // If backend ignored entryType, roll back so it never silently becomes a payment
+          if (saved && savedType !== 'charge') {
+            const id = saved._id;
+            if (id) {
+              this.caseApi.deleteDoctorPayment(id).subscribe({
+                next: () => {
+                  this.chargeSaving = false;
+                  this.chargeError =
+                    'السيرفر حفظ الزيادة كدفعة بالخطأ وتم التراجع. حدّث الباك اند ثم أعد المحاولة.';
+                },
+                error: () => {
+                  this.chargeSaving = false;
+                  this.chargeError =
+                    'الزيادة اتسجلت كدفعة بالخطأ. احذفها من جدول الدفعات وحدّث الباك اند.';
+                  this.loadDoctorPayments();
+                },
+              });
+              return;
+            }
+          }
           this.chargeSaving = false;
           this.newChargeAmount = null;
           this.newChargeNotes = '';

@@ -1059,12 +1059,18 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
       return true;
     };
+    const isChargeEntry = (p) => {
+      const type = String(p?.entryType || '').toLowerCase().trim();
+      if (type === 'charge') return true;
+      const notes = String(p?.notes || '');
+      return notes.startsWith('[CHARGE]') || notes.startsWith('[زيادة]');
+    };
     const paidFromPayments = doctorLedger
-      .filter((p) => String(p.entryType || 'payment') !== 'charge')
+      .filter((p) => !isChargeEntry(p))
       .filter(inPeriod)
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const chargesTotal = doctorLedger
-      .filter((p) => String(p.entryType || '') === 'charge')
+      .filter((p) => isChargeEntry(p))
       .filter(inPeriod)
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     totalDue += chargesTotal;

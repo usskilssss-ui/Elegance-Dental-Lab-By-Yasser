@@ -81,10 +81,16 @@ exports.getFinanceSummary = async (req, res) => {
     let revenueDetail = {};
 
     if (mode === 'cash') {
-      const payments = await DoctorPayment.find({
+      const paymentsRaw = await DoctorPayment.find({
         paymentDate: { $gte: start, $lte: end },
-        entryType: { $ne: 'charge' },
       }).lean();
+      const payments = paymentsRaw.filter((p) => {
+        const type = String(p?.entryType || '').toLowerCase().trim();
+        if (type === 'charge') return false;
+        const notes = String(p?.notes || '');
+        if (notes.startsWith('[CHARGE]') || notes.startsWith('[زيادة]')) return false;
+        return true;
+      });
       revenue = round2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
       revenueDetail = {
         label: 'المقبوض من الأطباء (سجل الدفعات)',
@@ -658,13 +664,19 @@ exports.getDoctorDebts = async (req, res) => {
     for (const row of byDoctor.values()) {
       const match = doctors.find((d) => doctorKeysMatch(d.fullName, row.doctorName));
       row.phone = match?.phone || '';
+      const isChargeEntry = (p) => {
+        const type = String(p?.entryType || '').toLowerCase().trim();
+        if (type === 'charge') return true;
+        const notes = String(p?.notes || '');
+        return notes.startsWith('[CHARGE]') || notes.startsWith('[زيادة]');
+      };
       const paidFromPayments = payments
         .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
-        .filter((p) => String(p.entryType || 'payment') !== 'charge')
+        .filter((p) => !isChargeEntry(p))
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const chargesTotal = payments
         .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
-        .filter((p) => String(p.entryType || '') === 'charge')
+        .filter((p) => isChargeEntry(p))
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const balance = resolveDoctorPaid({
         totalDue: row.totalDue + chargesTotal,

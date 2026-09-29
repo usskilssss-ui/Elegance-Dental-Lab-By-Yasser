@@ -4,10 +4,12 @@
  * Rule:
  * - unpaid cases: always use live DoctorPricing (same as Reports) so price edits apply
  * - paid cases: prefer exit freeze (revenueAmount / salaryAmount) so paid history stays fixed
- * - totalPaid = DoctorPayment ledger if any payments exist for doctor; else sum of cases marked paid
+ * - totalPaid = sum of cases marked paid + DoctorPayment ledger (payments only, not charges)
  * - remaining = max(0, totalDue - totalPaid)
+ * - charges (entryType=charge) add to totalDue, never to totalPaid
  *
- * Never add case-paid flags AND payment ledger together (that double-counts).
+ * Case confirm-payment and account payments are complementary: paying the remaining
+ * via ledger must not wipe earlier case-paid amounts.
  */
 
 function round2(n) {
@@ -61,15 +63,19 @@ function resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments }) {
   const due = round2(totalDue);
   const fromCases = round2(paidFromCases);
   const fromPayments = round2(paidFromPayments);
-  const totalPaid = fromPayments > 0 ? fromPayments : fromCases;
+  const totalPaid = round2(fromCases + fromPayments);
   const remaining = Math.max(0, round2(due - totalPaid));
+  let paidSource = 'none';
+  if (fromCases > 0 && fromPayments > 0) paidSource = 'mixed';
+  else if (fromPayments > 0) paidSource = 'ledger';
+  else if (fromCases > 0) paidSource = 'case-flags';
   return {
     totalDue: due,
     totalPaid,
     remaining,
     paidFromCases: fromCases,
     paidFromPayments: fromPayments,
-    paidSource: fromPayments > 0 ? 'ledger' : 'case-flags',
+    paidSource,
   };
 }
 

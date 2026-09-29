@@ -1,5 +1,12 @@
 const DoctorPayment = require('../models/DoctorPayment');
 
+function isChargeEntry(doc) {
+  const type = String(doc?.entryType || '').toLowerCase().trim();
+  if (type === 'charge') return true;
+  const notes = String(doc?.notes || '');
+  return notes.startsWith('[CHARGE]') || notes.startsWith('[زيادة]');
+}
+
 exports.getAllPayments = async (req, res) => {
   try {
     const { doctor, entryType } = req.query;
@@ -8,11 +15,20 @@ exports.getAllPayments = async (req, res) => {
       // Normalize and find case-insensitive matching if needed, or exact matching
       filter.doctorName = { $regex: new RegExp('^' + doctor.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
     }
-    if (entryType === 'payment' || entryType === 'charge') {
-      filter.entryType = entryType;
-    }
     const payments = await DoctorPayment.find(filter).sort({ paymentDate: -1 });
-    res.status(200).json({ success: true, data: payments });
+    let data = payments;
+    if (entryType === 'payment' || entryType === 'charge') {
+      data = payments.filter((p) =>
+        entryType === 'charge' ? isChargeEntry(p) : !isChargeEntry(p)
+      );
+    }
+    // Ensure clients always see a concrete entryType (repair stripped legacy rows via notes marker)
+    data = data.map((p) => {
+      const obj = typeof p.toObject === 'function' ? p.toObject() : { ...p };
+      obj.entryType = isChargeEntry(obj) ? 'charge' : 'payment';
+      return obj;
+    });
+    res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -30,17 +46,41 @@ exports.addPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount must be greater than zero' });
     }
 
-    const type = entryType === 'charge' ? 'charge' : 'payment';
+    const rawType = String(entryType || 'payment').toLowerCase().trim();
+    if (rawType !== 'payment' && rawType !== 'charge') {
+      return res.status(400).json({ success: false, message: 'entryType must be payment or charge' });
+    }
+    const type = rawType === 'charge' ? 'charge' : 'payment';
+
+    let normalizedNotes = notes || '';
+    if (type === 'charge') {
+      const n = String(normalizedNotes || '').trim();
+      if (!n.startsWith('[CHARGE]') && !n.startsWith('[زيادة]')) {
+        normalizedNotes = n ? `[CHARGE] ${n}` : '[CHARGE]';
+      }
+    }
 
     const payment = await DoctorPayment.create({
       doctorName: normalizedName,
       amount: Number(amount),
       paymentDate: paymentDate || new Date(),
-      notes: notes || '',
+      notes: normalizedNotes,
       entryType: type,
     });
 
-    res.status(201).json({ success: true, data: payment });
+    // Guard: if schema somehow dropped entryType, fail loudly instead of misfiling as payment
+    if (type === 'charge' && String(payment.entryType || '') !== 'charge') {
+      await DoctorPayment.findByIdAndDelete(payment._id);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to persist charge entryType — check DoctorPayment schema deploy',
+      });
+    }
+
+    const data = typeof payment.toObject === 'function' ? payment.toObject() : payment;
+    data.entryType = type;
+
+    res.status(201).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
