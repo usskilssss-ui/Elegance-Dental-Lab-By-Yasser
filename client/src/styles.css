@@ -75,8 +75,9 @@ body.dark-theme {
   --badge-amber-text: #fbbf24;
 }
 
+/* Only apply OS dark preference when the user has not forced light theme */
 @media (prefers-color-scheme: dark) {
-  body:not(.light-theme) {
+  body:not(.light-theme):not(.dark-theme) {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-card: #1e293b;

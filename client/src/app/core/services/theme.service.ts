@@ -29,9 +29,11 @@ export class ThemeService {
     this.isDarkMode.set(isDark);
     if (isDark) {
       document.body.classList.add('dark-theme');
+      document.body.classList.remove('light-theme');
       localStorage.setItem('app-theme', 'dark');
     } else {
       document.body.classList.remove('dark-theme');
+      document.body.classList.add('light-theme');
       localStorage.setItem('app-theme', 'light');
     }
   }
