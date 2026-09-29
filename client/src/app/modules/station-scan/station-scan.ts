@@ -113,6 +113,7 @@ export class StationScanComponent implements OnInit, OnDestroy {
     const session = this.auth.getSession();
     const role = session?.role;
     this.accountName.set(session?.name || '');
+    // Same pill nav as cases / print when the role can open those screens
     this.showReceptionHub.set(role === 'secretary' || role === 'admin');
 
     const meta = role ? ROLE_META[role] : undefined;
@@ -122,8 +123,8 @@ export class StationScanComponent implements OnInit, OnDestroy {
         this.canPickStation.set(true);
         // Admin via reception hub: same chrome as cases/print (not "demo scan")
         this.titleKey.set(role === 'admin' ? 'scan.title.default' : 'scan.title.demo');
-        this.subtitleKey.set(role === 'admin' ? 'scan.subtitle.toDesign' : 'scan.subtitle.demo');
-        this.station.set(role === 'finisher' ? 'finishing' : 'design');
+        this.subtitleKey.set(role === 'admin' ? 'scan.subtitle.toDone' : 'scan.subtitle.demo');
+        this.station.set(role === 'finisher' ? 'finishing' : role === 'admin' ? 'reception' : 'design');
       } else {
         this.unauthorized.set(true);
       }
