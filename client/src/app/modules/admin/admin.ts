@@ -465,6 +465,7 @@ export class Admin implements OnInit, OnDestroy {
   readonly positions = [
     'سكرتير',
     'مدير',
+    'سكان 1',
     'سكان 2',
     'سكان 3',
   ] as const;

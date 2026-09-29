@@ -1,32 +1,43 @@
 <div
-  class="station-scan"
-  [class.hub-layout]="showReceptionHub()"
+  class="station-scan hub-layout"
   [attr.dir]="lang.dir()"
   (click)="focusScanner()"
 >
-  <header class="scan-topbar">
-    <div class="scan-brand">
-      <app-overflow-menu (click)="$event.stopPropagation()"></app-overflow-menu>
-      <div class="scan-brand-text">
-        <strong>Elegance</strong>
-        <span>{{ 'brand.sub' | t }}</span>
-        @if (accountName()) {
-          <span class="scan-account">{{ accountName() }}</span>
-        }
+  <header class="topbar" (click)="$event.stopPropagation()">
+    <div class="topbar-left">
+      <app-overflow-menu></app-overflow-menu>
+      <div class="avatar" aria-label="Elegance Precision Labs Logo">
+        <div class="elegance-logo-container">
+          <svg viewBox="0 0 100 100" fill="none" class="elegance-logo-svg">
+            <path d="M 32,25 C 20,25 15,45 25,68 C 32,82 46,85 48,72 C 44,64 36,48 40,36 C 44,24 52,28 58,26" stroke="url(#logo-grad-scan)" stroke-width="5.5" stroke-linecap="round" />
+            <path d="M 68,25 C 80,25 85,45 75,68 C 68,82 54,85 52,72 C 56,64 64,48 60,36 C 56,24 48,28 42,26" stroke="url(#logo-grad-scan)" stroke-width="5.5" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="logo-grad-scan" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#2563eb" />
+                <stop offset="100%" stop-color="#0d9488" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
       </div>
     </div>
-    <div class="scan-top-actions">
+
+    <div class="topbar-center">
+      <div class="elegance-navbar-brand">
+        <span class="elegance-navbar-dot"></span>
+        <span class="elegance-navbar-title">Elegance</span>
+        <span class="elegance-navbar-dot"></span>
+      </div>
+      <p class="elegance-navbar-sub">{{ 'brand.sub' | t }}</p>
+    </div>
+
+    <div class="topbar-right">
       @if (isAdminUser()) {
-        <a
-          routerLink="/admin"
-          class="hub-back-admin"
-          [attr.title]="'hub.backAdmin' | t"
-          (click)="$event.stopPropagation()"
-        >
+        <a routerLink="/admin" class="hub-back-admin" [attr.title]="'hub.backAdmin' | t">
           {{ 'hub.backAdmin' | t }}
         </a>
       }
-      <button type="button" class="icon-btn scan-theme-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme(); $event.stopPropagation()" [attr.title]="'common.theme' | t">
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.theme' | t" (click)="themeService.toggleTheme()" [attr.title]="'common.theme' | t">
         @if (!themeService.isDarkMode()) {
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -45,7 +56,11 @@
           </svg>
         }
       </button>
-      <button type="button" class="scan-link" (click)="logout(); $event.stopPropagation()">{{ 'scan.exit' | t }}</button>
+      <button type="button" class="icon-btn" [attr.aria-label]="'common.logout' | t" (click)="logout()" [attr.title]="'common.logout' | t">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -75,14 +90,14 @@
         <div class="scan-station-picker" role="group" [attr.aria-label]="'scan.pickStation' | t" (click)="$event.stopPropagation()">
           <span class="scan-station-label">{{ 'scan.pickStation' | t }}</span>
           <div class="scan-station-btns">
+            <button type="button" class="scan-station-btn" [class.active]="station() === 'reception'" (click)="setStation('reception')">
+              {{ 'scan.station.done' | t }}
+            </button>
             <button type="button" class="scan-station-btn" [class.active]="station() === 'design'" (click)="setStation('design')">
               {{ 'scan.station.design' | t }}
             </button>
             <button type="button" class="scan-station-btn" [class.active]="station() === 'finishing'" (click)="setStation('finishing')">
               {{ 'scan.station.finishing' | t }}
-            </button>
-            <button type="button" class="scan-station-btn" [class.active]="station() === 'reception'" (click)="setStation('reception')">
-              {{ 'scan.station.done' | t }}
             </button>
           </div>
         </div>

@@ -149,13 +149,13 @@ body.dark-theme .hub-link:hover,
 
 .scan-main {
   flex: 1;
-  width: min(1100px, 100%);
+  width: min(1200px, 100%);
   margin: 0 auto;
-  padding: 36px 20px 48px;
-  text-align: center;
+  padding: 20px 20px 40px;
+  text-align: start;
 }
 
-/* Match cases / print screens when opened from reception hub */
+/* Match cases / print screens (shared secretary topbar + content rhythm) */
 .station-scan.hub-layout .scan-main {
   width: min(1200px, 100%);
   text-align: start;
