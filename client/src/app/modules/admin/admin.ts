@@ -179,14 +179,12 @@ export class Admin implements OnInit, OnDestroy {
   set reportDoctorFilter(val: string) {
     this._reportDoctorFilter = val;
     if (val) {
-      this.reportYearFilter = '';
-      this.reportMonthFilter = '';
       this.reportSearch = '';
       this.loadCustomPricesForDoctor(val);
     }
   }
 
-  paymentFilter: 'all' | 'paid' | 'unpaid' = 'unpaid';
+  paymentFilter: 'all' | 'paid' | 'unpaid' = 'all';
 
   doctorPricingsMap = new Map<string, any>();
   
@@ -324,6 +322,10 @@ export class Admin implements OnInit, OnDestroy {
   };
   doctorPayments: any[] = [];
   newPaymentAmount: number | null = null;
+  newChargeAmount: number | null = null;
+  newChargeNotes = '';
+  chargeSaving = false;
+  chargeError = '';
   newPaymentNotes = '';
   paymentSaving = false;
   paymentError = '';
@@ -697,10 +699,33 @@ export class Admin implements OnInit, OnDestroy {
       docObj.paidFromCases += paidFromCase;
     });
 
+    // Include doctors who only have ledger entries (charges/payments) in the period view
+    this.doctorPayments.forEach((p) => {
+      const name = this.normalizeDoctorName(p.doctorName || 'غير محدد');
+      const key = this.doctorGroupKey(name);
+      if (!doctorMap.has(key)) {
+        doctorMap.set(key, {
+          doctorName: name,
+          totalCases: 0,
+          totalDue: 0,
+          totalPaid: 0,
+          remaining: 0,
+          paidFromCases: 0,
+        });
+      }
+    });
+
     doctorMap.forEach((docObj, key) => {
-      const paidFromPayments = this.doctorPayments
-        .filter(p => this.doctorGroupKey(p.doctorName) === key)
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+      const ledger = this.doctorPayments.filter(
+        (p) => this.doctorGroupKey(p.doctorName) === key
+      );
+      const paidFromPayments = ledger
+        .filter((p) => String(p.entryType || 'payment') !== 'charge')
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const charges = ledger
+        .filter((p) => String(p.entryType || '') === 'charge')
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      docObj.totalDue += charges;
       // Unified rule: ledger wins if any payments exist; else case-paid flags
       docObj.totalPaid = paidFromPayments > 0 ? paidFromPayments : docObj.paidFromCases;
       docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
@@ -3295,7 +3320,60 @@ export class Admin implements OnInit, OnDestroy {
 
   getDoctorPaymentsList(doctorName: string): any[] {
     const key = this.doctorGroupKey(doctorName);
-    return this.doctorPayments.filter(p => this.doctorGroupKey(p.doctorName) === key);
+    return this.doctorPayments.filter(
+      (p) =>
+        this.doctorGroupKey(p.doctorName) === key &&
+        String(p.entryType || 'payment') !== 'charge'
+    );
+  }
+
+  getDoctorChargesList(doctorName: string): any[] {
+    const key = this.doctorGroupKey(doctorName);
+    return this.doctorPayments.filter(
+      (p) =>
+        this.doctorGroupKey(p.doctorName) === key &&
+        String(p.entryType || '') === 'charge'
+    );
+  }
+
+  addDoctorChargeOnAccount(): void {
+    if (!this.reportDoctorFilter || !this.newChargeAmount || this.newChargeAmount <= 0) return;
+    this.chargeSaving = true;
+    this.chargeError = '';
+
+    this.caseApi
+      .addDoctorPayment(
+        this.reportDoctorFilter,
+        this.newChargeAmount,
+        this.newChargeNotes,
+        undefined,
+        'charge'
+      )
+      .subscribe({
+        next: () => {
+          this.chargeSaving = false;
+          this.newChargeAmount = null;
+          this.newChargeNotes = '';
+          this.loadDoctorPayments();
+        },
+        error: (err) => {
+          this.chargeSaving = false;
+          this.chargeError =
+            'تعذر تسجيل الزيادة على الفاتورة: ' + (err.error?.message || err.message);
+          console.error('Failed to add doctor charge:', err);
+        },
+      });
+  }
+
+  deleteDoctorChargeOnAccount(id: string): void {
+    if (!confirm('هل أنت متأكد من حذف هذه الزيادة على الفاتورة؟')) return;
+    this.caseApi.deleteDoctorPayment(id).subscribe({
+      next: () => this.loadDoctorPayments(),
+      error: (err) => {
+        alert('تعذر حذف الزيادة: ' + (err.error?.message || err.message));
+        console.error('Failed to delete doctor charge:', err);
+      },
+    });
   }
 
   printDoctorReceipt(): void {

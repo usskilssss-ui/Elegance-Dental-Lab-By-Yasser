@@ -667,7 +667,7 @@
             <label>{{ 'common.month' | t }}</label>
             <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
               <option value="">{{ 'common.allMonths' | t }}</option>
-              <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
+              <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ month }}</option>
             </select>
           </div>
           <div class="control-card" *ngIf="!reportDoctorFilter">
@@ -692,6 +692,20 @@
               <option value="all">{{ 'admin.reports.allCases' | t }}</option>
               <option value="paid">{{ 'admin.reports.paid' | t }}</option>
               <option value="unpaid">{{ 'admin.reports.unpaid' | t }}</option>
+            </select>
+          </div>
+          <div class="control-card" *ngIf="reportDoctorFilter">
+            <label>{{ 'common.year' | t }}</label>
+            <select [ngModel]="reportYearFilter" (ngModelChange)="onReportYearChange($event)">
+              <option value="">{{ 'common.allYears' | t }}</option>
+              <option *ngFor="let year of reportYears" [value]="year">{{ year }}</option>
+            </select>
+          </div>
+          <div class="control-card" *ngIf="reportDoctorFilter">
+            <label>{{ 'common.month' | t }}</label>
+            <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
+              <option value="">{{ 'common.allMonths' | t }}</option>
+              <option *ngFor="let month of archiveMonths" [value]="month">{{ month }}</option>
             </select>
           </div>
         </div>
@@ -921,6 +935,81 @@
                   </tr>
                   <tr *ngIf="getDoctorPaymentsList(reportDoctorFilter).length === 0">
                     <td colspan="4" class="payments-empty">{{ 'admin.reports.noPayments' | t }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- زيادات على فاتورة الطبيب (تزيد المستحق) -->
+          <div class="report-table-card report-doctor-payments" style="margin-bottom:24px; padding:20px;">
+            <div class="report-section-title">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:#f59e0b;"><path d="M12 4v16m8-8H4"/></svg>
+                {{ 'admin.reports.chargesTitle' | t }}: {{ reportDoctorFilter }}
+              </div>
+            </div>
+            <p style="margin:0 0 12px;font-size:13px;opacity:.8;">{{ 'admin.reports.chargesHint' | t }}</p>
+
+            <div class="payment-entry-row">
+              <div class="payment-entry-field" style="flex:1;min-width:150px;">
+                <label>{{ 'admin.reports.chargeValue' | t }}</label>
+                <input
+                  type="number"
+                  [(ngModel)]="newChargeAmount"
+                  [attr.placeholder]="'admin.reports.chargeValuePh' | t"
+                />
+              </div>
+              <div class="payment-entry-field" style="flex:2;min-width:250px;">
+                <label>{{ 'admin.reports.chargeNotes' | t }}</label>
+                <input
+                  type="text"
+                  [(ngModel)]="newChargeNotes"
+                  [attr.placeholder]="'admin.reports.chargeNotesPh' | t"
+                />
+              </div>
+              <div>
+                <button
+                  type="button"
+                  class="finish-btn"
+                  style="padding:10px 24px;font-size:14px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;box-shadow:0 4px 12px rgba(245,158,11,0.25);display:flex;align-items:center;gap:6px;"
+                  [disabled]="chargeSaving || !newChargeAmount"
+                  (click)="addDoctorChargeOnAccount()"
+                >
+                  {{ chargeSaving ? ('common.saving' | t) : ('admin.reports.registerCharge' | t) }}
+                </button>
+              </div>
+            </div>
+
+            <p *ngIf="chargeError" style="color:#ef4444;font-size:14px;margin-bottom:12px;">{{ chargeError }}</p>
+
+            <div class="payments-table-wrap">
+              <table class="payments-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'admin.reports.chargeDate' | t }}</th>
+                    <th>{{ 'common.amount' | t }}</th>
+                    <th>{{ 'common.notes' | t }}</th>
+                    <th style="text-align:center;">{{ 'common.action' | t }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of getDoctorChargesList(reportDoctorFilter)">
+                    <td>{{ formatDateEn(p.paymentDate) }}</td>
+                    <td class="payment-amount" style="color:#f59e0b;">+{{ p.amount | number:'1.0-0' }} EGP</td>
+                    <td class="payment-notes">{{ p.notes || '—' }}</td>
+                    <td style="text-align:center;">
+                      <button
+                        type="button"
+                        class="payment-delete-btn"
+                        (click)="deleteDoctorChargeOnAccount(p._id)"
+                      >
+                        {{ 'common.delete' | t }}
+                      </button>
+                    </td>
+                  </tr>
+                  <tr *ngIf="getDoctorChargesList(reportDoctorFilter).length === 0">
+                    <td colspan="4" class="payments-empty">{{ 'admin.reports.noCharges' | t }}</td>
                   </tr>
                 </tbody>
               </table>
