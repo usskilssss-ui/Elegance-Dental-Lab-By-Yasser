@@ -1,5 +1,6 @@
 <div class="app-menu-anchor" (click)="$event.stopPropagation()">
   <button
+    #menuBtn
     type="button"
     class="icon-btn app-menu-btn"
     [attr.aria-label]="'menu.title' | t"
@@ -17,9 +18,10 @@
 
   @if (open()) {
     <div
+      #menuPanel
       class="app-menu-panel"
-      [class.app-menu-panel--rtl]="lang.isArabic()"
       role="menu"
+      [ngStyle]="panelStyle()"
       (click)="$event.stopPropagation()"
     >
       @for (item of items; track item.id) {
