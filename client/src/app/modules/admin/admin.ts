@@ -1189,13 +1189,16 @@ export class Admin implements OnInit, OnDestroy {
     return this.caseBillDisplay(c);
   }
 
-  /** Live doctor price first; fall back to API salary (never stick on stale 0 for try-in). */
+  /** Live doctor price is source of truth for unpaid (incl. Try in = 0). */
   caseBillDisplay(c: AdminCaseRow): number {
-    const live = Number(this.calculateCaseCost(c)) || 0;
-    if (live > 0) return live;
+    const live = Number(this.calculateCaseCost(c));
+    const liveOk = Number.isFinite(live);
+    // Unpaid: never fall back to a stale stored salary (e.g. old zircon price on try-in).
+    if (!c.paid && liveOk) return live;
+    if (liveOk && live > 0) return live;
     const stored = Number(c.salary || 0) || 0;
     if (stored > 0) return stored;
-    return 0;
+    return liveOk ? live : 0;
   }
 
   getSalaryDraft(caseItem: AdminCaseRow): string {
@@ -1355,9 +1358,29 @@ export class Admin implements OnInit, OnDestroy {
     });
   }
 
-  /** Try-in phase labels (including "try in before Zircon") — billed at tryIn unit price. */
+  /**
+   * Try-in phase labels (any casing): "try in before Zircon", "Try in", "TRYIN"...
+   * Not "Emax after try in" — that bills as the final material.
+   */
   private isTryInPart(lowerPart: string): boolean {
-    return lowerPart.includes('try in') || lowerPart.includes('tryin');
+    const s = String(lowerPart || '').toLowerCase();
+    if (/\bafter\s+try\s*in\b|\bafter\s+tray\s*in\b|\bafter\s+tary\s*in\b/.test(s)) {
+      return false;
+    }
+    return /try\s*in|tryin|tray\s*in|tary\s*in/.test(s);
+  }
+
+  /** Align with backend: collapse "try in before X" so zircon/emax keywords cannot win. */
+  private normalizeMaterialPartForPricing(lowerPart: string): string {
+    let lower = String(lowerPart || '').toLowerCase();
+    if (/try\s*in\s+before|tray\s*in\s+before|tary\s*in\s+before/.test(lower)) {
+      return 'try in';
+    }
+    return lower
+      .replace(/\s+after\s+try\s*in/gi, '')
+      .replace(/\s+after\s+tray\s*in/gi, '')
+      .replace(/\s+after\s+tary\s*in/gi, '')
+      .trim();
   }
 
   calculateCaseCost(c: AdminCaseRow): number {
@@ -1443,27 +1466,38 @@ export class Admin implements OnInit, OnDestroy {
             },
           ] as LabMaterial[]);
 
+    const tryInMaterial =
+      materials.find((m) => String(m.key).toLowerCase() === 'tryin') ||
+      ({
+        key: 'tryIn',
+        label: 'Try in',
+        matchKeywords: ['try in before', 'try in', 'tryin', 'tray in before'],
+        defaultPrice: 0,
+      } as LabMaterial);
+
     for (const part of parts) {
       if (isExcludedWorkPart(part)) continue;
       const lowerPart = part.toLowerCase();
       const match = part.match(/\((\d+)\)/);
       const qty = match ? parseInt(match[1], 10) : caseOverallQuantity;
-      // Prefer try-in match so "try in before Zircon" bills as Try in, not Zircon.
+
+      // Try-in ALWAYS wins over embedded material names (zircon/emax), any casing.
       let best: LabMaterial | null = null;
-      let bestLen = -1;
-      for (const m of materials) {
-        for (const kw of m.matchKeywords || []) {
-          const k = String(kw).toLowerCase();
-          if (k && lowerPart.includes(k) && k.length > bestLen) {
-            bestLen = k.length;
-            best = m;
+      if (this.isTryInPart(lowerPart)) {
+        best = tryInMaterial;
+      } else {
+        const normalized = this.normalizeMaterialPartForPricing(lowerPart);
+        let bestLen = -1;
+        for (const m of materials) {
+          if (String(m.key).toLowerCase() === 'tryin') continue;
+          for (const kw of m.matchKeywords || []) {
+            const k = String(kw).toLowerCase();
+            if (k && normalized.includes(k) && k.length > bestLen) {
+              bestLen = k.length;
+              best = m;
+            }
           }
         }
-      }
-      if (!best && this.isTryInPart(lowerPart)) {
-        best =
-          materials.find((m) => String(m.key).toLowerCase() === 'tryin') ||
-          ({ key: 'tryIn', label: 'Try in', matchKeywords: ['try in'], defaultPrice: 0 } as LabMaterial);
       }
       if (!best) continue;
       const unit = priceOf(best.key, Number(best.defaultPrice) || 0);
