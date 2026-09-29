@@ -194,3 +194,65 @@ app-root {
     display: none !important;
   }
 }
+
+/* Secretary original-entry banner — always theme-safe (beats component encapsulation) */
+body.dark-theme .entry-summary-banner,
+.dark-theme .entry-summary-banner {
+  background: rgba(251, 191, 36, 0.14) !important;
+  border: 1px solid rgba(251, 191, 36, 0.35) !important;
+}
+
+body.dark-theme .entry-summary-changed,
+.dark-theme .entry-summary-changed {
+  background: rgba(59, 130, 246, 0.14) !important;
+  border: 1px solid rgba(59, 130, 246, 0.35) !important;
+}
+
+body.dark-theme .entry-summary-work,
+.dark-theme .entry-summary-work {
+  color: #93c5fd !important;
+}
+
+body.dark-theme .entry-summary-specs,
+body.dark-theme .entry-summary-label,
+body.dark-theme .entry-summary-detail,
+body.dark-theme .entry-summary-row span,
+.dark-theme .entry-summary-specs,
+.dark-theme .entry-summary-label,
+.dark-theme .entry-summary-detail,
+.dark-theme .entry-summary-row span {
+  color: #94a3b8 !important;
+}
+
+body.dark-theme .entry-summary-row strong,
+.dark-theme .entry-summary-row strong {
+  color: #f8fafc !important;
+}
+
+/* Language menu — force readable labels in both themes */
+body.dark-theme .app-menu-panel {
+  background: #0f172a !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+
+body.dark-theme .app-menu-item,
+body.dark-theme .app-menu-lang-label,
+body.dark-theme .app-menu-section {
+  color: #f8fafc !important;
+}
+
+body.dark-theme .app-menu-item.active {
+  background: #134e4a !important;
+  color: #5eead4 !important;
+}
+
+body:not(.dark-theme) .app-menu-panel {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+body:not(.dark-theme) .app-menu-item,
+body:not(.dark-theme) .app-menu-lang-label {
+  color: #0f172a !important;
+}
