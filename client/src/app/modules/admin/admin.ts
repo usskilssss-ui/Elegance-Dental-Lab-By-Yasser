@@ -3402,27 +3402,25 @@ export class Admin implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          const saved = res?.data;
-          const savedType = String(saved?.entryType || '').toLowerCase().trim();
-          // If backend ignored entryType, roll back so it never silently becomes a payment
-          if (saved && savedType !== 'charge') {
-            const id = saved._id;
-            if (id) {
-              this.caseApi.deleteDoctorPayment(id).subscribe({
-                next: () => {
-                  this.chargeSaving = false;
-                  this.chargeError =
-                    'السيرفر حفظ الزيادة كدفعة بالخطأ وتم التراجع. حدّث الباك اند ثم أعد المحاولة.';
-                },
-                error: () => {
-                  this.chargeSaving = false;
-                  this.chargeError =
-                    'الزيادة اتسجلت كدفعة بالخطأ. احذفها من جدول الدفعات وحدّث الباك اند.';
-                  this.loadDoctorPayments();
-                },
-              });
-              return;
-            }
+          // HttpClient body may be { success, data } or the document itself
+          const saved = res?.data ?? res;
+          const looksLikeCharge = this.isDoctorLedgerCharge(saved);
+          // Roll back only when neither entryType nor [CHARGE] notes marker survived
+          if (saved?._id && !looksLikeCharge) {
+            this.caseApi.deleteDoctorPayment(saved._id).subscribe({
+              next: () => {
+                this.chargeSaving = false;
+                this.chargeError =
+                  'السيرفر حفظ الزيادة كدفعة بالخطأ وتم التراجع. حدّث الباك اند ثم أعد المحاولة.';
+              },
+              error: () => {
+                this.chargeSaving = false;
+                this.chargeError =
+                  'الزيادة اتسجلت كدفعة بالخطأ. احذفها من جدول الدفعات وحدّث الباك اند.';
+                this.loadDoctorPayments();
+              },
+            });
+            return;
           }
           this.chargeSaving = false;
           this.newChargeAmount = null;
