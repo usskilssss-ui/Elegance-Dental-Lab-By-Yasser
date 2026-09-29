@@ -83,6 +83,7 @@ exports.getFinanceSummary = async (req, res) => {
     if (mode === 'cash') {
       const payments = await DoctorPayment.find({
         paymentDate: { $gte: start, $lte: end },
+        entryType: { $ne: 'charge' },
       }).lean();
       revenue = round2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
       revenueDetail = {
@@ -659,9 +660,14 @@ exports.getDoctorDebts = async (req, res) => {
       row.phone = match?.phone || '';
       const paidFromPayments = payments
         .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
+        .filter((p) => String(p.entryType || 'payment') !== 'charge')
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const chargesTotal = payments
+        .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
+        .filter((p) => String(p.entryType || '') === 'charge')
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const balance = resolveDoctorPaid({
-        totalDue: row.totalDue,
+        totalDue: row.totalDue + chargesTotal,
         paidFromCases: row.paidFromCases,
         paidFromPayments,
       });

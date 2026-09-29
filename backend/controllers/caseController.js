@@ -1050,17 +1050,24 @@ exports.getDoctorAccountSummary = async (req, res) => {
       });
     }
 
-    const paidFromPayments = payments
-      .filter((p) => doctorKeysMatch(p.doctorName, doctorName))
-      .filter((p) => {
-        if (!year && !month) return true;
-        const d = p.paymentDate ? new Date(p.paymentDate) : null;
-        if (!d) return false;
-        if (year && Number.isFinite(year) && d.getFullYear() !== year) return false;
-        if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
-        return true;
-      })
+    const doctorLedger = payments.filter((p) => doctorKeysMatch(p.doctorName, doctorName));
+    const inPeriod = (p) => {
+      if (!year && !month) return true;
+      const d = p.paymentDate ? new Date(p.paymentDate) : null;
+      if (!d) return false;
+      if (year && Number.isFinite(year) && d.getFullYear() !== year) return false;
+      if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
+      return true;
+    };
+    const paidFromPayments = doctorLedger
+      .filter((p) => String(p.entryType || 'payment') !== 'charge')
+      .filter(inPeriod)
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const chargesTotal = doctorLedger
+      .filter((p) => String(p.entryType || '') === 'charge')
+      .filter(inPeriod)
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    totalDue += chargesTotal;
 
     const balance = resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments });
 

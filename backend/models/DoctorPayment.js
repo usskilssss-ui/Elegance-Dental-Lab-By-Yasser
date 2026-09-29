@@ -11,6 +11,13 @@ const DoctorPaymentSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  /** payment = credit against due; charge = add to doctor's invoice/due */
+  entryType: {
+    type: String,
+    enum: ['payment', 'charge'],
+    default: 'payment',
+    index: true,
+  },
   paymentDate: {
     type: Date,
     default: Date.now

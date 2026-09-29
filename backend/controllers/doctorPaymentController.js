@@ -2,11 +2,14 @@ const DoctorPayment = require('../models/DoctorPayment');
 
 exports.getAllPayments = async (req, res) => {
   try {
-    const { doctor } = req.query;
+    const { doctor, entryType } = req.query;
     let filter = {};
     if (doctor) {
       // Normalize and find case-insensitive matching if needed, or exact matching
       filter.doctorName = { $regex: new RegExp('^' + doctor.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
+    }
+    if (entryType === 'payment' || entryType === 'charge') {
+      filter.entryType = entryType;
     }
     const payments = await DoctorPayment.find(filter).sort({ paymentDate: -1 });
     res.status(200).json({ success: true, data: payments });
@@ -17,7 +20,7 @@ exports.getAllPayments = async (req, res) => {
 
 exports.addPayment = async (req, res) => {
   try {
-    const { doctorName, amount, paymentDate, notes } = req.body;
+    const { doctorName, amount, paymentDate, notes, entryType } = req.body;
     if (!doctorName || amount === undefined || amount === null) {
       return res.status(400).json({ success: false, message: 'doctorName and amount are required' });
     }
@@ -27,11 +30,14 @@ exports.addPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount must be greater than zero' });
     }
 
+    const type = entryType === 'charge' ? 'charge' : 'payment';
+
     const payment = await DoctorPayment.create({
       doctorName: normalizedName,
       amount: Number(amount),
       paymentDate: paymentDate || new Date(),
-      notes: notes || ''
+      notes: notes || '',
+      entryType: type,
     });
 
     res.status(201).json({ success: true, data: payment });
