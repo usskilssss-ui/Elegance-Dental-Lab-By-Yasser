@@ -1479,7 +1479,14 @@ export class Secretary implements OnInit, OnDestroy {
         if (evt) scheduleReload();
       }),
       this.socketService.onCaseMovedStage().subscribe((evt) => {
-        if (evt) scheduleReload();
+        if (!evt) return;
+        const patched = this.sharedCases.patchCaseStage(
+          evt.caseId,
+          evt.caseNumber,
+          evt.newStage || ''
+        );
+        // Only full-refetch when the case wasn't in the local list
+        if (!patched) scheduleReload();
       }),
       this.socketService.onCaseCompleted().subscribe((evt) => {
         if (evt) scheduleReload();
@@ -1487,9 +1494,7 @@ export class Secretary implements OnInit, OnDestroy {
       this.socketService.onCaseReleased().subscribe((evt) => {
         if (evt) scheduleReload();
       }),
-      this.socketService.onCaseUpdated().subscribe((evt) => {
-        if (evt) scheduleReload();
-      }),
+      // Ignore case:updated for list reload — moved-stage / completed cover stage changes
       this.socketService.onCaseDeleted().subscribe((evt) => {
         if (evt) scheduleReload();
       })

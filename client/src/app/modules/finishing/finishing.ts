@@ -182,12 +182,19 @@ export class Finishing implements OnInit, OnDestroy {
     const reload = () => this.scheduleBackgroundReload();
     this.socketSubs.push(
       this.socketService.onCaseCreated().subscribe((e) => { if (e) reload(); }),
-      this.socketService.onCaseMovedStage().subscribe((e) => { if (e) reload(); }),
+      this.socketService.onCaseMovedStage().subscribe((e) => {
+        if (!e) return;
+        const patched = this.sharedCasesService.patchCaseStage(
+          e.caseId,
+          e.caseNumber,
+          e.newStage || ''
+        );
+        if (!patched) reload();
+      }),
       this.socketService.onCaseAssigned().subscribe((e) => { if (e) reload(); }),
       this.socketService.onCaseReassigned().subscribe((e) => { if (e) reload(); }),
       this.socketService.onCaseReleased().subscribe((e) => { if (e) reload(); }),
       this.socketService.onCaseCompleted().subscribe((e) => { if (e) reload(); }),
-      this.socketService.onCaseUpdated().subscribe((e) => { if (e) reload(); }),
       this.socketService.onCaseDeleted().subscribe((e) => { if (e) reload(); })
     );
   }

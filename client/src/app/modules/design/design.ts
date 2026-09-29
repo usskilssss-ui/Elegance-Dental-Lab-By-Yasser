@@ -211,12 +211,19 @@ export class CaseDetailsComponent implements OnInit, OnDestroy {
     const scheduleReload = () => this.scheduleBackgroundReload();
     this.socketSubs.push(
       this.socketService.onCaseCreated().subscribe((evt) => { if (evt) scheduleReload(); }),
-      this.socketService.onCaseMovedStage().subscribe((evt) => { if (evt) scheduleReload(); }),
+      this.socketService.onCaseMovedStage().subscribe((evt) => {
+        if (!evt) return;
+        const patched = this.sharedCasesService.patchCaseStage(
+          evt.caseId,
+          evt.caseNumber,
+          evt.newStage || ''
+        );
+        if (!patched) scheduleReload();
+      }),
       this.socketService.onCaseAssigned().subscribe((evt) => { if (evt) scheduleReload(); }),
       this.socketService.onCaseReassigned().subscribe((evt) => { if (evt) scheduleReload(); }),
       this.socketService.onCaseCompleted().subscribe((evt) => { if (evt) scheduleReload(); }),
       this.socketService.onCaseReleased().subscribe((evt) => { if (evt) scheduleReload(); }),
-      this.socketService.onCaseUpdated().subscribe((evt) => { if (evt) scheduleReload(); }),
       this.socketService.onCaseDeleted().subscribe((evt) => { if (evt) scheduleReload(); })
     );
   }
