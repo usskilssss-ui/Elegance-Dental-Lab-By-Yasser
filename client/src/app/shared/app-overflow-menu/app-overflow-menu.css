@@ -30,12 +30,10 @@
   height: 22px;
 }
 
+/* Fixed + JS clamp — stays inside viewport for AR (left) and EN (right) */
 .app-menu-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: auto;
-  z-index: 5000;
+  position: fixed;
+  z-index: 10000;
   width: max-content;
   min-width: 260px;
   max-width: min(340px, calc(100vw - 16px));
@@ -49,14 +47,10 @@
   text-align: start;
   direction: ltr;
   max-height: min(80vh, 560px);
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
   white-space: normal;
   box-sizing: border-box;
-}
-
-.app-menu-panel.app-menu-panel--rtl {
-  left: auto;
-  right: 0;
 }
 
 .app-menu-section {
@@ -150,48 +144,48 @@
   }
 }
 
-:host-context(body.dark-theme) .app-menu-btn {
+body.dark-theme .app-menu-btn {
   background: #1e293b;
   color: #e2e8f0;
 }
 
-:host-context(body.dark-theme) .app-menu-btn:hover {
+body.dark-theme .app-menu-btn:hover {
   background: #334155;
   color: #93c5fd;
 }
 
-:host-context(body.dark-theme) .app-menu-panel {
+body.dark-theme .app-menu-panel {
   background: #0f172a !important;
   border-color: #475569;
   color: #f8fafc !important;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
-:host-context(body.dark-theme) .app-menu-section {
+body.dark-theme .app-menu-section {
   color: #cbd5e1 !important;
 }
 
-:host-context(body.dark-theme) .app-menu-item {
+body.dark-theme .app-menu-item {
   color: #f8fafc !important;
 }
 
-:host-context(body.dark-theme) .app-menu-item:hover,
-:host-context(body.dark-theme) .app-menu-item:focus-visible {
+body.dark-theme .app-menu-item:hover,
+body.dark-theme .app-menu-item:focus-visible {
   background: #1e3a5f;
   color: #93c5fd !important;
 }
 
-:host-context(body.dark-theme) .app-menu-item.active {
+body.dark-theme .app-menu-item.active {
   background: #134e4a;
   color: #5eead4 !important;
 }
 
-:host-context(body.dark-theme) .app-menu-check {
+body.dark-theme .app-menu-check {
   background: #14b8a6;
   color: #042f2e !important;
 }
 
-:host-context(body.dark-theme) .app-menu-sep {
+body.dark-theme .app-menu-sep {
   background: #334155;
 }
 
