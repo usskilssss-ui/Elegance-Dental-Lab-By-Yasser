@@ -612,9 +612,22 @@ export class Admin implements OnInit, OnDestroy {
 
   private matchesReportPeriod(c: AdminCaseRow): boolean {
     if (!this.reportYearFilter && !this.reportMonthFilter) return true;
-    const d = c.exitedAt || c.receivedAt;
+    // Exited-case reports must use exit date only (never create/receive date)
+    const d = c.exitedAt;
     if (!d) return false;
     const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return false;
+    if (this.reportYearFilter && dt.getFullYear() !== Number(this.reportYearFilter)) return false;
+    if (this.reportMonthFilter && dt.getMonth() + 1 !== Number(this.reportMonthFilter)) return false;
+    return true;
+  }
+
+  private matchesPaymentPeriod(p: { paymentDate?: unknown; createdAt?: unknown }): boolean {
+    if (!this.reportYearFilter && !this.reportMonthFilter) return true;
+    const raw = p.paymentDate || p.createdAt;
+    if (!raw) return false;
+    const dt = raw instanceof Date ? raw : new Date(String(raw));
+    if (Number.isNaN(dt.getTime())) return false;
     if (this.reportYearFilter && dt.getFullYear() !== Number(this.reportYearFilter)) return false;
     if (this.reportMonthFilter && dt.getMonth() + 1 !== Number(this.reportMonthFilter)) return false;
     return true;
@@ -703,8 +716,9 @@ export class Admin implements OnInit, OnDestroy {
       docObj.paidFromCases += paidFromCase;
     });
 
-    // Include doctors who only have ledger entries (charges/payments) in the period view
+    // Include doctors who only have ledger entries (charges/payments) in THIS period
     this.doctorPayments.forEach((p) => {
+      if (!this.matchesPaymentPeriod(p)) return;
       const name = this.normalizeDoctorName(p.doctorName || 'غير محدد');
       const key = this.doctorGroupKey(name);
       if (!doctorMap.has(key)) {
@@ -721,7 +735,7 @@ export class Admin implements OnInit, OnDestroy {
 
     doctorMap.forEach((docObj, key) => {
       const ledger = this.doctorPayments.filter(
-        (p) => this.doctorGroupKey(p.doctorName) === key
+        (p) => this.doctorGroupKey(p.doctorName) === key && this.matchesPaymentPeriod(p)
       );
       const paidFromPayments = ledger
         .filter((p) => this.isDoctorLedgerPayment(p))
@@ -735,7 +749,14 @@ export class Admin implements OnInit, OnDestroy {
       docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
     });
 
-    return Array.from(doctorMap.values()).sort((a, b) => a.doctorName.localeCompare(b.doctorName));
+    // Hide empty rows when a period is selected (no cases / payments / charges in that month)
+    const periodScoped = !!(this.reportYearFilter || this.reportMonthFilter);
+    const rows = Array.from(doctorMap.values()).filter((d) => {
+      if (!periodScoped) return true;
+      return d.totalCases > 0 || d.totalDue > 0 || d.totalPaid > 0;
+    });
+
+    return rows.sort((a, b) => a.doctorName.localeCompare(b.doctorName));
   }
 
   get filteredDoctorReportSummaries() {
@@ -1319,7 +1340,8 @@ export class Admin implements OnInit, OnDestroy {
 
   private matchesDashPeriod(c: AdminCaseRow): boolean {
     if (!this.dashYearFilter && !this.dashMonthFilter) return true;
-    const d = c.exitedAt || c.receivedAt;
+    // Material counters for exited cases — exit date only
+    const d = c.exitedAt;
     if (!d) return false;
     const dt = d instanceof Date ? d : new Date(d);
     if (Number.isNaN(dt.getTime())) return false;
@@ -1809,13 +1831,29 @@ export class Admin implements OnInit, OnDestroy {
   private loadMaterialStats(): void {
     const year = this.dashYearFilter ? Number(this.dashYearFilter) : undefined;
     const month = this.dashMonthFilter ? Number(this.dashMonthFilter) : undefined;
+    // Local recompute already scopes by month. Never let an unfiltered API response
+    // overwrite October (etc.) with all-time totals.
     this.caseApi.getExitedMaterialStats({ year, month }).subscribe({
       next: (res) => {
-        const data = (res?.data ?? {}) as Record<string, number>;
+        const data = (res?.data ?? {}) as Record<string, unknown>;
         if (!data || typeof data !== 'object') return;
+        if (year || month) {
+          const apiYear = data['year'] == null ? null : Number(data['year']);
+          const apiMonth = data['month'] == null ? null : Number(data['month']);
+          const yearOk = !year || apiYear === year;
+          const monthOk = !month || apiMonth === month;
+          if (!yearOk || !monthOk) {
+            // Old backend without period echo — keep local filtered counters
+            return;
+          }
+        }
+        const { year: _y, month: _m, totalExitedCases: _t, ...stats } = data as Record<
+          string,
+          number
+        > & { year?: number; month?: number; totalExitedCases?: number };
         this.materialStats = {
           ...this.materialStats,
-          ...data,
+          ...stats,
         };
       },
       error: (err) => {
@@ -1899,9 +1937,7 @@ export class Admin implements OnInit, OnDestroy {
       rawNotes: notes,
       source: 'case',
       exitedAt: this.normalizeDate(
-        (doc['stageTimestamps'] as Record<string, unknown>)?.['exited'] ??
-        (doc['stageTimestamps'] as Record<string, unknown>)?.['completed'] ??
-        doc['updatedAt']
+        (doc['stageTimestamps'] as Record<string, unknown>)?.['exited'] ?? doc['updatedAt']
       ),
     };
   }
@@ -1909,7 +1945,7 @@ export class Admin implements OnInit, OnDestroy {
   private mapFinancialReportRowToAdminCase(row: Record<string, unknown>): AdminCaseRow {
     const receivedAt = this.normalizeDate(row['receivedAt']);
     const dueDate = this.normalizeDate(row['dueDate']);
-    const exitedAt = this.normalizeDate(row['exitedAt'] || row['updatedAt']);
+    const exitedAt = this.normalizeDate(row['exitedAt']);
     const salaryAmountRaw = Number(row['salaryAmount']);
     const pricedRaw = Number(row['pricedAmount']);
     const storedOk = Number.isFinite(salaryAmountRaw) && salaryAmountRaw > 0;
