@@ -269,6 +269,29 @@ export class Secretary implements OnInit, OnDestroy {
   readonly listVisibleCount = signal(40);
   private readonly LIST_PAGE_SIZE = 40;
 
+  /** Dashboard month scope — default = current calendar month */
+  readonly viewYear = signal(new Date().getFullYear());
+  readonly viewMonth = signal(new Date().getMonth() + 1);
+
+  readonly viewYears = computed(() => {
+    const nowY = new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = nowY; y >= nowY - 5; y -= 1) years.push(y);
+    return years;
+  });
+
+  readonly viewMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  /** Past month view = historical read-only dashboard */
+  readonly isHistoricalMonthView = computed(() => {
+    const now = new Date();
+    const curY = now.getFullYear();
+    const curM = now.getMonth() + 1;
+    const y = this.viewYear();
+    const m = this.viewMonth();
+    return y < curY || (y === curY && m < curM);
+  });
+
   /** Same stage buckets as the doctor portal filters/dashboard */
   private caseBucket(
     c: { status: string; currentStage?: string }
@@ -287,15 +310,78 @@ export class Secretary implements OnInit, OnDestroy {
     return c.priority === 'emergency';
   }
 
+  private caseExitDate(c: DentalCase): Date | null {
+    const raw = c.exitedAtRaw || '';
+    if (raw) {
+      const parsed = Date.parse(raw);
+      if (!Number.isNaN(parsed)) return new Date(parsed);
+    }
+    return null;
+  }
+
+  private isExitedInViewMonth(c: DentalCase): boolean {
+    if (c.status !== 'exited') return false;
+    const d = this.caseExitDate(c);
+    if (!d) return false;
+    return d.getFullYear() === this.viewYear() && d.getMonth() + 1 === this.viewMonth();
+  }
+
+  /**
+   * Current month: all active + exited in this month.
+   * Past month: only exited in that month (historical dashboard).
+   */
+  readonly monthScopedCases = computed(() => {
+    const all = this.sharedCases.cases();
+    const historical = this.isHistoricalMonthView();
+    if (historical) {
+      return all.filter((c) => this.isExitedInViewMonth(c));
+    }
+    return all.filter((c) => c.status !== 'exited' || this.isExitedInViewMonth(c));
+  });
+
+  monthName(monthNumber: number): string {
+    const key = `month.${monthNumber}`;
+    const label = this.lang.t(key);
+    return label !== key ? label : String(monthNumber);
+  }
+
+  onViewYearChange(value: string | number): void {
+    const y = Number(value);
+    if (!Number.isFinite(y)) return;
+    this.viewYear.set(y);
+    this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+    if (this.isHistoricalMonthView()) {
+      this.activeFilter.set('exited');
+    }
+  }
+
+  onViewMonthChange(value: string | number): void {
+    const m = Number(value);
+    if (!Number.isFinite(m) || m < 1 || m > 12) return;
+    this.viewMonth.set(m);
+    this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+    if (this.isHistoricalMonthView()) {
+      this.activeFilter.set('exited');
+    }
+  }
+
+  canMutateCase(c: DentalCase): boolean {
+    if (this.isHistoricalMonthView()) return false;
+    return true;
+  }
+
   // عرض الحالات من SharedCasesService مباشرة لتحديث فوري
   readonly cases = computed(() => {
-    const allCases = this.sharedCases.cases();
+    const allCases = this.monthScopedCases();
     const selectedFilter = this.activeFilter();
     const q = this.normalizeSearchText(this.debouncedSearchQuery());
+    const historical = this.isHistoricalMonthView();
 
     let baseCases =
       selectedFilter === 'all'
-        ? allCases.filter((c) => c.status !== 'exited')
+        ? historical
+          ? allCases
+          : allCases.filter((c) => c.status !== 'exited')
         : selectedFilter === 'urgent'
           ? allCases.filter((c) => c.status !== 'exited' && this.isUrgentCase(c))
           : allCases.filter((c) => this.caseBucket(c) === selectedFilter);
@@ -392,7 +478,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   readonly stats = computed(() => {
     this.lang.lang();
-    const allCases = this.sharedCases.cases();
+    const allCases = this.monthScopedCases();
     const pending = allCases.filter((c) => this.caseBucket(c) === 'pending').length;
     const design = allCases.filter((c) => this.caseBucket(c) === 'design').length;
     const finishing = allCases.filter((c) => this.caseBucket(c) === 'finishing').length;
@@ -410,10 +496,11 @@ export class Secretary implements OnInit, OnDestroy {
   });
 
   readonly filterCounts = computed(() => {
-    const allCases = this.sharedCases.cases();
+    const allCases = this.monthScopedCases();
+    const historical = this.isHistoricalMonthView();
     const activeCases = allCases.filter((c) => c.status !== 'exited');
     return {
-      all: activeCases.length,
+      all: historical ? allCases.length : activeCases.length,
       urgent: activeCases.filter((c) => this.isUrgentCase(c)).length,
       pending: allCases.filter((c) => this.caseBucket(c) === 'pending').length,
       design: allCases.filter((c) => this.caseBucket(c) === 'design').length,
@@ -1657,6 +1744,10 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openCreateDialog(type: RequesterType = 'doctor'): void {
+    if (this.isHistoricalMonthView()) {
+      this.flash(this.lang.t('secretary.month.readonly'));
+      return;
+    }
     this.dialogMode.set('create');
     this.createRequesterType = normalizeRequesterType(type);
     this.formRequesterType.set(this.createRequesterType);
@@ -1681,6 +1772,10 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   openEdit(c: any): void {
+    if (!this.canMutateCase(c)) {
+      this.flash(this.lang.t('secretary.month.readonly'));
+      return;
+    }
     if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('edit', c);
       return;
@@ -2355,6 +2450,10 @@ export class Secretary implements OnInit, OnDestroy {
     ev: Event
   ): void {
     ev.stopPropagation();
+    if (this.isHistoricalMonthView()) {
+      this.flash(this.lang.t('secretary.month.readonly'));
+      return;
+    }
     if (this.requesterMenuCaseId === c.id) {
       this.closeRequesterMenu();
       return;
@@ -2576,6 +2675,10 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   confirmDelete(c: any): void {
+    if (!this.canMutateCase(c)) {
+      this.flash(this.lang.t('secretary.month.readonly'));
+      return;
+    }
     if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('delete', c);
       return;
