@@ -263,8 +263,11 @@ export class Admin implements OnInit, OnDestroy {
   financePanelYear = new Date().getFullYear();
   financePanelMonth = new Date().getMonth() + 1;
   financialDoctorSearch = '';
-  reportYearFilter = '';
-  reportMonthFilter = '';
+  reportYearFilter = String(new Date().getFullYear());
+  reportMonthFilter = String(new Date().getMonth() + 1);
+  /** Admin dashboard material counters — default current calendar month */
+  dashYearFilter = String(new Date().getFullYear());
+  dashMonthFilter = String(new Date().getMonth() + 1);
   aiYearFilter = '';
   aiMonthFilter = '';
   archiveYearFilter = String(new Date().getFullYear());
@@ -1305,12 +1308,59 @@ export class Admin implements OnInit, OnDestroy {
     return this.dashboardMetrics.staffEfficiency;
   }
 
-  /** الحالات الخارجة التي فيها جزء قابل للفوترة (مش كلها redo/mod/empty) */
+  /** الحالات الخارجة التي فيها جزء قابل للفوترة (مش كلها redo/mod/empty) — scoped by dashboard month */
   get exitedNonRedoCases(): AdminCaseRow[] {
     return this.adminCases.filter(c => {
       if (String(c.currentStage) !== 'exited') return false;
+      if (!this.matchesDashPeriod(c)) return false;
       return !isWholeCaseExcluded(c.caseType || '');
     });
+  }
+
+  private matchesDashPeriod(c: AdminCaseRow): boolean {
+    if (!this.dashYearFilter && !this.dashMonthFilter) return true;
+    const d = c.exitedAt || c.receivedAt;
+    if (!d) return false;
+    const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return false;
+    if (this.dashYearFilter && dt.getFullYear() !== Number(this.dashYearFilter)) return false;
+    if (this.dashMonthFilter && dt.getMonth() + 1 !== Number(this.dashMonthFilter)) return false;
+    return true;
+  }
+
+  get dashYears(): number[] {
+    const years = new Set<number>();
+    const current = new Date().getFullYear();
+    years.add(current);
+    for (let y = current - 1; y >= current - 5; y -= 1) years.add(y);
+    this.adminCases.forEach((c) => {
+      const d = c.exitedAt || c.receivedAt;
+      if (d) years.add((d instanceof Date ? d : new Date(d)).getFullYear());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }
+
+  get dashMonths(): number[] {
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  }
+
+  onDashYearChange(value: string): void {
+    this.dashYearFilter = value;
+    if (!value) {
+      this.dashMonthFilter = '';
+    } else if (!this.dashMonthFilter) {
+      const now = new Date();
+      this.dashMonthFilter =
+        Number(value) === now.getFullYear() ? String(now.getMonth() + 1) : '1';
+    }
+    this.refreshMaterialStatsFromLocalCases();
+    this.loadMaterialStats();
+  }
+
+  onDashMonthChange(value: string): void {
+    this.dashMonthFilter = value;
+    this.refreshMaterialStatsFromLocalCases();
+    this.loadMaterialStats();
   }
 
   /** عدد وحدات الزيركونيا الإجمالي الخارجة غير الإعادة */
@@ -1757,7 +1807,9 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   private loadMaterialStats(): void {
-    this.caseApi.getExitedMaterialStats().subscribe({
+    const year = this.dashYearFilter ? Number(this.dashYearFilter) : undefined;
+    const month = this.dashMonthFilter ? Number(this.dashMonthFilter) : undefined;
+    this.caseApi.getExitedMaterialStats({ year, month }).subscribe({
       next: (res) => {
         const data = (res?.data ?? {}) as Record<string, number>;
         if (!data || typeof data !== 'object') return;
@@ -2396,15 +2448,7 @@ export class Admin implements OnInit, OnDestroy {
 
   get reportMonthsForSelectedYear(): number[] {
     if (!this.reportYearFilter) return [];
-    const year = Number(this.reportYearFilter);
-    const months = new Set<number>();
-    this.reportCases.forEach((c) => {
-      const d = c.exitedAt || c.receivedAt;
-      if (!d) return;
-      const dt = d instanceof Date ? d : new Date(d);
-      if (dt.getFullYear() === year) months.add(dt.getMonth() + 1);
-    });
-    return Array.from(months).sort((a, b) => a - b);
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   }
 
   onReportYearChange(value: string): void {
@@ -2413,8 +2457,15 @@ export class Admin implements OnInit, OnDestroy {
       this.reportMonthFilter = '';
       return;
     }
+    const now = new Date();
+    if (!this.reportMonthFilter) {
+      this.reportMonthFilter =
+        Number(value) === now.getFullYear() ? String(now.getMonth() + 1) : '1';
+      return;
+    }
     if (!this.reportMonthsForSelectedYear.includes(Number(this.reportMonthFilter))) {
-      this.reportMonthFilter = '';
+      this.reportMonthFilter =
+        Number(value) === now.getFullYear() ? String(now.getMonth() + 1) : '1';
     }
   }
 

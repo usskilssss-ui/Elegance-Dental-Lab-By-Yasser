@@ -97,6 +97,20 @@
           <div class="page-label">{{ 'admin.dashboard.label' | t }}</div>
           <div class="page-title">{{ 'admin.dashboard.title' | t }}</div>
         </div>
+        <div class="page-header-actions month-scope-controls" [attr.aria-label]="'admin.dashboard.monthScope' | t">
+          <div class="control-card" style="margin:0;min-width:120px;">
+            <label>{{ 'common.year' | t }}</label>
+            <select [ngModel]="dashYearFilter" (ngModelChange)="onDashYearChange($event)">
+              <option *ngFor="let year of dashYears" [value]="year">{{ year }}</option>
+            </select>
+          </div>
+          <div class="control-card" style="margin:0;min-width:140px;">
+            <label>{{ 'common.month' | t }}</label>
+            <select [ngModel]="dashMonthFilter" (ngModelChange)="onDashMonthChange($event)">
+              <option *ngFor="let month of dashMonths" [value]="month">{{ monthName(month) }}</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <!-- عدادات الماتريال الخارجة -->
@@ -667,7 +681,7 @@
             <label>{{ 'common.month' | t }}</label>
             <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
               <option value="">{{ 'common.allMonths' | t }}</option>
-              <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ month }}</option>
+              <option *ngFor="let month of reportMonthsForSelectedYear" [value]="month">{{ monthName(month) }}</option>
             </select>
           </div>
           <div class="control-card" *ngIf="!reportDoctorFilter">
@@ -705,7 +719,7 @@
             <label>{{ 'common.month' | t }}</label>
             <select [(ngModel)]="reportMonthFilter" [disabled]="!reportYearFilter">
               <option value="">{{ 'common.allMonths' | t }}</option>
-              <option *ngFor="let month of archiveMonths" [value]="month">{{ month }}</option>
+              <option *ngFor="let month of archiveMonths" [value]="month">{{ monthName(month) }}</option>
             </select>
           </div>
         </div>
