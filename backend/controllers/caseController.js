@@ -785,9 +785,27 @@ function addMaterialUnits(stats, caseType, quantity, targets) {
 /** Live material counters for admin dashboard — always from DB exited cases */
 exports.getExitedMaterialStats = async (req, res) => {
   try {
+    const year = req.query.year ? Number(req.query.year) : null;
+    const month = req.query.month ? Number(req.query.month) : null;
+    const hasYear = Number.isFinite(year);
+    const hasMonth = Number.isFinite(month) && month >= 1 && month <= 12;
+
     const cases = await DentalCase.find({ currentStage: 'exited' })
-      .select('caseType notes referringDoctor')
+      .select('caseType notes referringDoctor stageTimestamps updatedAt createdAt')
       .lean();
+
+    const inPeriod = (doc) => {
+      if (!hasYear && !hasMonth) return true;
+      const raw = doc?.stageTimestamps?.exited || doc?.updatedAt || doc?.createdAt;
+      if (!raw) return false;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return false;
+      if (hasYear && d.getFullYear() !== year) return false;
+      if (hasMonth && d.getMonth() + 1 !== month) return false;
+      return true;
+    };
+
+    const scoped = cases.filter(inPeriod);
 
     const stats = {
       emax: 0,
@@ -808,7 +826,7 @@ exports.getExitedMaterialStats = async (req, res) => {
       jundiPeek: 0,
     };
 
-    for (const doc of cases) {
+    for (const doc of scoped) {
       const meta = parseNotesMeta(doc.notes || '');
       if (isNonBillableCase(doc.caseType, meta)) continue;
 
@@ -829,7 +847,9 @@ exports.getExitedMaterialStats = async (req, res) => {
         ...stats,
         zircon,
         jundiZircon,
-        totalExitedCases: cases.length,
+        totalExitedCases: scoped.length,
+        year: hasYear ? year : null,
+        month: hasMonth ? month : null,
       },
     });
   } catch (error) {

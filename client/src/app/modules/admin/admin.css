@@ -87,6 +87,12 @@ body { background: transparent; }
 }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .page-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.page-header-actions.month-scope-controls {
+  align-items: flex-end;
+}
+.page-header-actions .control-card {
+  box-shadow: none;
+}
 .page-label { font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
 .page-title { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
 .page-title span { font-size: 14px; font-weight: 400; color: var(--color-text-secondary); margin-right: 8px; }

@@ -43,9 +43,13 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/financial-report${query}`);
   }
 
-  /** Admin dashboard material counters (all exited cases in DB) */
-  getExitedMaterialStats(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/material-stats`);
+  /** Admin dashboard material counters (optionally scoped by exit year/month) */
+  getExitedMaterialStats(filters?: { year?: number; month?: number }): Observable<any> {
+    const params: string[] = [];
+    if (filters?.year) params.push(`year=${filters.year}`);
+    if (filters?.month) params.push(`month=${filters.month}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    return this.http.get(`${this.apiUrl}/material-stats${query}`);
   }
 
   /** Doctor portal: read-only حسابات summary for exited billable cases */
