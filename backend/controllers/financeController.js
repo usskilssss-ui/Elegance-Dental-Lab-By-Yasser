@@ -104,7 +104,7 @@ exports.getFinanceSummary = async (req, res) => {
         if (isNonBillableCase(doc.caseType, doc.notes)) continue;
         const d = caseExitDate(doc);
         if (!d || d < start || d > end) continue;
-        billed += Number(doc.salaryAmount) || 0;
+        billed += Number(doc.revenueAmount) || Number(doc.salaryAmount) || 0;
         count += 1;
       }
       revenue = round2(billed);
@@ -673,6 +673,7 @@ exports.getDoctorDebts = async (req, res) => {
       const paidFromPayments = payments
         .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))
         .filter((p) => !isChargeEntry(p))
+        .filter((p) => !p.caseId)
         .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const chargesTotal = payments
         .filter((p) => doctorKeysMatch(p.doctorName, row.doctorName))

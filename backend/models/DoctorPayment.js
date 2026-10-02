@@ -18,6 +18,16 @@ const DoctorPaymentSchema = new mongoose.Schema({
     default: 'payment',
     index: true,
   },
+  /**
+   * Optional link to a case. Linked payments are audit/settlement for that case
+   * and must NOT be double-counted with paymentStatus=paid on the same case.
+   */
+  caseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'DentalCase',
+    default: null,
+    index: true,
+  },
   paymentDate: {
     type: Date,
     default: Date.now

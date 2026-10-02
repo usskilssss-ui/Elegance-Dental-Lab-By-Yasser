@@ -5,7 +5,8 @@ const auditLogSchema = new mongoose.Schema(
     caseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'DentalCase',
-      required: true,
+      required: false,
+      default: null,
       index: true,
     },
     caseNumber: {
@@ -25,6 +26,10 @@ const auditLogSchema = new mongoose.Schema(
         'released',
         'exited',
         'financial_updated',
+        'doctor_payment_added',
+        'doctor_charge_added',
+        'backup_exported',
+        'scan_uploaded',
       ],
       required: true,
       index: true,

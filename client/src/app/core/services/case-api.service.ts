@@ -52,6 +52,11 @@ export class CaseApiService {
     return this.http.get(`${this.apiUrl}/material-stats${query}`);
   }
 
+  /** Active cases overdue / due within 24h */
+  getDeliveryAlerts(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/delivery-alerts`);
+  }
+
   /** Doctor portal: read-only حسابات summary for exited billable cases */
   getDoctorAccountSummary(filters?: {
     doctor?: string;

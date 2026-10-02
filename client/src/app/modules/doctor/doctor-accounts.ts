@@ -23,6 +23,17 @@ export type DoctorAccountCaseRow = {
     lineTotal: number;
   }>;
   paymentStatus: 'paid' | 'unpaid';
+  plyScanUrl?: string | null;
+  plyFileName?: string | null;
+};
+
+export type DoctorLedgerRow = {
+  id: string;
+  amount: number;
+  entryType: 'payment' | 'charge';
+  paymentDate: string | null;
+  notes: string;
+  linkedToCase: boolean;
 };
 
 export type DoctorAccountSummary = {
@@ -32,6 +43,7 @@ export type DoctorAccountSummary = {
   remaining: number;
   caseCount: number;
   cases: DoctorAccountCaseRow[];
+  ledger?: DoctorLedgerRow[];
 };
 
 @Component({

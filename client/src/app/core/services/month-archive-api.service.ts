@@ -91,4 +91,37 @@ export class MonthArchiveApiService {
       headers: new HttpHeaders({ Accept: 'application/zip' }),
     });
   }
+
+  /** Full JSON backup (cases + payments + audits + stock) scoped by exit month */
+  exportJsonBackup(year?: number | null, month?: number | null): Observable<Blob> {
+    const params: string[] = [];
+    if (year) params.push(`year=${year}`);
+    if (month) params.push(`month=${month}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    const url = `${environment.apiUrl}/backup/export${query}`;
+    const token = this.auth.getToken();
+    return from(
+      (async () => {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        const buffer = await res.arrayBuffer();
+        if (!res.ok) {
+          let message = `فشل النسخ الاحتياطي (${res.status})`;
+          try {
+            const parsed = JSON.parse(new TextDecoder().decode(buffer));
+            message = String(parsed?.message || message);
+          } catch {
+            /* ignore */
+          }
+          throw new Error(message);
+        }
+        return new Blob([buffer], { type: 'application/json' });
+      })()
+    );
+  }
 }

@@ -63,6 +63,11 @@ router.post(
 router.get('/financial-report', authorize('admin'), caseController.getFinancialReport);
 router.get('/material-stats', authorize('admin'), caseController.getExitedMaterialStats);
 router.get(
+  '/delivery-alerts',
+  authorize('admin', 'secretary'),
+  caseController.getDeliveryAlerts
+);
+router.get(
   '/doctor-account-summary',
   authorize('doctor', 'student', 'lab', 'admin'),
   caseController.getDoctorAccountSummary
