@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, switchMap, catchError } from 'rxjs';
+import { Subscription, switchMap, catchError, of } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { CaseApiService } from '../../core/services/case-api.service';
 import { SharedCasesService, DentalCase } from '../../core/services/shared-cases.service';
@@ -736,6 +736,19 @@ export class DoctorComponent implements OnInit, OnDestroy {
     return null;
   }
 
+  /** Upload scan/link in the background so Save is not blocked by large PLY files. */
+  private queueScanAttach(caseId: string, ply: File | null, link: string): void {
+    const attach$ = this.attachScanAfterSave(caseId, ply, link);
+    if (!attach$) return;
+    attach$.subscribe({
+      next: () => this.loadCases({ silent: true }),
+      error: () => {
+        this.flash(this.lang.t('doctor.toast.savedScanFail'));
+        this.loadCases({ silent: true });
+      },
+    });
+  }
+
   private maybeOfferPinSetup(): void {
     if (this.isAdminView()) return;
     const session = this.auth.getSession();
@@ -1232,24 +1245,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
     if (isEdit && editId) {
       this.caseApi.updateCase(editId, casePayload).subscribe({
         next: () => {
-          const done = () => {
-            this.saveInProgress.set(false);
-            this.flash(this.lang.t('secretary.toast.savedEdit'));
-            this.loadCases();
-          };
-          const attach$ = this.attachScanAfterSave(editId, ply, plyLink);
-          if (attach$) {
-            attach$.subscribe({
-              next: () => done(),
-              error: () => {
-                this.saveInProgress.set(false);
-                this.flash(this.lang.t('doctor.toast.updatedScanFail'));
-                this.loadCases({ silent: true });
-              },
-            });
-          } else {
-            done();
-          }
+          this.saveInProgress.set(false);
+          this.flash(this.lang.t('secretary.toast.savedEdit'));
+          this.loadCases();
+          this.queueScanAttach(editId, ply, plyLink);
         },
         error: (err) => {
           this.saveInProgress.set(false);
@@ -1266,20 +1265,10 @@ export class DoctorComponent implements OnInit, OnDestroy {
         switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
           const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
-          const print$ = this.http.post(`${this.apiBase}/print/job`, {
+          if (caseId) this.queueScanAttach(caseId, ply, plyLink);
+          return this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
-          });
-          const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
-          if (attach$) {
-            return attach$.pipe(
-              switchMap(() => print$),
-              catchError(() => {
-                this.flash(this.lang.t('doctor.toast.savedScanFail'));
-                return print$;
-              })
-            );
-          }
-          return print$;
+          }).pipe(catchError(() => of(null)));
         })
       )
       .subscribe({
