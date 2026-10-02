@@ -101,8 +101,9 @@ const dentalCaseSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+      // Doctor bill total (NOT employee payroll). Prefer revenueAmount / billSnapshot for finance reads.
     },
-    /** Snapshot of sell amount used for profit (usually = salaryAmount at exit). */
+    /** Canonical billed/sell amount frozen at exit (= doctor invoice). Prefer this over salaryAmount. */
     revenueAmount: {
       type: Number,
       default: 0,

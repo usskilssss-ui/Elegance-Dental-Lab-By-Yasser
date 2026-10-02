@@ -303,7 +303,7 @@ export class Admin implements OnInit, OnDestroy {
   adminCases: AdminCaseRow[] = [];
   reportCases: AdminCaseRow[] = [];
   /** Live DB stats for dashboard counters (all exited cases) */
-  materialStats: Record<string, number> = {
+  materialStats: Record<string, any> = {
     emax: 0,
     regularZircon: 0,
     germanZircon: 0,
@@ -374,6 +374,7 @@ export class Admin implements OnInit, OnDestroy {
     this.loadDoctorPricings();
     this.loadStaffFromApi();
     this.loadLabConfig();
+    this.loadDeliveryAlerts();
     if (this.activeNav === 'staff') {
       this.loadStaffFromApi();
     }
@@ -1015,14 +1016,14 @@ export class Admin implements OnInit, OnDestroy {
 
     if (Number.isFinite(selectedYear) && selectedYear > 0) {
       cases = cases.filter(c => {
-        const d = this.normalizeDate(c.receivedAt) || this.parseDate(c.receivedDateDisplay);
+        const d = this.normalizeDate(c.exitedAt) || this.normalizeDate(c.receivedAt) || this.parseDate(c.receivedDateDisplay);
         return d && d.getFullYear() === selectedYear;
       });
     }
 
     if (Number.isFinite(selectedMonth) && selectedMonth > 0) {
       cases = cases.filter(c => {
-        const d = this.normalizeDate(c.receivedAt) || this.parseDate(c.receivedDateDisplay);
+        const d = this.normalizeDate(c.exitedAt) || this.normalizeDate(c.receivedAt) || this.parseDate(c.receivedDateDisplay);
         return d && d.getMonth() + 1 === selectedMonth;
       });
     }
@@ -1416,6 +1417,44 @@ export class Admin implements OnInit, OnDestroy {
       { label: 'Wax', qty: this.materialStats['wax'] || 0, color: '#a16207' },
       { label: 'Ring', qty: this.materialStats['ring'] || 0, color: '#ef4444' },
     ];
+  }
+
+  get kindNewCount(): number {
+    const k = this.materialStats['kindStats'] as { New?: number } | undefined;
+    return Number(k?.New) || 0;
+  }
+  get kindRedoCount(): number {
+    const k = this.materialStats['kindStats'] as { Redo?: number } | undefined;
+    return Number(k?.Redo) || 0;
+  }
+  get kindModificationCount(): number {
+    const k = this.materialStats['kindStats'] as { Modification?: number } | undefined;
+    return Number(k?.Modification) || 0;
+  }
+
+  deliveryAlerts: {
+    overdue: Array<{ caseNumber: string; patientName: string; doctorName: string; dueDate: string; hoursOverdue: number }>;
+    dueSoon: Array<{ caseNumber: string; patientName: string; doctorName: string; dueDate: string }>;
+    overdueCount: number;
+    dueSoonCount: number;
+  } = { overdue: [], dueSoon: [], overdueCount: 0, dueSoonCount: 0 };
+
+  private loadDeliveryAlerts(): void {
+    this.caseApi.getDeliveryAlerts().subscribe({
+      next: (res) => {
+        const data = res?.data;
+        if (!data) return;
+        this.deliveryAlerts = {
+          overdue: Array.isArray(data.overdue) ? data.overdue : [],
+          dueSoon: Array.isArray(data.dueSoon) ? data.dueSoon : [],
+          overdueCount: Number(data.overdueCount) || 0,
+          dueSoonCount: Number(data.dueSoonCount) || 0,
+        };
+      },
+      error: () => {
+        /* optional endpoint */
+      },
+    });
   }
 
   get financialCostEligibleCases(): AdminCaseRow[] {
@@ -2552,6 +2591,38 @@ export class Admin implements OnInit, OnDestroy {
               ? String(err.error?.message || err.message || 'فشل التحميل')
               : 'فشل التحميل';
         this.archiveError = message;
+      },
+    });
+  }
+
+  downloadJsonBackup(): void {
+    const year = Number(this.archiveYearFilter);
+    const month = Number(this.archiveMonthFilter);
+    if (!year || !month) {
+      this.archiveError = 'اختر السنة والشهر أولاً';
+      return;
+    }
+    this.archiveError = '';
+    this.archiveSuccess = '';
+    this.archiveLoading = true;
+    this.monthArchiveApi.exportJsonBackup(year, month).subscribe({
+      next: (blob) => {
+        this.archiveLoading = false;
+        const filename = `elegance-backup-${year}-${String(month).padStart(2, '0')}.json`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        this.archiveSuccess = `تم تنزيل النسخة الاحتياطية: ${filename}`;
+      },
+      error: (err: unknown) => {
+        this.archiveLoading = false;
+        this.archiveError = err instanceof Error ? err.message : 'فشل النسخ الاحتياطي';
       },
     });
   }

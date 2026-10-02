@@ -98,6 +98,11 @@
                   </div>
                   <p class="da-case-patient">{{ row.patientName }}</p>
                   <p class="da-case-type">{{ row.caseType }}</p>
+                  @if (row.plyScanUrl) {
+                    <p class="da-case-type">
+                      <a [href]="row.plyScanUrl" target="_blank" rel="noopener">{{ row.plyFileName || 'ملف السكان' }}</a>
+                    </p>
+                  }
                   <div class="da-case-pricing">
                     @if (row.lines?.length) {
                       @for (line of row.lines; track line.label + line.quantity) {
@@ -123,6 +128,36 @@
           </ul>
         }
       </section>
+
+      @if (s.ledger?.length) {
+        <section class="da-cases" style="margin-top:36px;" aria-label="Ledger">
+          <div class="da-cases-head">
+            <h2>سجل الدفعات</h2>
+            <p>دفعات وزيادات الحساب (غير المرتبطة بحالة مدفوعة مسبقاً تُحسب في المدفوع)</p>
+          </div>
+          <ul class="da-case-list">
+            @for (row of s.ledger; track row.id) {
+              <li class="da-case-card">
+                <div class="da-case-main">
+                  <div class="da-case-top">
+                    <span class="da-case-num">{{ row.entryType === 'charge' ? 'زيادة' : 'دفعة' }}</span>
+                    @if (row.linkedToCase) {
+                      <span class="da-case-pay is-paid">مرتبطة بحالة</span>
+                    }
+                  </div>
+                  <p class="da-case-type">{{ row.notes || '—' }}</p>
+                  @if (row.paymentDate) {
+                    <p class="da-case-type">{{ row.paymentDate | date:'mediumDate' }}</p>
+                  }
+                </div>
+                <div class="da-case-side">
+                  <span class="da-case-amount">{{ formatMoney(row.amount) }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
 
       <p class="da-footnote">{{ 'doctorPages.accounts.footnote' | t }}</p>
     }

@@ -174,7 +174,7 @@ function buildSummary(cases) {
 async function loadExportPayload(year, month) {
   const filterMonth = Number.isFinite(year) && Number.isFinite(month);
 
-  const [allCases, payments, pricings, users, printJobs] =
+  const [allCases, payments, pricings, users, printJobs, auditLogs] =
     await Promise.all([
       DentalCase.find({})
         .populate('assignedTo', 'fullName role')
@@ -185,11 +185,13 @@ async function loadExportPayload(year, month) {
       DoctorPricing.find({}).sort({ doctorName: 1 }).lean(),
       User.find({}).select('-password').sort({ fullName: 1 }).lean(),
       PrintJob.find({}).sort({ createdAt: -1 }).limit(2000).lean(),
+      AuditLog.find({}).sort({ timestamp: -1 }).limit(8000).lean(),
     ]);
 
   let cases = allCases;
   let filteredPayments = payments;
   let filteredPrint = printJobs;
+  let filteredAudits = auditLogs;
 
   if (filterMonth) {
     cases = allCases.filter((doc) => {
@@ -200,6 +202,11 @@ async function loadExportPayload(year, month) {
     });
     filteredPayments = payments.filter((p) => inMonth(p.paymentDate || p.createdAt, year, month));
     filteredPrint = printJobs.filter((j) => inMonth(j.createdAt, year, month));
+    const caseIdSet = new Set(cases.map((c) => String(c._id)));
+    filteredAudits = auditLogs.filter((a) => {
+      if (a.caseId && caseIdSet.has(String(a.caseId))) return true;
+      return inMonth(a.timestamp || a.createdAt, year, month);
+    });
   }
 
   const caseRows = cases.map((doc) => {
@@ -242,7 +249,7 @@ async function loadExportPayload(year, month) {
     pricings,
     users,
     printJobs: filteredPrint,
-    auditLogs: [],
+    auditLogs: filteredAudits,
     notifications: [],
     summary,
     start: filterMonth ? monthBounds(year, month).start : null,
@@ -618,7 +625,7 @@ exports.closeMonth = async (req, res) => {
     });
 
     if (exitedIds.length) {
-      await AuditLog.deleteMany({ caseId: { $in: exitedIds } });
+      // Keep AuditLog rows for historical accountability (exported in ZIP / backup)
       await Notification.deleteMany({ caseId: { $in: exitedIds } });
     }
 

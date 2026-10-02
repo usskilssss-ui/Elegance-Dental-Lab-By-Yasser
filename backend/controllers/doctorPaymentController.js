@@ -70,6 +70,7 @@ exports.addPayment = async (req, res) => {
       paymentDate: paymentDate || new Date(),
       notes: normalizedNotes,
       entryType: type,
+      caseId: req.body?.caseId || null,
     });
 
     // Force-repair if schema/default left it as payment despite charge intent
@@ -79,6 +80,27 @@ exports.addPayment = async (req, res) => {
         { $set: { entryType: 'charge', notes: normalizedNotes } },
         { new: true }
       );
+    }
+
+    try {
+      const AuditLog = require('../models/AuditLog');
+      await AuditLog.create({
+        caseId: payment.caseId || undefined,
+        caseNumber: payment.caseId ? String(payment.caseId) : 'ACCOUNT',
+        action: type === 'charge' ? 'doctor_charge_added' : 'doctor_payment_added',
+        performedBy: req.user?.id,
+        performedByName: req.user?.fullName || '',
+        details: {
+          newValue: {
+            doctorName: normalizedName,
+            amount: Number(amount),
+            entryType: type,
+            paymentId: String(payment._id),
+          },
+        },
+      });
+    } catch (auditErr) {
+      console.warn('AuditLog for doctor payment failed:', auditErr.message);
     }
 
     if (type === 'charge' && payment && !isChargeEntry(payment)) {

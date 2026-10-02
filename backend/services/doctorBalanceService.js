@@ -1,15 +1,16 @@
 /**
  * Unified doctor balance helpers — one money rule for reports / portal / debts.
  *
- * Rule:
- * - unpaid cases: always use live DoctorPricing (same as Reports) so price edits apply
- * - paid cases: prefer exit freeze (revenueAmount / salaryAmount) so paid history stays fixed
- * - totalPaid = sum of cases marked paid + DoctorPayment ledger (payments only, not charges)
- * - remaining = max(0, totalDue - totalPaid)
- * - charges (entryType=charge) add to totalDue, never to totalPaid
+ * Bill amount:
+ * - Exited cases with a freeze (revenueAmount / billSnapshot / salaryAmount) → use freeze
+ * - Otherwise unpaid preview may use live DoctorPricing
  *
- * Case confirm-payment and account payments are complementary: paying the remaining
- * via ledger must not wipe earlier case-paid amounts.
+ * Paid amount (no double-count):
+ * - paidFromCases = sum of bills for cases with paymentStatus=paid
+ * - paidFromPayments = sum of DoctorPayment ledger rows that are NOT linked to a case
+ *   (case-linked ledger rows are settlement records for already-counted case flags)
+ * - totalPaid = min(totalDue, paidFromCases + paidFromPayments)
+ * - charges (entryType=charge) add to totalDue, never to totalPaid
  */
 
 function round2(n) {
@@ -20,26 +21,36 @@ function isCasePaid(doc) {
   return String(doc?.paymentStatus || 'unpaid') === 'paid';
 }
 
-/**
- * Bill amount for a case.
- * Unpaid → live price (Reports-aligned). Paid → frozen snapshot when present.
- */
-function caseBillAmount(doc, liveBreakdownTotal) {
-  const live = round2(liveBreakdownTotal || 0);
-  if (!isCasePaid(doc) && live > 0) return live;
-  const snapshot = Number(doc?.revenueAmount ?? doc?.salaryAmount ?? 0);
-  if (Number.isFinite(snapshot) && snapshot > 0) return round2(snapshot);
-  return live;
+/** Canonical frozen doctor bill for an exited case. */
+function frozenBillAmount(doc) {
+  const revenue = Number(doc?.revenueAmount);
+  if (Number.isFinite(revenue) && revenue > 0) return round2(revenue);
+  const snap = Number(doc?.billSnapshot?.total);
+  if (Number.isFinite(snap) && snap > 0) return round2(snap);
+  const salary = Number(doc?.salaryAmount);
+  if (Number.isFinite(salary) && salary > 0) return round2(salary);
+  return 0;
 }
 
 /**
- * Prefer frozen bill lines only for paid cases; unpaid always show live unit prices.
+ * Bill amount for a case.
+ * Prefer freeze whenever present (especially after exit); live only as fallback preview.
+ */
+function caseBillAmount(doc, liveBreakdownTotal) {
+  const frozen = frozenBillAmount(doc);
+  if (frozen > 0) return frozen;
+  const live = round2(liveBreakdownTotal || 0);
+  if (live > 0) return live;
+  return 0;
+}
+
+/**
+ * Prefer frozen bill lines when snapshot exists; otherwise live unit prices.
  */
 function caseBillLines(doc, liveBreakdown) {
   const liveLines = Array.isArray(liveBreakdown?.lines) ? liveBreakdown.lines : [];
   const liveUnit = Number(liveBreakdown?.unitPrice) || 0;
   if (
-    isCasePaid(doc) &&
     doc?.billSnapshot &&
     Array.isArray(doc.billSnapshot.lines) &&
     doc.billSnapshot.lines.length
@@ -57,13 +68,14 @@ function caseBillLines(doc, liveBreakdown) {
  * @param {object} opts
  * @param {number} opts.totalDue
  * @param {number} opts.paidFromCases - sum of bill amounts for cases with paymentStatus=paid
- * @param {number} opts.paidFromPayments - sum of DoctorPayment.amount
+ * @param {number} opts.paidFromPayments - sum of UNLINKED DoctorPayment.amount (payments only)
  */
 function resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments }) {
   const due = round2(totalDue);
   const fromCases = round2(paidFromCases);
   const fromPayments = round2(paidFromPayments);
-  const totalPaid = round2(fromCases + fromPayments);
+  // Cap at due so case-flag + duplicate ledger never invents overpayment that hides issues weirdly
+  const totalPaid = round2(Math.min(due, fromCases + fromPayments));
   const remaining = Math.max(0, round2(due - totalPaid));
   let paidSource = 'none';
   if (fromCases > 0 && fromPayments > 0) paidSource = 'mixed';
@@ -79,9 +91,20 @@ function resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments }) {
   };
 }
 
+/** True if a ledger payment should count toward cash-in (not already covered by case paid flag). */
+function isUnallocatedPayment(entry) {
+  if (!entry) return false;
+  if (String(entry.entryType || 'payment') === 'charge') return false;
+  if (entry.caseId) return false;
+  return true;
+}
+
 module.exports = {
   round2,
+  frozenBillAmount,
   caseBillAmount,
   caseBillLines,
   resolveDoctorPaid,
+  isUnallocatedPayment,
+  isCasePaid,
 };

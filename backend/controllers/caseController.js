@@ -28,6 +28,7 @@ const {
   assertCanExit,
   isExitedCase,
 } = require('../services/caseWorkflowService');
+const { parsePartKind } = require('../utils/caseTypeParts');
 const { isClientPortalRole, requesterTypeForRole } = require('../utils/clientRoles');
 const {
   ensureClientAccount,
@@ -826,6 +827,8 @@ exports.getExitedMaterialStats = async (req, res) => {
       jundiPeek: 0,
     };
 
+    const kindStats = { New: 0, Redo: 0, Modification: 0 };
+
     for (const doc of scoped) {
       const meta = parseNotesMeta(doc.notes || '');
       if (isNonBillableCase(doc.caseType, meta)) continue;
@@ -835,6 +838,16 @@ exports.getExitedMaterialStats = async (req, res) => {
       const jundi = isJundiDoctorName(doctorName);
 
       addMaterialUnits(stats, doc.caseType, quantity, { global: true, jundi });
+
+      for (const part of splitNormalizedCaseTypeParts(doc.caseType)) {
+        if (isExcludedWorkPart(part)) continue;
+        const { kind, bare } = parsePartKind(part);
+        const match = bare.match(/\((\d+)\)/);
+        const qty = match ? parseInt(match[1], 10) : quantity;
+        if (kind === 'Redo') kindStats.Redo += qty;
+        else if (kind === 'Modification') kindStats.Modification += qty;
+        else kindStats.New += qty;
+      }
     }
 
     const zircon = stats.regularZircon + stats.germanZircon + stats.titanium + stats.peek;
@@ -847,6 +860,7 @@ exports.getExitedMaterialStats = async (req, res) => {
         ...stats,
         zircon,
         jundiZircon,
+        kindStats,
         totalExitedCases: scoped.length,
         year: hasYear ? year : null,
         month: hasMonth ? month : null,
@@ -856,6 +870,61 @@ exports.getExitedMaterialStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to compute material stats',
+      error: error.message,
+    });
+  }
+};
+
+/** Active cases past / near delivery due date (admin + secretary). */
+exports.getDeliveryAlerts = async (req, res) => {
+  try {
+    const now = new Date();
+    const soonMs = 24 * 60 * 60 * 1000;
+    const cases = await DentalCase.find({
+      currentStage: { $nin: ['exited'] },
+      status: { $ne: 'cancelled' },
+    })
+      .select('caseNumber patientName caseType currentStage dueDate notes priority createdAt')
+      .lean();
+
+    const overdue = [];
+    const dueSoon = [];
+    for (const doc of cases) {
+      const meta = parseNotesMeta(doc.notes || '');
+      let due = doc.dueDate ? new Date(doc.dueDate) : null;
+      if ((!due || Number.isNaN(due.getTime())) && meta.deliveryDate) {
+        due = new Date(String(meta.deliveryDate));
+      }
+      if (!due || Number.isNaN(due.getTime())) continue;
+      const row = {
+        id: String(doc._id),
+        caseNumber: String(doc.caseNumber || ''),
+        patientName: String(doc.patientName || ''),
+        doctorName: String(meta.doctor || meta.doctorName || doc.referringDoctor || ''),
+        currentStage: String(doc.currentStage || ''),
+        dueDate: due.toISOString(),
+        priority: String(doc.priority || 'normal'),
+        hoursOverdue: Math.round((now.getTime() - due.getTime()) / 3600000),
+      };
+      if (due.getTime() < now.getTime()) overdue.push(row);
+      else if (due.getTime() - now.getTime() <= soonMs) dueSoon.push(row);
+    }
+    overdue.sort((a, b) => b.hoursOverdue - a.hoursOverdue);
+    dueSoon.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overdue,
+        dueSoon,
+        overdueCount: overdue.length,
+        dueSoonCount: dueSoon.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to compute delivery alerts',
       error: error.message,
     });
   }
@@ -874,11 +943,12 @@ exports.getFinancialReport = async (req, res) => {
     const cases = await DentalCase.find(filter)
       .populate('assignedTo', 'fullName')
       .populate('createdBy', 'fullName role')
-      .sort({ createdAt: -1 });
+      .sort({ 'stageTimestamps.exited': -1, createdAt: -1 });
 
     const pricings = await DoctorPricing.find().lean();
     const materials = await loadActiveMaterials();
     const labDefaults = materialsToDefaultPrices(materials);
+    const { frozenBillAmount } = require('../services/doctorBalanceService');
 
     const rows = cases
       .map((doc) => {
@@ -894,8 +964,13 @@ exports.getFinancialReport = async (req, res) => {
         const doctorName = String(doctorNameRaw).trim() || 'غير محدد';
 
         const createdAt = doc.createdAt ? new Date(doc.createdAt) : new Date();
+        const exitedAt = doc.stageTimestamps?.exited
+          ? new Date(doc.stageTimestamps.exited)
+          : doc.updatedAt
+            ? new Date(doc.updatedAt)
+            : null;
         const doctorPrices = mergePricesForDoctor(pricings, doctorName);
-        const billedAmount = calculateCaseCost(
+        const livePricedAmount = calculateCaseCost(
           doc.caseType,
           notesMeta,
           doctorPrices,
@@ -903,13 +978,10 @@ exports.getFinancialReport = async (req, res) => {
           labDefaults
         );
         const storedSalary = Number(doc.salaryAmount || 0);
+        const frozen = frozenBillAmount(doc);
+        // Prefer freeze; live only as preview when nothing frozen yet
+        const salaryAmount = frozen > 0 ? frozen : livePricedAmount > 0 ? livePricedAmount : storedSalary;
         const payment = String(doc.paymentStatus || 'unpaid');
-        const salaryAmount =
-          billedAmount > 0
-            ? billedAmount
-            : Number.isFinite(storedSalary)
-              ? storedSalary
-              : 0;
 
         return {
           id: String(doc._id),
@@ -920,20 +992,22 @@ exports.getFinancialReport = async (req, res) => {
           assignedTo: doc.assignedTo ? String(doc.assignedTo.fullName || '') : null,
           currentStage: String(doc.currentStage || ''),
           salaryAmount,
-          pricedAmount: billedAmount,
+          billedAmount: salaryAmount,
+          pricedAmount: livePricedAmount,
           storedSalaryAmount: Number.isFinite(storedSalary) ? storedSalary : 0,
+          revenueAmount: Number(doc.revenueAmount) || 0,
           paymentStatus: payment === 'paid' ? 'paid' : 'unpaid',
           paidAt: doc.paidAt || null,
           receivedAt: createdAt,
           receivedDateDisplay: createdAt.toISOString(),
           dueDate: doc.dueDate || null,
           notes: doc.notes || '',
-          exitedAt: doc.stageTimestamps?.exited || doc.updatedAt || null,
+          exitedAt,
         };
       })
       .filter(Boolean)
       .filter((row) => {
-        const rowDate = new Date(row.receivedAt);
+        const rowDate = row.exitedAt ? new Date(row.exitedAt) : new Date(row.receivedAt);
         if (year && Number(year) !== rowDate.getFullYear()) return false;
         if (month && Number(month) !== rowDate.getMonth() + 1) return false;
         if (doctor && !row.doctorName.toLowerCase().includes(String(doctor).toLowerCase().trim()))
@@ -974,7 +1048,7 @@ exports.getFinancialReport = async (req, res) => {
 /**
  * Read-only account summary for a doctor portal (exited billable cases + pricing).
  * Doctor: always self (req.user.fullName). Admin: ?doctor= (same name as ?as=).
- * Optional ?year=&month= filter by case createdAt.
+ * Optional ?year=&month= filter by case exit date (stageTimestamps.exited).
  */
 exports.getDoctorAccountSummary = async (req, res) => {
   try {
@@ -1005,7 +1079,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const [cases, pricings, payments] = await Promise.all([
       DentalCase.find({ currentStage: 'exited' })
         .select(
-          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps'
+          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps plyScanPath plyFileName'
         )
         .sort({ createdAt: -1 })
         .lean(),
@@ -1070,6 +1144,15 @@ exports.getDoctorAccountSummary = async (req, res) => {
         lines,
         paymentStatus,
         salaryAmount: Number.isFinite(salaryAmount) ? salaryAmount : 0,
+        billedAmount: amount,
+        plyScanPath: doc.plyScanPath || meta.plyScanPath || null,
+        plyFileName: doc.plyFileName || meta.plyFileName || null,
+        plyScanUrl: (() => {
+          const path = doc.plyScanPath || meta.plyScanPath || meta.plyScanUrl || null;
+          if (!path) return null;
+          if (String(path).startsWith('http')) return String(path);
+          return String(path).startsWith('/') ? String(path) : `/uploads/${String(path).replace(/^\/+/, '')}`;
+        })(),
         receivedAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
         exitedAt: exitedAt.toISOString(),
       });
@@ -1092,6 +1175,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
     };
     const paidFromPayments = doctorLedger
       .filter((p) => !isChargeEntry(p))
+      .filter((p) => !p.caseId)
       .filter(inPeriod)
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const chargesTotal = doctorLedger
@@ -1101,6 +1185,23 @@ exports.getDoctorAccountSummary = async (req, res) => {
     totalDue += chargesTotal;
 
     const balance = resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments });
+
+    const ledger = doctorLedger
+      .filter(inPeriod)
+      .map((p) => ({
+        id: String(p._id),
+        amount: Number(p.amount) || 0,
+        entryType: isChargeEntry(p) ? 'charge' : 'payment',
+        paymentDate: p.paymentDate || null,
+        notes: String(p.notes || ''),
+        caseId: p.caseId ? String(p.caseId) : null,
+        linkedToCase: !!p.caseId,
+      }))
+      .sort((a, b) => {
+        const da = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
+        const db = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
+        return db - da;
+      });
 
     res.status(200).json({
       success: true,
@@ -1115,6 +1216,7 @@ exports.getDoctorAccountSummary = async (req, res) => {
         paidSource: balance.paidSource,
         caseCount: billableCases.length,
         cases: billableCases,
+        ledger,
         filters: {
           year: year && Number.isFinite(year) ? year : null,
           month: month && Number.isFinite(month) ? month : null,
@@ -2555,6 +2657,22 @@ exports.updateCaseFinancials = async (req, res) => {
         return res.status(400).json({ message: 'salaryAmount must be a non-negative number' });
       }
       dentalCase.salaryAmount = parsedSalary;
+      dentalCase.revenueAmount = parsedSalary;
+      if (dentalCase.billSnapshot && typeof dentalCase.billSnapshot === 'object') {
+        dentalCase.billSnapshot = {
+          ...dentalCase.billSnapshot,
+          total: parsedSalary,
+          pricedAt: new Date(),
+        };
+      } else {
+        dentalCase.billSnapshot = {
+          total: parsedSalary,
+          pricedAt: new Date(),
+          priceSource: 'manual',
+        };
+      }
+      const cogs = Number(dentalCase.materialCost) || 0;
+      dentalCase.caseProfit = parsedSalary - cogs;
     }
 
     if (paymentStatus !== undefined) {
@@ -2574,6 +2692,41 @@ exports.updateCaseFinancials = async (req, res) => {
 
     await dentalCase.save();
 
+    // When marking paid, write a case-linked ledger row so cash history exists
+    // without double-counting (linked rows are excluded from unallocated paid sum).
+    if (paymentStatus === 'paid') {
+      try {
+        const notesMeta = parseNotesMeta(dentalCase.notes || '');
+        const doctorName =
+          String(
+            notesMeta.doctor ||
+              notesMeta.doctorName ||
+              dentalCase.referringDoctor ||
+              ''
+          ).trim() || 'غير محدد';
+        const { frozenBillAmount } = require('../services/doctorBalanceService');
+        const amount = frozenBillAmount(dentalCase) || Number(dentalCase.salaryAmount) || 0;
+        if (amount > 0 && doctorName) {
+          const existing = await DoctorPayment.findOne({
+            caseId: dentalCase._id,
+            entryType: 'payment',
+          }).lean();
+          if (!existing) {
+            await DoctorPayment.create({
+              doctorName,
+              amount,
+              entryType: 'payment',
+              caseId: dentalCase._id,
+              paymentDate: dentalCase.paidAt || new Date(),
+              notes: `تسوية حالة ${dentalCase.caseNumber || dentalCase._id}`,
+            });
+          }
+        }
+      } catch (ledgerErr) {
+        console.warn('Linked DoctorPayment create failed:', ledgerErr.message);
+      }
+    }
+
     await AuditLog.create({
       caseId: dentalCase._id,
       caseNumber: dentalCase.caseNumber,
@@ -2583,6 +2736,8 @@ exports.updateCaseFinancials = async (req, res) => {
       details: {
         newValue: {
           salaryAmount: dentalCase.salaryAmount,
+          revenueAmount: dentalCase.revenueAmount,
+          billedAmount: dentalCase.revenueAmount || dentalCase.salaryAmount,
           paymentStatus: dentalCase.paymentStatus,
         },
       },
