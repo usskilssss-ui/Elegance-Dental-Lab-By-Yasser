@@ -2200,6 +2200,24 @@ export class Secretary implements OnInit, OnDestroy {
     return null;
   }
 
+  /** Upload scan/link in the background so Save is not blocked by large PLY files. */
+  private queueScanAttach(caseId: string, ply: File | null, link: string): void {
+    const attach$ = this.attachScanAfterSave(caseId, ply, link);
+    if (!attach$) return;
+    attach$.subscribe({
+      next: () => this.reloadCasesFromBackend(),
+      error: (err: unknown) => {
+        const detail = this.formatCaseApiError(err);
+        this.flash(
+          detail
+            ? this.lang.t('secretary.toast.savedButScanFailDetail').replace('{detail}', detail)
+            : this.lang.t('secretary.toast.savedButScanFail')
+        );
+        this.reloadCasesFromBackend();
+      },
+    });
+  }
+
   save(): void {
     const d = this.formDraft;
     const existing =
@@ -2335,23 +2353,12 @@ export class Secretary implements OnInit, OnDestroy {
             if (res?.accountEnsure?.action === 'created') createdAccount = true;
             const caseNumber = String(res?.case?.caseNumber ?? '');
             const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
-            const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
-            if (skipPrint) {
-              if (attach$) {
-                return attach$.pipe(catchError(() => of(null)));
-              }
-              return of(null);
-            }
-            const print$ = this.http.post(`${this.apiBase}/print/job`, {
+            // Don't block save on large PLY upload — attach in background.
+            if (caseId) this.queueScanAttach(caseId, ply, plyLink);
+            if (skipPrint) return of(null);
+            return this.http.post(`${this.apiBase}/print/job`, {
               printData: buildPrintData(printDraft, caseNumber),
             });
-            if (attach$) {
-              return attach$.pipe(
-                switchMap(() => print$),
-                catchError(() => print$)
-              );
-            }
-            return print$;
           })
         )
         .subscribe({
@@ -2390,32 +2397,13 @@ export class Secretary implements OnInit, OnDestroy {
         )
         .subscribe({
         next: () => {
-          const done = () => {
-            this.saveInProgress.set(false);
-            this.flash(this.lang.t('secretary.toast.savedEdit'));
-            this.loadAccountDoctors();
-            this.closeDialog();
-            this.reloadCasesFromBackend();
-          };
-          const attach$ = this.attachScanAfterSave(this.editingId!, ply, plyLink);
-          if (attach$) {
-            attach$.subscribe({
-              next: () => done(),
-              error: (err: unknown) => {
-                this.saveInProgress.set(false);
-                const detail = this.formatCaseApiError(err);
-                this.flash(
-                  detail
-                    ? this.lang.t('secretary.toast.savedButScanFailDetail').replace('{detail}', detail)
-                    : this.lang.t('secretary.toast.savedButScanFail')
-                );
-                this.closeDialog();
-                this.reloadCasesFromBackend();
-              },
-            });
-          } else {
-            done();
-          }
+          const editId = this.editingId!;
+          this.saveInProgress.set(false);
+          this.flash(this.lang.t('secretary.toast.savedEdit'));
+          this.loadAccountDoctors();
+          this.closeDialog();
+          this.reloadCasesFromBackend();
+          this.queueScanAttach(editId, ply, plyLink);
         },
         error: (err: unknown) => {
           this.saveInProgress.set(false);

@@ -13,7 +13,7 @@ import {
   formatPrintDate,
   formatWorkTypeForPrint,
 } from '../../core/utils/print-job.util';
-import { Subscription, catchError, switchMap } from 'rxjs';
+import { Subscription, catchError, switchMap, of } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { SocketService } from '../../core/services/socket.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -263,6 +263,19 @@ export class EntryComponent implements OnInit, OnDestroy {
     if (ply) return this.caseApi.uploadCasePly(caseId, ply);
     if (link) return this.caseApi.setCasePlyLink(caseId, link);
     return null;
+  }
+
+  /** Upload scan/link in the background so Save is not blocked by large PLY files. */
+  private queueScanAttach(caseId: string, ply: File | null, link: string): void {
+    const attach$ = this.attachScanAfterSave(caseId, ply, link);
+    if (!attach$) return;
+    attach$.subscribe({
+      next: () => this.loadTodayJobs(),
+      error: () => {
+        this.flash(this.lang.t('entry.toast.saveFail'));
+        this.loadTodayJobs();
+      },
+    });
   }
 
   onDoctorInputChange(): void {
@@ -631,17 +644,10 @@ export class EntryComponent implements OnInit, OnDestroy {
         switchMap((res: { case?: { caseNumber?: string; _id?: string; id?: string } }) => {
           const caseNumber = String(res?.case?.caseNumber ?? '');
           const caseId = String(res?.case?._id ?? res?.case?.id ?? '');
-          const print$ = this.http.post(`${this.apiBase}/print/job`, {
+          if (caseId) this.queueScanAttach(caseId, ply, plyLink);
+          return this.http.post(`${this.apiBase}/print/job`, {
             printData: buildPrintData(draft, caseNumber),
-          });
-          const attach$ = caseId ? this.attachScanAfterSave(caseId, ply, plyLink) : null;
-          if (attach$) {
-            return attach$.pipe(
-              switchMap(() => print$),
-              catchError(() => print$)
-            );
-          }
-          return print$;
+          }).pipe(catchError(() => of(null)));
         })
       )
       .subscribe({
