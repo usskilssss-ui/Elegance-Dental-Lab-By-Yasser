@@ -5,6 +5,7 @@
  * Temporary: SCANNER1_ALLOW_STAGE_SKIP (default true) lets scanner1 complete
  * from any non-exited stage (new / design / finish / …) without walking the path.
  * Set env SCANNER1_ALLOW_STAGE_SKIP=false to restore strict order later.
+ * railway-deploy-stamp: 2026-10-04 scanner1-complete-any-stage
  */
 
 const STAGE_ORDER = [
