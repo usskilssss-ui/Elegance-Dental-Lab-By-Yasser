@@ -63,6 +63,11 @@ if (!SERVER_URL || !EMAIL || !PASSWORD) {
 let authToken = '';
 let authRole = '';
 let busy = false;
+/** Queue one pending code while a scan request is in-flight (never drop as "skipped"). */
+let pendingCode = '';
+let lastAcceptedCode = '';
+let lastAcceptedAt = 0;
+const DEDUPE_MS = 1200;
 const MIN_CODE_LEN = 6;
 const LOG_FILE = path.join(path.dirname(configPath), 'scan-agent.log');
 
@@ -190,21 +195,35 @@ async function ensureAuth() {
   if (!authToken) await login();
 }
 
-async function scanCode(rawCode) {
-  const code = String(rawCode || '')
+function normalizeScanInput(rawCode) {
+  return String(rawCode || '')
     .replace(/[\r\n\t]+/g, '')
     .replace(/[\u064B-\u065F\u0670\u200e\u200f\u202a-\u202e\ufeff]/g, '')
     .trim();
+}
+
+async function scanCode(rawCode) {
+  const code = normalizeScanInput(rawCode);
   if (!code) return { ok: false, message: 'Empty code' };
   if (code.length < MIN_CODE_LEN) {
     console.log(`⏭️  Ignored short code: "${code}"`);
     return { ok: false, message: 'Short code' };
   }
-  if (busy) {
-    console.log(`⏭️  Busy — skipped: ${code}`);
-    return { ok: false, message: 'Busy' };
+
+  // Same barcode from dual hooks / double Enter within ~1.2s → ignore duplicate
+  const now = Date.now();
+  if (code === lastAcceptedCode && now - lastAcceptedAt < DEDUPE_MS) {
+    return { ok: true, message: 'Duplicate ignored', deduped: true };
   }
 
+  if (busy) {
+    // Keep latest pending — process after current request finishes (no "skipped")
+    pendingCode = code;
+    return { ok: false, message: 'Queued' };
+  }
+
+  lastAcceptedCode = code;
+  lastAcceptedAt = now;
   busy = true;
   say(`\n📷 Scan: ${code}`);
   try {
@@ -248,6 +267,13 @@ async function scanCode(rawCode) {
     return { ok: false, message: err.message };
   } finally {
     busy = false;
+    const next = pendingCode;
+    pendingCode = '';
+    if (next && next !== code) {
+      setImmediate(() => {
+        void scanCode(next);
+      });
+    }
   }
 }
 
@@ -548,8 +574,13 @@ async function main() {
     loginOnce().catch((err) => say(`⚠️  Re-login failed: ${err.message}`));
   }, TOKEN_REFRESH_MS);
 
+  // Prefer US-layout hook alone — running both fires the same barcode twice
+  // and used to log "Busy — skipped" while dropping the real scan.
   const usHookOk = startUsLayoutBarcodeHook();
-  const npmHookOk = startGlobalBarcodeListener();
+  const npmHookOk = usHookOk ? false : startGlobalBarcodeListener();
+  if (usHookOk) {
+    say('🎧 Using US-layout hook only (secondary listener off — avoids duplicate skip)');
+  }
   const backgroundOk = usHookOk || npmHookOk;
   startStdinFallback();
 
