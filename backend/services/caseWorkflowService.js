@@ -1,6 +1,10 @@
 /**
  * Strict case workflow rules — forward-only stages, exit only after completed.
  * Enabled stages come from AppSettings.workflow (lab-configurable).
+ *
+ * Temporary: SCANNER1_ALLOW_STAGE_SKIP (default true) lets scanner1 complete
+ * from any non-exited stage (new / design / finish / …) without walking the path.
+ * Set env SCANNER1_ALLOW_STAGE_SKIP=false to restore strict order later.
  */
 
 const STAGE_ORDER = [
@@ -12,6 +16,11 @@ const STAGE_ORDER = [
   'completed',
   'exited',
 ];
+
+function scanner1SkipEnabled() {
+  const v = String(process.env.SCANNER1_ALLOW_STAGE_SKIP ?? 'true').toLowerCase().trim();
+  return v !== '0' && v !== 'false' && v !== 'no' && v !== 'off';
+}
 
 let workflowCache = {
   enabledStages: [...STAGE_ORDER],
@@ -163,6 +172,13 @@ function buildStationAllowedFrom() {
   const receptionFrom = new Set(['completed']);
   if (enabled.has('finishing')) receptionFrom.add('finishing');
 
+  // Temporary lab mode: scanner1 (منتهية) may complete from any open stage
+  if (scanner1SkipEnabled()) {
+    for (const s of STAGE_ORDER) {
+      if (s !== 'exited') receptionFrom.add(s);
+    }
+  }
+
   return {
     design: designFrom,
     finishing: finishingFrom,
@@ -186,6 +202,16 @@ function assertStationTransition(station, fromRaw, targetStage) {
   if (from === targetStage) {
     return { ok: true, same: true };
   }
+
+  // Scanner1 temporary skip: jump straight to completed without intermediate gates
+  if (
+    station === 'reception' &&
+    normalizeStage(targetStage) === 'completed' &&
+    scanner1SkipEnabled()
+  ) {
+    return { ok: true, same: false, skipped: true };
+  }
+
   return assertForwardTransition(from, targetStage);
 }
 
@@ -240,4 +266,5 @@ module.exports = {
   setWorkflowConfig,
   getWorkflowConfig,
   isStageEnabled,
+  scanner1SkipEnabled,
 };
