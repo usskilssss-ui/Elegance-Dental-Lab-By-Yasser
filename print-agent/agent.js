@@ -216,8 +216,13 @@ function isPrinterIssueError(message) {
   return /printer|offline|not ready|not found|spooler/i.test(String(message || ''));
 }
 
+/** Jobs we already decided to print this process (set BEFORE any await) */
+const startedIds = new Set();
+/** Serialize SumatraPDF — concurrent prints jam the HP P1102 spooler */
+let printPdfChain = Promise.resolve();
+
 function isInPipeline(id) {
-  return queuedIds.has(id) || currentJobId === id;
+  return queuedIds.has(id) || currentJobId === id || startedIds.has(id);
 }
 
 /**
@@ -232,14 +237,14 @@ function enqueueJob(job, source, opts = {}) {
     return false;
   }
 
-  if (isInPipeline(id)) {
+  // Critical: once printed successfully this session, NEVER reprint —
+  // even if a catch-up poll still sees the job as pending/printing (race before done sync).
+  if (completedIds.has(id) || startedIds.has(id)) {
+    console.log(`⏭️  Skip ${id} (already printed/started this session, via ${source})`);
     return false;
   }
 
-  // Critical: once printed successfully this session, NEVER reprint —
-  // even if a catch-up poll still sees the job as pending/printing (race before done sync).
-  if (completedIds.has(id)) {
-    console.log(`⏭️  Skip ${id} (already printed this session, via ${source})`);
+  if (isInPipeline(id)) {
     return false;
   }
 
@@ -420,11 +425,14 @@ async function processQueue() {
     queuedIds.delete(job.jobId);
     currentJobId = job.jobId;
 
-    if (completedIds.has(job.jobId)) {
+    if (completedIds.has(job.jobId) || startedIds.has(job.jobId)) {
       console.log(`⏭️  Skip processing ${job.jobId} — already printed this session`);
       currentJobId = null;
       continue;
     }
+
+    // Mark BEFORE any await so a second socket event cannot start a duplicate print
+    startedIds.add(job.jobId);
 
     console.log(`\n📄 Processing print job: ${job.jobId}`);
     console.log(`   Patient: ${job.printData.patient} | Doctor: ${job.printData.doctor}`);
@@ -445,7 +453,12 @@ async function processQueue() {
       console.log(`   ✅ PDF generated in ${Date.now() - t0}ms: ${pdfPath}`);
 
       console.log(`   🖨️  Sending PDF to printer [${PRINTER_NAME}]...`);
-      await withTimeout(printPdf(pdfPath), 20000, 'printPdf');
+      // One Sumatra at a time — parallel prints jam the P1102 and nothing comes out
+      await new Promise((resolve, reject) => {
+        printPdfChain = printPdfChain
+          .then(() => withTimeout(printPdf(pdfPath), 20000, 'printPdf'))
+          .then(resolve, reject);
+      });
       console.log(`   📤 Sent to Windows spooler [${PRINTER_NAME}]`);
 
       const confirm = await waitForPrintConfirmation(PRINTER_NAME, new Set());
@@ -463,6 +476,8 @@ async function processQueue() {
         console.warn('   ⚠️  Ignoring failure after local completion');
       } else if (isPrinterIssueError(err.message)) {
         printerDown = true;
+        // Allow a later retry after printer recovers
+        startedIds.delete(job.jobId);
         await reportStatus(job.jobId, 'pending', `Waiting for printer: ${err.message}`);
         console.log('   ⏳ Job held as pending — will print when printer/agent is back');
       } else {
