@@ -483,12 +483,11 @@ async function claimJob(jobId) {
     return Boolean(res && (res.claimed === true || res.success === true));
   } catch (err) {
     const msg = String(err.message || '');
-    if (/HTTP 409/.test(msg)) {
-      return false;
-    }
-    console.warn(`   ⚠️  Claim failed for ${jobId}:`, err.message);
-    // Fail closed — do not print without a claim (avoids double sheets)
-    return false;
+    // Another agent already owns it
+    if (/HTTP 409/.test(msg)) return false;
+    // Backend not upgraded yet / transient network — print once; supervisor keeps a single agent
+    console.warn(`   ⚠️  Claim unavailable for ${jobId} (${err.message}) — printing anyway`);
+    return true;
   }
 }
 
