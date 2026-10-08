@@ -5,6 +5,6 @@
  */
 export const environment = {
   production: true,
-  apiUrl: 'https://elegance-dental-lab-by-yasser-production-962c.up.railway.app/api',
-  socketUrl: 'https://elegance-dental-lab-by-yasser-production-962c.up.railway.app',
+  apiUrl: 'https://elegance-dental-lab-by-yasser-production-f9f5.up.railway.app/api',
+  socketUrl: 'https://elegance-dental-lab-by-yasser-production-f9f5.up.railway.app',
 };
