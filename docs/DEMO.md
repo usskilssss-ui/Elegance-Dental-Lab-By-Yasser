@@ -7,11 +7,11 @@
 
 | الدور | الإيميل | الباسورد |
 |--------|---------|----------|
-| **Admin Demo** | `demo-admin@unishop.local` | `Demo@UniShop2026` |
-| سكرتارية | `demo-secretary@unishop.local` | `Demo@123456` |
-| ديزاين | `demo-designer@unishop.local` | `Demo@123456` |
-| فينيش | `demo-finisher@unishop.local` | `Demo@123456` |
-| دكتور | `demo-doctor1@unishop.local` | `Demo@123456` (PIN `1234`) |
+| **Admin Demo** | `demo-admin@elegance-demo.com` | `Demo@UniShop2026` |
+| سكرتارية | `demo-secretary@elegance-demo.com` | `Demo@123456` |
+| ديزاين | `demo-designer@elegance-demo.com` | `Demo@123456` |
+| فينيش | `demo-finisher@elegance-demo.com` | `Demo@123456` |
+| دكتور | `demo-doctor1@elegance-demo.com` | `Demo@123456` (PIN `1234`) |
 
 ## ١) Mongo فاضي للديمو
 

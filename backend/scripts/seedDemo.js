@@ -19,7 +19,7 @@ const DoctorPricing = require('../models/DoctorPricing');
 
 const DEMO_ADMIN = {
   fullName: 'Admin Demo',
-  email: 'demo-admin@unishop.local',
+  email: 'demo-admin@elegance-demo.com',
   password: 'Demo@UniShop2026',
   phone: '01000000000',
   role: 'admin',
@@ -85,7 +85,7 @@ async function seed() {
   const admin = await createUser(DEMO_ADMIN);
   const secretary = await createUser({
     fullName: 'سكرتارية ديمو',
-    email: 'demo-secretary@unishop.local',
+    email: 'demo-secretary@elegance-demo.com',
     password: 'Demo@123456',
     phone: '01000000002',
     role: 'secretary',
@@ -93,7 +93,7 @@ async function seed() {
   });
   const designer = await createUser({
     fullName: 'ديزاينر ديمو',
-    email: 'demo-designer@unishop.local',
+    email: 'demo-designer@elegance-demo.com',
     password: 'Demo@123456',
     phone: '01000000003',
     role: 'designer',
@@ -101,7 +101,7 @@ async function seed() {
   });
   const finisher = await createUser({
     fullName: 'فينيشر ديمو',
-    email: 'demo-finisher@unishop.local',
+    email: 'demo-finisher@elegance-demo.com',
     password: 'Demo@123456',
     phone: '01000000004',
     role: 'finisher',
@@ -110,9 +110,9 @@ async function seed() {
 
   const doctors = [];
   const doctorDefs = [
-    { fullName: 'د. أحمد التجريبي', email: 'demo-doctor1@unishop.local', pin: '1234' },
-    { fullName: 'د. سارة النموذج', email: 'demo-doctor2@unishop.local', pin: '1234' },
-    { fullName: 'د. كريم العرض', email: 'demo-doctor3@unishop.local', pin: '5678' },
+    { fullName: 'د. أحمد التجريبي', email: 'demo-doctor1@elegance-demo.com', pin: '1234' },
+    { fullName: 'د. سارة النموذج', email: 'demo-doctor2@elegance-demo.com', pin: '1234' },
+    { fullName: 'د. كريم العرض', email: 'demo-doctor3@elegance-demo.com', pin: '5678' },
   ];
   for (const d of doctorDefs) {
     doctors.push(
@@ -128,7 +128,7 @@ async function seed() {
 
   await createUser({
     fullName: 'طالب ديمو',
-    email: 'demo-student@unishop.local',
+    email: 'demo-student@elegance-demo.com',
     password: 'Demo@123456',
     phone: '01033334444',
     role: 'student',
@@ -262,7 +262,7 @@ async function seed() {
 
     const c = new DentalCase({
       patientName: spec.patientName,
-      patientEmail: 'patient.demo@unishop.local',
+      patientEmail: 'patient.demo@elegance-demo.com',
       patientPhone: '01099998888',
       requesterType: 'doctor',
       referringDoctor: spec.doctor.fullName,
@@ -312,9 +312,9 @@ async function seed() {
   console.log(`  ${DEMO_ADMIN.email}`);
   console.log(`  ${DEMO_ADMIN.password}`);
   console.log('Staff (password Demo@123456):');
-  console.log('  demo-secretary@unishop.local');
-  console.log('  demo-designer@unishop.local');
-  console.log('  demo-finisher@unishop.local');
+  console.log('  demo-secretary@elegance-demo.com');
+  console.log('  demo-designer@elegance-demo.com');
+  console.log('  demo-finisher@elegance-demo.com');
   console.log('Doctors (password Demo@123456, PIN 1234/5678):');
   for (const d of doctorDefs) console.log(`  ${d.email}  pin=${d.pin}`);
   console.log(`Users: admin=${admin.email}, secretary=${secretary.email}, designer=${designer.email}, finisher=${finisher.email}`);
