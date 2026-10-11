@@ -87,7 +87,7 @@ export class CaseManagementComponent implements OnInit, OnDestroy {
   }
 
   private reloadCases(): void {
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    this.caseApi.getAllCases(1, 500, { scope: 'open' }).subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = rows.map((r) => this.mapApiCaseToModel(r));

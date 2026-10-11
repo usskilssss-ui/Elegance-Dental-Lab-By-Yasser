@@ -1,7 +1,7 @@
 // railway-deploy-stamp: 2026-09-24 lab-convert (no behavior change)
 const User = require('../models/User');
 const DentalCase = require('../models/DentalCase');
-const { doctorKeysMatch, normalizeDoctorKey } = require('./casePricingService');
+const { normalizeDoctorKey } = require('./casePricingService');
 const {
   CLIENT_PORTAL_ROLES,
   departmentForClientRole,
@@ -67,13 +67,16 @@ function caseNamesFromDoc(dentalCase) {
     .filter(Boolean);
 }
 
+function namesAreExact(a, b) {
+  const ka = normalizeDoctorKey(a);
+  const kb = normalizeDoctorKey(b);
+  return !!ka && ka === kb;
+}
+
 function caseMatchesClientName(dentalCase, name) {
   const wanted = String(name || '').trim();
   if (!wanted) return false;
-  if (caseNamesFromDoc(dentalCase).some((value) => doctorKeysMatch(value, wanted))) {
-    return true;
-  }
-  return new RegExp(escapeRegex(wanted), 'i').test(String(dentalCase.notes || ''));
+  return caseNamesFromDoc(dentalCase).some((value) => namesAreExact(value, wanted));
 }
 
 function notesRequesterType(notes) {
@@ -93,10 +96,11 @@ function applyRequesterTypeFromNotes(doc) {
   return { ...doc, requesterType: fromNotes };
 }
 
-async function persistRequesterType(id, requesterType, notes, referringDoctor) {
+async function persistRequesterType(id, requesterType, notes, referringDoctor, referringDoctorId) {
   const _id = id && id._id ? id._id : id;
   const $notes = { notes };
   if (referringDoctor) $notes.referringDoctor = referringDoctor;
+  if (referringDoctorId) $notes.referringDoctorId = referringDoctorId;
   if (requesterType === 'lab') $notes.priority = 'normal';
   // Notes first via the native driver so a rejected requesterType=lab field
   // cannot roll back the only copy the UI can read after refresh.
@@ -109,27 +113,34 @@ async function persistRequesterType(id, requesterType, notes, referringDoctor) {
   return true;
 }
 
-async function retagCasesForClientName(fullName, role, extraIds = []) {
+async function retagCasesForClientName(fullName, role, extraIds = [], userId = null) {
   const name = String(fullName || '').trim();
   const requesterType = requesterTypeForRole(role);
   if (!name && !extraIds.length) return 0;
 
-  const looseRe = name ? new RegExp(escapeRegex(name), 'i') : null;
+  const exactName = name ? new RegExp(`^${escapeRegex(name)}$`, 'i') : null;
+  const notesDoctor = name
+    ? new RegExp(`"doctor"\\s*:\\s*"${escapeRegex(name)}"`, 'i')
+    : null;
   const idList = (Array.isArray(extraIds) ? extraIds : [])
     .map((id) => String(id || '').trim())
     .filter(Boolean);
 
-  const [byName, byId] = await Promise.all([
-    name
+  const [byName, byEmptyField, byId] = await Promise.all([
+    exactName
+      ? DentalCase.find({ referringDoctor: exactName }).limit(5000)
+      : Promise.resolve([]),
+    notesDoctor
       ? DentalCase.find({
-          $or: [{ referringDoctor: looseRe }, { notes: looseRe }],
-        }).limit(20000)
+          $or: [{ referringDoctor: '' }, { referringDoctor: null }, { referringDoctor: { $exists: false } }],
+          notes: notesDoctor,
+        }).limit(2000)
       : Promise.resolve([]),
     idList.length ? DentalCase.find({ _id: { $in: idList } }) : Promise.resolve([]),
   ]);
 
   const seen = new Map();
-  for (const dentalCase of [...byId, ...byName]) {
+  for (const dentalCase of [...byId, ...byName, ...byEmptyField]) {
     seen.set(String(dentalCase._id), dentalCase);
   }
 
@@ -141,15 +152,6 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
       );
     } catch (err) {
       console.error('[retagCasesForClientName] updateMany', err?.message || err);
-    }
-  }
-
-  if (!seen.size && name) {
-    const fallback = await DentalCase.find({ notes: /__META__/ }).limit(20000);
-    for (const dentalCase of fallback) {
-      if (caseMatchesClientName(dentalCase, name)) {
-        seen.set(String(dentalCase._id), dentalCase);
-      }
     }
   }
 
@@ -166,7 +168,17 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
     const alreadyPersisted =
       dentalCase.requesterType === requesterType &&
       notesRequesterType(notesText) === requesterType;
-    if (alreadyPersisted && notesText === nextNotes) {
+    const linked =
+      !userId || String(dentalCase.referringDoctorId || '') === String(userId);
+    if (alreadyPersisted && notesText === nextNotes && linked) {
+      updated += 1;
+      continue;
+    }
+    if (alreadyPersisted && notesText === nextNotes && userId) {
+      await DentalCase.collection.updateOne(
+        { _id: dentalCase._id },
+        { $set: { referringDoctorId: userId } }
+      );
       updated += 1;
       continue;
     }
@@ -174,7 +186,8 @@ async function retagCasesForClientName(fullName, role, extraIds = []) {
       dentalCase._id,
       requesterType,
       nextNotes,
-      displayName
+      displayName,
+      userId
     );
     if (ok) updated += 1;
   }
@@ -186,7 +199,7 @@ async function findClientUsersByName(name) {
     role: { $in: CLIENT_PORTAL_ROLES },
     isActive: { $ne: false },
   }).limit(4000);
-  const matches = clients.filter((user) => doctorKeysMatch(user.fullName, name));
+  const matches = clients.filter((user) => namesAreExact(user.fullName, name));
   const wanted = normalizeDoctorKey(name);
   matches.sort((a, b) => {
     const aExact = normalizeDoctorKey(a.fullName) === wanted ? 0 : 1;
@@ -246,7 +259,9 @@ async function ensureClientAccount(fullName, requesterType, opts = {}) {
   const matches = await findClientUsersByName(name);
   const sameRole = matches.find((user) => user.role === role);
   if (sameRole) {
-    const updatedCases = shouldRetag ? await retagCasesForClientName(sameRole.fullName, role) : 0;
+    const updatedCases = shouldRetag
+      ? await retagCasesForClientName(sameRole.fullName, role, [], sameRole._id)
+      : 0;
     return { action: updatedCases ? 'retagged' : 'exists', user: sameRole, updatedCases };
   }
 
@@ -266,12 +281,12 @@ async function ensureClientAccount(fullName, requesterType, opts = {}) {
         { $set: { role, department: departmentForClientRole(role) } }
       );
     }
-    const updatedCases = await retagCasesForClientName(otherRole.fullName, role);
+    const updatedCases = await retagCasesForClientName(otherRole.fullName, role, [], otherRole._id);
     return { action: 'converted', user: otherRole, updatedCases };
   }
 
   const created = await createClientAccount(name, role);
-  const updatedCases = shouldRetag ? await retagCasesForClientName(name, role) : 0;
+  const updatedCases = shouldRetag ? await retagCasesForClientName(name, role, [], created._id) : 0;
   return { action: 'created', user: created, updatedCases };
 }
 

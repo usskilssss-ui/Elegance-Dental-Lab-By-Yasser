@@ -369,6 +369,41 @@ function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Portal ownership: account id first, exact name only for rows not linked yet. */
+function portalDoctorClause(doctorFullName, doctorId) {
+  const name = String(doctorFullName || '').trim();
+  const exactName = new RegExp(`^${escapeRegex(name)}$`, 'i');
+  const notesDoctor = new RegExp(`"doctor"\\s*:\\s*"${escapeRegex(name)}"`, 'i');
+  const unlinked = {
+    $or: [{ referringDoctorId: null }, { referringDoctorId: { $exists: false } }],
+  };
+  const clauses = [];
+  if (doctorId) clauses.push({ referringDoctorId: doctorId });
+  if (name) {
+    clauses.push({ $and: [unlinked, { referringDoctor: exactName }] });
+    clauses.push({
+      $and: [
+        unlinked,
+        {
+          $or: [
+            { referringDoctor: { $exists: false } },
+            { referringDoctor: null },
+            { referringDoctor: '' },
+          ],
+        },
+        { notes: notesDoctor },
+      ],
+    });
+  }
+  return clauses.length ? { $or: clauses } : null;
+}
+
+function pushAnd(filter, clause) {
+  if (!clause) return;
+  if (!filter.$and) filter.$and = [];
+  filter.$and.push(clause);
+}
+
 function referringDoctorFromNotes(notes) {
   const meta = parseNotesMeta(notes || '');
   return String(meta.doctor || meta.doctorName || '')
@@ -434,6 +469,9 @@ exports.createCase = async (req, res) => {
       referringDoctor,
       normalizedRequesterType
     );
+    const referringDoctorId = isClientPortalRole(req.user?.role)
+      ? req.user.id
+      : accountEnsure?.user?._id || null;
 
     const newCase = new DentalCase({
       patientName,
@@ -446,6 +484,7 @@ exports.createCase = async (req, res) => {
       paidBy: isStudentCase ? req.user.id : null,
       notes: notesFinal,
       referringDoctor,
+      referringDoctorId,
       originalEntry,
       caseType,
       priority,
@@ -555,7 +594,12 @@ exports.retagRequesterByName = async (req, res) => {
     } catch (err) {
       console.error('[retagRequesterByName] account', err?.message || err);
     }
-    const updatedCases = await retagCasesForClientName(fullName, requesterType, caseIds);
+    const updatedCases = await retagCasesForClientName(
+      fullName,
+      requesterType,
+      caseIds,
+      account?.user?._id || null
+    );
     const n = Math.max(Number(account?.updatedCases || 0), Number(updatedCases || 0));
 
     res.status(200).json({
@@ -590,24 +634,46 @@ exports.retagRequesterByName = async (req, res) => {
 exports.getAllCases = async (req, res) => {
   try {
     await sweepUrgentLabCases().catch(() => {});
-    const { page = 1, limit = 10, stage, status, priority, search } = req.query;
+    const { page = 1, limit = 10, stage, status, priority, search, scope, year, month } = req.query;
 
     const filter = {};
 
-    if (stage) filter.currentStage = stage;
+    if (stage) {
+      filter.currentStage = stage;
+    } else if (scope === 'open') {
+      filter.currentStage = { $ne: 'exited' };
+      filter.status = { $ne: 'exited' };
+    } else if (scope === 'board') {
+      const now = new Date();
+      const yy = parseInt(year, 10);
+      const mm = parseInt(month, 10);
+      const y = Number.isFinite(yy) ? yy : now.getFullYear();
+      const m = Number.isFinite(mm) && mm >= 1 && mm <= 12 ? mm : now.getMonth() + 1;
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 1);
+      pushAnd(filter, {
+        $or: [
+          { currentStage: { $ne: 'exited' } },
+          { 'stageTimestamps.exited': { $gte: start, $lt: end } },
+        ],
+      });
+    }
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
 
     if (search) {
-      filter.$or = [
-        { patientName: { $regex: search, $options: 'i' } },
-        { caseNumber: { $regex: search, $options: 'i' } },
-        { patientEmail: { $regex: search, $options: 'i' } },
-      ];
+      pushAnd(filter, {
+        $or: [
+          { patientName: { $regex: search, $options: 'i' } },
+          { caseNumber: { $regex: search, $options: 'i' } },
+          { patientEmail: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
 
     // Resolve doctor identity when JWT is present (optional auth on GET /)
     let doctorFullName = '';
+    let doctorId = null;
     let isClientPortal = isClientPortalRole(req.user?.role);
     if (req.user?.userId || req.user?.id) {
       const uid = req.user.id || req.user.userId;
@@ -619,40 +685,14 @@ exports.getAllCases = async (req, res) => {
           isClientPortal = isClientPortalRole(u.role);
         }
       }
-      if (isClientPortal) doctorFullName = String(req.user.fullName || '').trim();
+      if (isClientPortal) {
+        doctorFullName = String(req.user.fullName || '').trim();
+        doctorId = uid;
+      }
     }
 
-    // Client portal: filter by indexed referringDoctor (+ legacy notes match)
-    if (isClientPortal && doctorFullName) {
-      const doctorClause = {
-        $or: [
-          { referringDoctor: new RegExp(`^${escapeRegex(doctorFullName)}$`, 'i') },
-          {
-            $and: [
-              {
-                $or: [
-                  { referringDoctor: { $exists: false } },
-                  { referringDoctor: null },
-                  { referringDoctor: '' },
-                ],
-              },
-              {
-                notes: new RegExp(
-                  `"doctor"\\s*:\\s*"${escapeRegex(doctorFullName)}"`,
-                  'i'
-                ),
-              },
-            ],
-          },
-        ],
-      };
-      if (filter.$or) {
-        const searchOr = filter.$or;
-        delete filter.$or;
-        filter.$and = [{ $or: searchOr }, doctorClause];
-      } else {
-        Object.assign(filter, doctorClause);
-      }
+    if (isClientPortal && (doctorId || doctorFullName)) {
+      pushAnd(filter, portalDoctorClause(doctorFullName, doctorId));
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -666,7 +706,7 @@ exports.getAllCases = async (req, res) => {
         .populate('assignedTo', 'fullName email role')
         .populate('createdBy', 'fullName email role')
         .select(
-          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor plyScanPath plyFileName currentStage status assignedTo createdBy caseType originalEntry priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
+          'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor referringDoctorId plyScanPath plyFileName currentStage status assignedTo createdBy caseType originalEntry priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt'
         )
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -675,27 +715,7 @@ exports.getAllCases = async (req, res) => {
       DentalCase.countDocuments(filter),
     ]);
 
-    const needAuditBackfill = cases.some((row) => !normalizeOriginalEntry(row.originalEntry));
-    const createdAudits = needAuditBackfill
-      ? await loadCreatedAudits(
-          cases.filter((row) => !normalizeOriginalEntry(row.originalEntry)).map((row) => row._id)
-        )
-      : new Map();
-    const persistOps = [];
-    const data = cases.map((row) => {
-      const presented = presentCaseWithOriginal(row, createdAudits.get(String(row._id)));
-      const chosen = normalizeOriginalEntry(presented.originalEntry);
-      if (shouldPersistOriginal(row, chosen)) {
-        persistOps.push({
-          updateOne: {
-            filter: { _id: row._id },
-            update: { $set: { originalEntry: chosen } },
-          },
-        });
-      }
-      return presented;
-    });
-    persistOriginalEntries(persistOps);
+    const data = cases.map((row) => presentCaseWithOriginal(row, null));
     res.status(200).json({
       success: true,
       data,
@@ -1055,8 +1075,10 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const role = req.user?.role;
     let doctorName = '';
 
+    let doctorId = null;
     if (isClientPortalRole(role)) {
       doctorName = String(req.user.fullName || '').trim();
+      doctorId = req.user.id || req.user.userId;
     } else if (role === 'admin') {
       doctorName = String(req.query.doctor || '').trim();
       if (!doctorName) {
@@ -1077,9 +1099,12 @@ exports.getDoctorAccountSummary = async (req, res) => {
     const month = req.query.month ? Number(req.query.month) : null;
 
     const [cases, pricings, payments] = await Promise.all([
-      DentalCase.find({ currentStage: 'exited' })
+      DentalCase.find({
+        currentStage: 'exited',
+        ...portalDoctorClause(doctorName, doctorId),
+      })
         .select(
-          'caseNumber patientName caseType notes referringDoctor salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps plyScanPath plyFileName'
+          'caseNumber patientName caseType notes referringDoctor referringDoctorId salaryAmount revenueAmount billSnapshot paymentStatus paidAt createdAt updatedAt stageTimestamps plyScanPath plyFileName'
         )
         .sort({ createdAt: -1 })
         .lean(),
@@ -1098,12 +1123,15 @@ exports.getDoctorAccountSummary = async (req, res) => {
 
     for (const doc of cases) {
       const meta = parseNotesMetaShared(doc.notes || '');
+      const linked =
+        doctorId && doc.referringDoctorId && String(doc.referringDoctorId) === String(doctorId);
+      if (!linked && !caseBelongsToDoctor(doc, doctorName)) continue;
+
+      if (isNonBillableCase(doc.caseType, meta)) continue;
+
       const caseDoctor = String(
         doc.referringDoctor || meta.doctor || meta.doctorName || ''
       ).trim();
-      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
-
-      if (isNonBillableCase(doc.caseType, meta)) continue;
 
       const exitedAt = doc.stageTimestamps?.exited
         ? new Date(doc.stageTimestamps.exited)
@@ -1256,9 +1284,11 @@ exports.getDoctorExitedMaterials = async (req, res) => {
   try {
     const role = req.user?.role;
     let doctorName = '';
+    let doctorId = null;
 
     if (isClientPortalRole(role)) {
       doctorName = String(req.user.fullName || '').trim();
+      doctorId = req.user.id || req.user.userId;
     } else if (role === 'admin') {
       doctorName = String(req.query.doctor || '').trim();
       if (!doctorName) {
@@ -1275,8 +1305,11 @@ exports.getDoctorExitedMaterials = async (req, res) => {
       return res.status(400).json({ success: false, message: 'اسم الدكتور مطلوب' });
     }
 
-    const cases = await DentalCase.find({ currentStage: 'exited' })
-      .select('caseType notes referringDoctor')
+    const cases = await DentalCase.find({
+      currentStage: 'exited',
+      ...portalDoctorClause(doctorName, doctorId),
+    })
+      .select('caseType notes referringDoctor referringDoctorId')
       .lean();
 
     const stats = {
@@ -1297,10 +1330,9 @@ exports.getDoctorExitedMaterials = async (req, res) => {
 
     for (const doc of cases) {
       const meta = parseNotesMetaShared(doc.notes || '');
-      const caseDoctor = String(
-        doc.referringDoctor || meta.doctor || meta.doctorName || ''
-      ).trim();
-      if (!doctorKeysMatch(caseDoctor, doctorName)) continue;
+      const linked =
+        doctorId && doc.referringDoctorId && String(doc.referringDoctorId) === String(doctorId);
+      if (!linked && !caseBelongsToDoctor(doc, doctorName)) continue;
 
       if (isNonBillableCase(doc.caseType, meta)) continue;
 
@@ -1352,17 +1384,6 @@ exports.getCaseById = async (req, res) => {
       .select('details')
       .lean();
     const presented = presentCaseWithOriginal(dentalCase, createdAudit);
-    const chosen = normalizeOriginalEntry(presented.originalEntry);
-    if (shouldPersistOriginal(dentalCase, chosen)) {
-      persistOriginalEntries([
-        {
-          updateOne: {
-            filter: { _id: dentalCase._id },
-            update: { $set: { originalEntry: chosen } },
-          },
-        },
-      ]);
-    }
     res.status(200).json({
       success: true,
       case: presented,
@@ -1379,33 +1400,49 @@ exports.getCaseById = async (req, res) => {
 // Claim case (Atomic operation)
 exports.claimCase = async (req, res) => {
   try {
-    const dentalCase = await DentalCase.findById(req.params.id);
+    const existing = await DentalCase.findById(req.params.id).select(
+      'assignedTo currentStage status caseNumber'
+    );
 
-    if (!dentalCase) {
+    if (!existing) {
       return res.status(404).json({ message: 'Case not found' });
     }
 
-    if (isExitedCase(dentalCase)) {
+    if (isExitedCase(existing)) {
       return res.status(400).json({
         success: false,
         message: 'لا يمكن استلام حالة خارجة',
       });
     }
 
-    // Check if already assigned
-    if (dentalCase.assignedTo && dentalCase.assignedTo.toString() !== req.user.id) {
+    const dentalCase = await DentalCase.findOneAndUpdate(
+      {
+        _id: existing._id,
+        currentStage: { $ne: 'exited' },
+        status: { $ne: 'exited' },
+        $or: [
+          { assignedTo: null },
+          { assignedTo: { $exists: false } },
+          { assignedTo: req.user.id },
+        ],
+      },
+      {
+        $set: {
+          assignedTo: req.user.id,
+          assignedAt: new Date(),
+          status: 'in_progress',
+        },
+      },
+      { new: true }
+    );
+
+    if (!dentalCase) {
       return res.status(400).json({
-        message: `Case is already assigned to another user`,
-        assignedTo: dentalCase.assignedTo,
+        message: 'Case is already assigned to another user',
+        assignedTo: existing.assignedTo,
       });
     }
 
-    // Assign case
-    dentalCase.assignedTo = req.user.id;
-    dentalCase.assignedAt = new Date();
-    dentalCase.status = 'in_progress';
-
-    await dentalCase.save();
     await dentalCase.populate('assignedTo', 'fullName email role');
 
     // Create audit log
@@ -2145,6 +2182,12 @@ exports.exitCase = async (req, res) => {
       console.warn('[exit] bill snapshot failed:', dentalCase?.caseNumber, priceErr?.message || priceErr);
       const revenue = Math.max(0, Number(dentalCase.salaryAmount) || 0);
       dentalCase.revenueAmount = revenue;
+      dentalCase.billSnapshot = {
+        total: revenue,
+        pricedAt: new Date().toISOString(),
+        priceSource: 'exit-fallback',
+        lines: [],
+      };
     }
 
     const revenue = Math.max(0, Number(dentalCase.revenueAmount || dentalCase.salaryAmount) || 0);
@@ -2604,14 +2647,21 @@ exports.updateCase = async (req, res) => {
       }
     }
 
+    const accountEnsure = isClientPortalRole(req.user?.role)
+      ? null
+      : await maybeEnsureClientAccount(
+          req,
+          dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes),
+          dentalCase.requesterType || 'doctor'
+        );
+    if (isClientPortalRole(req.user?.role)) {
+      dentalCase.referringDoctorId = req.user.id;
+    } else if (accountEnsure?.user?._id) {
+      dentalCase.referringDoctorId = accountEnsure.user._id;
+    }
+
     await dentalCase.save();
     await dentalCase.populate('createdBy', 'fullName email role');
-
-    const accountEnsure = await maybeEnsureClientAccount(
-      req,
-      dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes),
-      dentalCase.requesterType || 'doctor'
-    );
 
     emitCaseUpdated(dentalCase, req.user);
 
@@ -2881,7 +2931,23 @@ exports.uploadCasePly = async (req, res) => {
     }
     if (!meta || typeof meta !== 'object') meta = {};
 
-    meta.plyScanPath = `/uploads/cases/${req.file.filename}`;
+    let plyUrl = `/uploads/cases/${req.file.filename}`;
+    try {
+      const { r2Configured, putObjectBuffer } = require('../services/r2StorageService');
+      if (r2Configured() && process.env.R2_PUBLIC_BASE_URL) {
+        const fs = require('fs');
+        const body = fs.readFileSync(req.file.path);
+        const key = `cases/${dentalCase._id}/${req.file.filename}`;
+        const stored = await putObjectBuffer(key, body, req.file.mimetype);
+        plyUrl = stored.publicUrl;
+        fs.unlink(req.file.path, () => {});
+      }
+    } catch (storageErr) {
+      console.warn('[upload-ply] R2 failed, keeping disk copy', storageErr?.message || storageErr);
+      plyUrl = `/uploads/cases/${req.file.filename}`;
+    }
+
+    meta.plyScanPath = plyUrl;
     meta.plyFileName = String(req.file.originalname || req.file.filename || '').slice(0, 280);
 
     dentalCase.notes = sanitizeNotesMetaString(`${prefix}${JSON.stringify(meta)}`);
