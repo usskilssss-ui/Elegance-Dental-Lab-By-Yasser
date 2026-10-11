@@ -9,7 +9,8 @@
  * - paidFromCases = sum of bills for cases with paymentStatus=paid
  * - paidFromPayments = sum of DoctorPayment ledger rows that are NOT linked to a case
  *   (case-linked ledger rows are settlement records for already-counted case flags)
- * - totalPaid = min(totalDue, paidFromCases + paidFromPayments)
+ * - totalPaid = paidFromCases + paidFromPayments (may exceed totalDue)
+ * - remaining = totalDue - totalPaid (negative means the doctor has credit)
  * - charges (entryType=charge) add to totalDue, never to totalPaid
  */
 
@@ -21,12 +22,19 @@ function isCasePaid(doc) {
   return String(doc?.paymentStatus || 'unpaid') === 'paid';
 }
 
-/** Canonical frozen doctor bill for an exited case. */
+/** True when exit (or a manual bill edit) stored a total, including a real zero. */
+function hasFrozenSnapshot(doc) {
+  const snap = doc?.billSnapshot;
+  if (!snap || typeof snap !== 'object') return false;
+  if (snap.total == null || snap.total === '') return false;
+  return Number.isFinite(Number(snap.total));
+}
+
+/** Canonical frozen doctor bill for an exited case. Zero is a real freeze. */
 function frozenBillAmount(doc) {
+  if (hasFrozenSnapshot(doc)) return round2(Number(doc.billSnapshot.total));
   const revenue = Number(doc?.revenueAmount);
   if (Number.isFinite(revenue) && revenue > 0) return round2(revenue);
-  const snap = Number(doc?.billSnapshot?.total);
-  if (Number.isFinite(snap) && snap > 0) return round2(snap);
   const salary = Number(doc?.salaryAmount);
   if (Number.isFinite(salary) && salary > 0) return round2(salary);
   return 0;
@@ -34,9 +42,10 @@ function frozenBillAmount(doc) {
 
 /**
  * Bill amount for a case.
- * Prefer freeze whenever present (especially after exit); live only as fallback preview.
+ * A stored snapshot wins even when the total is 0. Live prices are only a preview.
  */
 function caseBillAmount(doc, liveBreakdownTotal) {
+  if (hasFrozenSnapshot(doc)) return round2(Number(doc.billSnapshot.total));
   const frozen = frozenBillAmount(doc);
   if (frozen > 0) return frozen;
   const live = round2(liveBreakdownTotal || 0);
@@ -74,9 +83,8 @@ function resolveDoctorPaid({ totalDue, paidFromCases, paidFromPayments }) {
   const due = round2(totalDue);
   const fromCases = round2(paidFromCases);
   const fromPayments = round2(paidFromPayments);
-  // Cap at due so case-flag + duplicate ledger never invents overpayment that hides issues weirdly
-  const totalPaid = round2(Math.min(due, fromCases + fromPayments));
-  const remaining = Math.max(0, round2(due - totalPaid));
+  const totalPaid = round2(fromCases + fromPayments);
+  const remaining = round2(due - totalPaid);
   let paidSource = 'none';
   if (fromCases > 0 && fromPayments > 0) paidSource = 'mixed';
   else if (fromPayments > 0) paidSource = 'ledger';

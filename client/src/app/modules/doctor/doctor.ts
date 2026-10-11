@@ -490,7 +490,14 @@ export class DoctorComponent implements OnInit, OnDestroy {
 
   private loadCases(opts?: { silent?: boolean }): void {
     if (!opts?.silent) this.casesLoading.set(true);
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    const now = new Date();
+    this.caseApi
+      .getAllCases(1, 800, {
+        scope: 'board',
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+      })
+      .subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {

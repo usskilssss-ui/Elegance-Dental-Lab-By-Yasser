@@ -273,7 +273,7 @@ export class RequesterComponent implements OnInit, OnDestroy {
   }
 
   loadRequests(): void {
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    this.caseApi.getAllCases(1, 400, { scope: 'open' }).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {

@@ -50,6 +50,13 @@ const dentalCaseSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    /** Account that owns the case. Portal lists use this; the name is only a fallback. */
+    referringDoctorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
 
     // Workflow
     currentStage: {
@@ -248,5 +255,6 @@ dentalCaseSchema.pre('save', function (next) {
 dentalCaseSchema.index({ createdAt: -1 });
 dentalCaseSchema.index({ currentStage: 1, createdAt: -1 });
 dentalCaseSchema.index({ referringDoctor: 1, createdAt: -1 });
+dentalCaseSchema.index({ referringDoctorId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('DentalCase', dentalCaseSchema);

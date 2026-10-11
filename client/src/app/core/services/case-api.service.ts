@@ -20,10 +20,13 @@ export class CaseApiService {
   // Get all cases with pagination and filtering
   getAllCases(page: number = 1, limit: number = 10, filters?: any): Observable<any> {
     let params = `?page=${page}&limit=${limit}`;
-    if (filters?.stage) params += `&stage=${filters.stage}`;
-    if (filters?.status) params += `&status=${filters.status}`;
-    if (filters?.priority) params += `&priority=${filters.priority}`;
-    if (filters?.search) params += `&search=${filters.search}`;
+    if (filters?.stage) params += `&stage=${encodeURIComponent(filters.stage)}`;
+    if (filters?.status) params += `&status=${encodeURIComponent(filters.status)}`;
+    if (filters?.priority) params += `&priority=${encodeURIComponent(filters.priority)}`;
+    if (filters?.search) params += `&search=${encodeURIComponent(filters.search)}`;
+    if (filters?.scope) params += `&scope=${encodeURIComponent(filters.scope)}`;
+    if (filters?.year) params += `&year=${encodeURIComponent(filters.year)}`;
+    if (filters?.month) params += `&month=${encodeURIComponent(filters.month)}`;
 
     return this.http.get(`${this.apiUrl}${params}`);
   }
