@@ -352,6 +352,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (!Number.isFinite(y)) return;
     this.viewYear.set(y);
     this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+    this.reloadCasesFromBackend(true);
     if (this.isHistoricalMonthView()) {
       this.activeFilter.set('exited');
     }
@@ -362,6 +363,7 @@ export class Secretary implements OnInit, OnDestroy {
     if (!Number.isFinite(m) || m < 1 || m > 12) return;
     this.viewMonth.set(m);
     this.listVisibleCount.set(this.LIST_PAGE_SIZE);
+    this.reloadCasesFromBackend(true);
     if (this.isHistoricalMonthView()) {
       this.activeFilter.set('exited');
     }
@@ -1685,7 +1687,13 @@ export class Secretary implements OnInit, OnDestroy {
 
   private reloadCasesFromBackend(silent = false, after?: () => void): void {
     if (!silent) this.casesLoading.set(true);
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    this.caseApi
+      .getAllCases(1, 800, {
+        scope: 'board',
+        year: this.viewYear(),
+        month: this.viewMonth(),
+      })
+      .subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         const mapped = Array.isArray(rows) ? rows.map((r) => mapApiCaseToDentalCase(r)) : [];

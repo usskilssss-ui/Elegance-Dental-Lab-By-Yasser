@@ -485,7 +485,7 @@ export class EntryComponent implements OnInit, OnDestroy {
     this.startPrintAgentStatusWatch();
 
     // Load cases (for list context / shared state)
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    this.caseApi.getAllCases(1, 400, { scope: 'open' }).subscribe({
       next: res => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         if (Array.isArray(rows)) {

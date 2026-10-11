@@ -59,7 +59,37 @@ async function createPresignedPutUrl(key, contentType, expiresIn = 900) {
   return { uploadUrl, publicUrl, key, expiresIn };
 }
 
+/**
+ * Store a scan on R2 and return a browser-reachable URL.
+ * Requires R2_PUBLIC_BASE_URL so the lab can open the file after a redeploy.
+ */
+async function putObjectBuffer(key, body, contentType) {
+  if (!r2Configured()) {
+    const err = new Error('R2 is not configured');
+    err.code = 'R2_NOT_CONFIGURED';
+    throw err;
+  }
+  const publicBase = (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  if (!publicBase) {
+    const err = new Error('R2_PUBLIC_BASE_URL is not set');
+    err.code = 'R2_PUBLIC_URL_MISSING';
+    throw err;
+  }
+  const { PutObjectCommand } = require('@aws-sdk/client-s3');
+  const client = await getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType || 'application/octet-stream',
+    })
+  );
+  return { key, publicUrl: `${publicBase}/${key}` };
+}
+
 module.exports = {
   r2Configured,
   createPresignedPutUrl,
+  putObjectBuffer,
 };

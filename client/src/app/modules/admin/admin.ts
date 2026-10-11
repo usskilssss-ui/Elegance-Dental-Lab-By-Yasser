@@ -747,7 +747,7 @@ export class Admin implements OnInit, OnDestroy {
       docObj.totalDue += charges;
       // Case confirm-payment + account ledger payments both count (settling remaining must not wipe case-paid)
       docObj.totalPaid = docObj.paidFromCases + paidFromPayments;
-      docObj.remaining = Math.max(0, docObj.totalDue - docObj.totalPaid);
+      docObj.remaining = docObj.totalDue - docObj.totalPaid;
     });
 
     // Hide empty rows when a period is selected (no cases / payments / charges in that month)
@@ -1814,7 +1814,14 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   private loadCasesFromApi(): void {
-    this.caseApi.getAllCases(1, 1500).subscribe({
+    const now = new Date();
+    this.caseApi
+      .getAllCases(1, 800, {
+        scope: 'board',
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+      })
+      .subscribe({
       next: (res) => {
         const rows = (res?.data ?? []) as Record<string, unknown>[];
         this.adminCases = Array.isArray(rows) ? rows.map((row) => this.mapApiCaseToAdminCase(row)) : [];
