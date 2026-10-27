@@ -153,7 +153,7 @@ const RECEIPT_PRINTER_NAME = config.RECEIPT_PRINTER_NAME || 'XP-Q808K';
 /** true only when the receipt printer is installed and ready on THIS PC */
 let receiptPrinterOk = false;
 const RECONNECT_DELAY = 3000; // ms
-const POLL_INTERVAL_MS = Number(config.POLL_INTERVAL_MS) || 20000;
+const POLL_INTERVAL_MS = Number(config.POLL_INTERVAL_MS) || 4000;
 const PRINT_CONFIRM_TIMEOUT_MS = Number(config.PRINT_CONFIRM_TIMEOUT_MS) || 90000;
 const PRINTER_CHECK_MS = Number(config.PRINTER_CHECK_MS) || 10000;
 
@@ -253,13 +253,14 @@ socket.on('disconnect', (reason) => {
 });
 
 // ── Print Queue Management ────────────────────────────────
-const jobQueue = [];
+/** Separate queues so the receipt printer never waits behind the HP (and vice versa) */
+const queues = { sheet: [], receipt: [] };
+const processing = { sheet: false, receipt: false };
 /** IDs currently waiting in the local queue */
 const queuedIds = new Set();
 /** IDs finished successfully this process lifetime (may still be pending on server if status sync failed) */
 const completedIds = new Set();
-let currentJobId = null;
-let isProcessingQueue = false;
+const currentIds = new Set();
 let networkDown = false;
 let printerDown = false;
 let lastPrinterOk = null;
@@ -274,8 +275,17 @@ function isPrinterIssueError(message) {
 
 /** Jobs we already decided to print this process (set BEFORE any await) */
 const startedIds = new Set();
-/** Serialize SumatraPDF — concurrent prints jam the HP P1102 spooler */
-let printPdfChain = Promise.resolve();
+/** Serialize Sumatra per printer — HP P1102 jams if two sheets overlap, receipts must not wait on HP */
+const printPdfChains = new Map();
+function printPdfSerialized(pdfPath, printerName) {
+  const key = String(printerName || PRINTER_NAME || 'default');
+  const prev = printPdfChains.get(key) || Promise.resolve();
+  const next = prev
+    .catch(() => {})
+    .then(() => withTimeout(printPdf(pdfPath, printerName), 8000, 'printPdf'));
+  printPdfChains.set(key, next);
+  return next;
+}
 const JOB_LOCK_DIR = path.join(__dirname, 'daemon', 'job-locks');
 
 /**
@@ -300,7 +310,11 @@ function tryAcquireJobLock(id) {
 }
 
 function isInPipeline(id) {
-  return queuedIds.has(id) || currentJobId === id || startedIds.has(id);
+  return queuedIds.has(id) || currentIds.has(id) || startedIds.has(id);
+}
+
+function queueKindFor(job) {
+  return String(job?.printData?.jobKind || '') === 'receipt' ? 'receipt' : 'sheet';
 }
 
 /**
@@ -334,9 +348,10 @@ function enqueueJob(job, source, opts = {}) {
 
   queuedIds.add(id);
   startedIds.add(id);
-  jobQueue.push({ jobId: id, printData: job.printData || {} });
-  console.log(`📥 Queued job ${id} (via ${source}, pid ${process.pid})`);
-  processQueue();
+  const kind = queueKindFor(job);
+  queues[kind].push({ jobId: id, printData: job.printData || {} });
+  console.log(`📥 Queued ${kind} job ${id} (via ${source}, pid ${process.pid})`);
+  processQueue(kind);
   return true;
 }
 
@@ -501,80 +516,78 @@ async function waitForPrintConfirmation(_printerName, _beforeJobIds) {
   return { mode: 'accepted-fast' };
 }
 
-async function processQueue() {
-  if (isProcessingQueue) return;
-  isProcessingQueue = true;
+async function processQueue(kind) {
+  const lane = kind === 'receipt' ? 'receipt' : 'sheet';
+  if (processing[lane]) return;
+  processing[lane] = true;
 
-  while (jobQueue.length > 0) {
-    const job = jobQueue.shift();
+  while (queues[lane].length > 0) {
+    const job = queues[lane].shift();
     queuedIds.delete(job.jobId);
-    currentJobId = job.jobId;
+    currentIds.add(job.jobId);
 
     if (completedIds.has(job.jobId)) {
       console.log(`⏭️  Skip processing ${job.jobId} — already printed this session`);
-      currentJobId = null;
+      currentIds.delete(job.jobId);
       continue;
     }
 
-    console.log(`\n📄 Processing print job: ${job.jobId}`);
+    console.log(`\n📄 Processing ${lane} job: ${job.jobId}`);
     console.log(`   Patient: ${job.printData.patient} | Doctor: ${job.printData.doctor}`);
+    const t0 = Date.now();
 
     try {
-      // A receipt must never land on the sheet printer: if this PC has no ready
-      // receipt printer, leave the job for a station that has one.
-      if (String(job.printData?.jobKind || '') === 'receipt' && !receiptPrinterOk) {
+      const isReceipt = lane === 'receipt';
+      if (isReceipt && !receiptPrinterOk) {
         console.log(`⏭️  Skip receipt ${job.jobId} — no ready receipt printer (${RECEIPT_PRINTER_NAME}) on this PC`);
         startedIds.delete(job.jobId);
         releaseJobLock(job.jobId);
-        currentJobId = null;
+        currentIds.delete(job.jobId);
         continue;
       }
 
-      // Atomic server claim — if another agent already owns this job, skip (no second sheet)
-      const claimed = await claimJob(job.jobId);
-      if (!claimed) {
-        console.log(`⏭️  Skip ${job.jobId} — another agent already claimed it`);
-        startedIds.delete(job.jobId);
-        releaseJobLock(job.jobId);
-        currentJobId = null;
-        continue;
-      }
-
-      const isReceipt = String(job.printData?.jobKind || '') === 'receipt';
       const printerName = isReceipt ? RECEIPT_PRINTER_NAME : PRINTER_NAME;
       if (isReceipt && !String(printerName || '').trim()) {
         throw new Error('RECEIPT_PRINTER_NAME is empty in config.json');
       }
-      const html = isReceipt ? buildReceiptHtml(job.printData) : await buildPrintHtml(job.printData);
+
+      // Build PDF immediately — don't wait on Railway claim (that was adding 1–15s)
+      const htmlPromise = isReceipt
+        ? Promise.resolve(buildReceiptHtml(job.printData))
+        : buildPrintHtml(job.printData);
+      const claimPromise = claimJob(job.jobId);
+      const html = await htmlPromise;
       const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
-      const t0 = Date.now();
-      await generatePdf(html, pdfPath, isReceipt ? 'receipt' : 'sheet');
-      console.log(`   ✅ PDF generated in ${Date.now() - t0}ms: ${pdfPath}`);
+      const pdfPromise = generatePdf(html, pdfPath, isReceipt ? 'receipt' : 'sheet');
+      const claimed = await claimPromise;
+      await pdfPromise.catch((err) => {
+        if (claimed !== false) throw err;
+      });
+      if (claimed === false) {
+        console.log(`⏭️  Skip ${job.jobId} — another agent already claimed it`);
+        startedIds.delete(job.jobId);
+        releaseJobLock(job.jobId);
+        currentIds.delete(job.jobId);
+        continue;
+      }
+      console.log(`   ✅ PDF ready in ${Date.now() - t0}ms: ${pdfPath}`);
 
       console.log(`   🖨️  Sending PDF to printer [${printerName}]...`);
-      await new Promise((resolve, reject) => {
-        printPdfChain = printPdfChain
-          .then(() => withTimeout(printPdf(pdfPath, printerName), 20000, 'printPdf'))
-          .then(resolve, reject);
-      });
+      await printPdfSerialized(pdfPath, printerName);
       console.log(`   📤 Sent to Windows spooler [${printerName}]`);
 
       const confirm = await waitForPrintConfirmation(printerName, new Set());
       console.log(`   🖨️  Print confirmed (${confirm.mode}) on [${printerName}] (${Date.now() - t0}ms total)`);
 
-      // Mark done locally FIRST so overlapping catch-up cannot re-queue this job
       completedIds.add(job.jobId);
-      // Don't await HTTP — paper is already printing
       reportStatus(job.jobId, 'done').catch(() => {});
       fs.unlink(pdfPath, () => {});
     } catch (err) {
       console.error(`   ❌ Print failed:`, err.message);
       if (completedIds.has(job.jobId)) {
-        // Shouldn't happen, but never downgrade a completed print
         console.warn('   ⚠️  Ignoring failure after local completion');
       } else if (isPrinterIssueError(err.message)) {
-        printerDown = true;
-        // Allow a later retry after printer recovers
+        if (lane === 'sheet') printerDown = true;
         startedIds.delete(job.jobId);
         await reportStatus(job.jobId, 'pending', `Waiting for printer: ${err.message}`);
         console.log('   ⏳ Job held as pending — will print when printer/agent is back');
@@ -582,11 +595,11 @@ async function processQueue() {
         await reportStatus(job.jobId, 'failed', err.message);
       }
     } finally {
-      currentJobId = null;
+      currentIds.delete(job.jobId);
     }
   }
 
-  isProcessingQueue = false;
+  processing[lane] = false;
 }
 
 function releaseJobLock(id) {
@@ -598,14 +611,17 @@ function releaseJobLock(id) {
 async function claimJob(jobId) {
   const url = `${SERVER_URL}/api/print/job/${encodeURIComponent(jobId)}/claim`;
   try {
-    const res = await httpJson('POST', url, { agentId: `pid-${process.pid}` });
+    // Hard cap: a slow Railway round-trip must not delay the paper
+    const res = await withTimeout(
+      httpJson('POST', url, { agentId: `pid-${process.pid}` }, 1200),
+      1200,
+      'claim'
+    );
     return Boolean(res && (res.claimed === true || res.success === true));
   } catch (err) {
     const msg = String(err.message || '');
-    // Another agent / already done
     if (/HTTP 409/.test(msg) || /HTTP 404/.test(msg)) return false;
-    // Network blip: local file lock already makes us the only printer on this PC
-    console.warn(`   ⚠️  Claim unavailable for ${jobId} (${err.message}) — printing with local lock`);
+    console.warn(`   ⚠️  Claim skipped for ${jobId} (${err.message}) — printing with local lock`);
     return true;
   }
 }
@@ -635,7 +651,7 @@ socket.on('print:new-job', (job) => {
 });
 
 // ── HTTP helpers ──────────────────────────────────────────
-function httpJson(method, url, body) {
+function httpJson(method, url, body, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -660,7 +676,7 @@ function httpJson(method, url, body) {
           'x-agent-caps': receiptPrinterOk ? 'sheet,receipt' : 'sheet',
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
-        timeout: 15000,
+        timeout: timeoutMs,
       },
       (res) => {
         let data = '';
@@ -709,27 +725,37 @@ async function fetchAndEnqueuePending(reason) {
       return true;
     }
 
-    // If printer is down, hold jobs on server as pending — don't burn them as failed
-    const health = await getPrinterHealth(PRINTER_NAME);
-    if (!health.ok) {
-      printerDown = true;
-      lastPrinterOk = false;
-      console.warn(
-        `⏳ Printer not ready (${health.error || 'unknown'}) — holding ${jobs.length} unfinished job(s) until printer is back`
-      );
-      return true;
-    }
-
-    if (printerDown || lastPrinterOk === false) {
-      console.log('🖨️  Printer ready — releasing held print jobs...');
-      printerDown = false;
-    }
-    lastPrinterOk = true;
+    // Per-printer hold: a sleeping HP must never block cash receipts
+    const receipts = jobs.filter((j) => String(j.printData?.jobKind || '') === 'receipt');
+    const sheets = jobs.filter((j) => String(j.printData?.jobKind || '') !== 'receipt');
 
     let added = 0;
-    for (const job of jobs) {
-      const ok = enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true });
-      if (ok) added += 1;
+    if (receipts.length && receiptPrinterOk) {
+      for (const job of receipts) {
+        if (enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true })) added += 1;
+      }
+    } else if (receipts.length && !receiptPrinterOk) {
+      console.warn(`⏳ Receipt printer not ready — holding ${receipts.length} receipt(s)`);
+    }
+
+    if (sheets.length) {
+      const health = await getPrinterHealth(PRINTER_NAME);
+      if (!health.ok) {
+        printerDown = true;
+        lastPrinterOk = false;
+        console.warn(
+          `⏳ Sheet printer not ready (${health.error || 'unknown'}) — holding ${sheets.length} sheet(s); receipts still print`
+        );
+      } else {
+        if (printerDown || lastPrinterOk === false) {
+          console.log('🖨️  Sheet printer ready — releasing held jobs...');
+          printerDown = false;
+        }
+        lastPrinterOk = true;
+        for (const job of sheets) {
+          if (enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true })) added += 1;
+        }
+      }
     }
     console.log(
       `🔁 Catch-up (${reason}): server has ${jobs.length} unfinished job(s), queued ${added} new`
@@ -824,7 +850,7 @@ function getLocalBrowserPath() {
 }
 
 function printPdf(pdfPath, printerName) {
-  const options = { scale: 'noscale' };
+  const options = { scale: 'noscale', silent: true };
   const name = String(printerName || PRINTER_NAME || '').trim();
   if (name) options.printer = name;
   return print(pdfPath, options);
@@ -913,9 +939,10 @@ function buildReceiptHtml(data) {
 </html>`;
 }
 
-// Keep one Chrome alive — cold launch every job was ~5–6s of the ~15s feel
+// Keep one Chrome + a tab per printer kind — sheet and receipt can render at the same time
 let pdfBrowser = null;
 let pdfBrowserLaunching = null;
+const pdfPages = { sheet: null, receipt: null };
 
 async function getPdfBrowser() {
   if (pdfBrowser) {
@@ -945,6 +972,8 @@ async function getPdfBrowser() {
     });
     browser.on('disconnected', () => {
       if (pdfBrowser === browser) pdfBrowser = null;
+      pdfPages.sheet = null;
+      pdfPages.receipt = null;
     });
     pdfBrowser = browser;
     return browser;
@@ -957,10 +986,32 @@ async function getPdfBrowser() {
   }
 }
 
+async function getWarmPdfPage(kind) {
+  const key = kind === 'receipt' ? 'receipt' : 'sheet';
+  const browser = await getPdfBrowser();
+  if (pdfPages[key]) {
+    try {
+      if (!pdfPages[key].isClosed()) return pdfPages[key];
+    } catch (_) {}
+    pdfPages[key] = null;
+  }
+  const page = await browser.newPage();
+  page.on('close', () => {
+    if (pdfPages[key] === page) pdfPages[key] = null;
+  });
+  pdfPages[key] = page;
+  return page;
+}
+
 async function warmPdfBrowser() {
   try {
-    await getPdfBrowser();
-    console.log('🔥 PDF browser warmed — next prints skip Chrome cold-start');
+    await Promise.all(
+      ['sheet', 'receipt'].map(async (kind) => {
+        const page = await getWarmPdfPage(kind);
+        await page.setContent('<html><body></body></html>', { waitUntil: 'domcontentloaded', timeout: 4000 });
+      })
+    );
+    console.log('🔥 PDF browser warmed (sheet + receipt tabs) — next prints skip Chrome cold-start');
   } catch (err) {
     console.warn('⚠️  PDF browser warm failed:', err.message);
   }
@@ -986,14 +1037,9 @@ function pdfPaper(kind) {
 }
 
 async function generatePdfViaWarmBrowser(html, outputPath, kind) {
-  const browser = await getPdfBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 8000 });
-    await page.pdf({ path: outputPath, ...pdfPaper(kind) });
-  } finally {
-    await page.close().catch(() => {});
-  }
+  const page = await getWarmPdfPage(kind === 'receipt' ? 'receipt' : 'sheet');
+  await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 4000 });
+  await page.pdf({ path: outputPath, ...pdfPaper(kind) });
 }
 
 async function generatePdfViaBrowserCli(html, outputPath) {
@@ -1051,6 +1097,8 @@ async function generatePdf(html, outputPath, kind) {
       await pdfBrowser.close();
     } catch (_) {}
     pdfBrowser = null;
+    pdfPages.sheet = null;
+    pdfPages.receipt = null;
   }
 
   try {
@@ -1081,6 +1129,15 @@ async function generatePdf(html, outputPath, kind) {
 
 // Pre-warm as soon as agent starts (don't wait for first job)
 warmPdfBrowser();
+setInterval(() => {
+  for (const key of ['sheet', 'receipt']) {
+    const page = pdfPages[key];
+    if (!page) continue;
+    page.evaluate(() => 1).catch(() => {
+      pdfPages[key] = null;
+    });
+  }
+}, 45000);
 
 function escapeHtml(value) {
   return String(value ?? '')

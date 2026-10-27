@@ -5,7 +5,7 @@
     "SERVER_URL":  "https://elegance-dental-lab-by-yasser-production-5940.up.railway.app",
     "PRINTER_NAME":  "HP LaserJet Professional P1102",
     "RECEIPT_PRINTER_NAME": "XP-Q808K",
-    "POLL_INTERVAL_MS":  20000,
+    "POLL_INTERVAL_MS":  4000,
     "CONTROL_PORT":  17891,
     "AUTO_START_AGENT":  true,
     "SCAN_AGENT_DIR": "../scan-agent",
