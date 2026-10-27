@@ -870,12 +870,16 @@ function buildReceiptHtml(data) {
     .replace(/\s*am$/i, ' AM')
     .replace(/\s*pm$/i, ' PM');
   const when = `<span class="num">${escapeHtml(whenRaw)}</span>`;
-  const note = escapeHtml(data.receiptNote || '');
+  const payMethod = escapeHtml(data.payMethod || data.receiptNote || '');
   const workLines = String(data.workDetail || '')
     .split('\n')
     .map((s) => s.trim())
     .filter((s) => s && s.includes('×'));
-  const money = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n) =>
+    (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const billTotal = Number(data.billTotal) > 0 ? Number(data.billTotal) : amount;
+  const paidTotal = Number(data.paidTotal) > 0 ? Number(data.paidTotal) : amount;
+  const remaining = Math.max(0, Number(data.remaining) || Math.max(0, billTotal - paidTotal));
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -908,7 +912,10 @@ function buildReceiptHtml(data) {
   .work { margin: 8px 0; }
   .work .item { display: flex; justify-content: space-between; gap: 10px; padding: 8px 2px; }
   .work .item .qty { font-weight: 700; direction: ltr; unicode-bidi: isolate; }
-  .amount { font-size: 24px; font-weight: 700; text-align: center; margin: 16px 0; }
+  .money { margin: 8px 0 4px; }
+  .money .row { margin: 8px 0; }
+  .money .paid { font-size: 17px; font-weight: 700; }
+  .money .remain { font-weight: 700; }
   .num { direction: ltr; unicode-bidi: isolate; display: inline-block; }
   .thanks { text-align: center; margin: 12px 0 8px; }
 </style>
@@ -920,6 +927,7 @@ function buildReceiptHtml(data) {
   <div class="row"><span class="lbl">الدكتور</span><span class="v">${doctor}</span></div>
   ${patient ? `<div class="row"><span class="lbl">المريض</span><span class="v">${patient}</span></div>` : ''}
   <div class="row"><span class="lbl">التاريخ</span><span class="v">${when}</span></div>
+  ${payMethod ? `<div class="row"><span class="lbl">طريقة الدفع</span><span class="v">${payMethod}</span></div>` : ''}
   ${
     workLines.length
       ? `<div class="line"></div><div class="work">${workLines
@@ -931,8 +939,11 @@ function buildReceiptHtml(data) {
       : ''
   }
   <div class="line"></div>
-  <div class="amount"><span class="num">${money}</span> ج.م</div>
-  ${note ? `<div class="center">${note}</div>` : ''}
+  <div class="money">
+    <div class="row"><span class="lbl">المبلغ الكامل</span><span class="v num">${fmt(billTotal)} ج.م</span></div>
+    <div class="row paid"><span class="lbl">المدفوع</span><span class="v num">${fmt(paidTotal)} ج.م</span></div>
+    <div class="row remain"><span class="lbl">المتبقي</span><span class="v num">${fmt(remaining)} ج.م</span></div>
+  </div>
   <div class="line"></div>
   <div class="thanks">شكراً لتعاملكم معنا</div>
 </body>

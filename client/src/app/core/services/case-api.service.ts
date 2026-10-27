@@ -230,17 +230,32 @@ export class CaseApiService {
 
   /** Record a cash payment linked to a case (marks it paid when covered + prints receipt). */
   /** `notes` = ledger note (with case ref); `receiptNote` = free text printed on the receipt only */
-  collectCasePayment(bill: CaseBill, amount: number, notes: string = '', receiptNote: string = ''): Observable<any> {
+  collectCasePayment(
+    bill: CaseBill,
+    amount: number,
+    notes: string = '',
+    paymentMethod: string = 'cash'
+  ): Observable<any> {
     return this.http.post(`${this.rootApiUrl}/doctor-payments`, {
       doctorName: bill.doctorName,
       amount,
       notes,
-      receiptNote,
+      paymentMethod,
+      billTotal: Number(bill.amount) || 0,
       entryType: 'payment',
       caseId: bill.caseId,
     });
   }
 }
+
+export type PayMethod = 'cash' | 'instapay' | 'vodafone' | 'bank';
+
+export const PAY_METHODS: { id: PayMethod; labelKey: string }[] = [
+  { id: 'cash', labelKey: 'bill.method.cash' },
+  { id: 'instapay', labelKey: 'bill.method.instapay' },
+  { id: 'vodafone', labelKey: 'bill.method.vodafone' },
+  { id: 'bank', labelKey: 'bill.method.bank' },
+];
 
 export interface CaseBill {
   caseId: string;
@@ -252,7 +267,8 @@ export interface CaseBill {
   nonBillable: boolean;
   paymentStatus: 'paid' | 'unpaid';
   paidAt: string | null;
+  paymentMethod?: string;
   paidTotal: number;
   currentStage: string;
-  payments: { id: string; amount: number; entryType: string; paymentDate: string | null; notes: string }[];
+  payments: { id: string; amount: number; entryType: string; paymentDate: string | null; notes: string; paymentMethod?: string }[];
 }

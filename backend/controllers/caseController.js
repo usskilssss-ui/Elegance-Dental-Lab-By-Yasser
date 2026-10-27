@@ -710,7 +710,7 @@ exports.getAllCases = async (req, res) => {
     const limitNum = Math.min(Math.max(1, requested), 2000);
     const skip = (pageNum - 1) * limitNum;
     const caseSelect =
-      'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor referringDoctorId plyScanPath plyFileName currentStage status assignedTo createdBy caseType originalEntry priority dueDate salaryAmount paymentStatus paidAt stageTimestamps createdAt updatedAt';
+      'caseNumber patientName patientEmail patientPhone requesterType notes referringDoctor referringDoctorId plyScanPath plyFileName currentStage status assignedTo createdBy caseType originalEntry priority dueDate salaryAmount paymentStatus paidAt paymentMethod stageTimestamps createdAt updatedAt';
 
     const listQuery = (q) =>
       q
@@ -3073,6 +3073,24 @@ exports.uploadCaseImage = async (req, res) => {
   }
 };
 
+function inferPayMethodFromDoc(p) {
+  const raw = String(p?.paymentMethod || '').toLowerCase().trim();
+  if (['cash', 'instapay', 'vodafone', 'bank'].includes(raw)) return raw;
+  const n = String(p?.notes || '');
+  if (/انستا|insta/i.test(n)) return 'instapay';
+  if (/فودافون|vodafone/i.test(n)) return 'vodafone';
+  if (/تحويل|بنك|bank/i.test(n)) return 'bank';
+  if (/كاش|cash/i.test(n)) return 'cash';
+  return '';
+}
+
+function inferCasePayMethod(dentalCase, payments) {
+  const onCase = String(dentalCase?.paymentMethod || '').toLowerCase().trim();
+  if (['cash', 'instapay', 'vodafone', 'bank'].includes(onCase)) return onCase;
+  const last = (payments || []).find((p) => String(p.entryType || 'payment') !== 'charge');
+  return inferPayMethodFromDoc(last || {});
+}
+
 /**
  * Bill summary for one case (reception / admin): doctor, amount due, paid status,
  * and case-linked ledger payments. Amount = frozen snapshot at exit, else live price.
@@ -3131,6 +3149,7 @@ exports.getCaseBill = async (req, res) => {
         nonBillable: isNonBillableCase(dentalCase.caseType, meta),
         paymentStatus: dentalCase.paymentStatus === 'paid' ? 'paid' : 'unpaid',
         paidAt: dentalCase.paidAt || null,
+        paymentMethod: inferCasePayMethod(dentalCase, payments),
         paidTotal,
         currentStage: dentalCase.currentStage,
         payments: payments.map((p) => ({
@@ -3139,6 +3158,7 @@ exports.getCaseBill = async (req, res) => {
           entryType: String(p.entryType || 'payment'),
           paymentDate: p.paymentDate || null,
           notes: p.notes || '',
+          paymentMethod: inferPayMethodFromDoc(p),
         })),
       },
     });

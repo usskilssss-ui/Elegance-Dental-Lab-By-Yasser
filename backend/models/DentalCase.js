@@ -155,6 +155,12 @@ const dentalCaseSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    /** Last collection method: cash | instapay | vodafone | bank */
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'instapay', 'vodafone', 'bank', ''],
+      default: '',
+    },
 
     // Timestamps for each stage
     stageTimestamps: {

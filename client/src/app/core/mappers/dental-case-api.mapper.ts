@@ -480,6 +480,7 @@ export function mapApiCaseToDentalCase(doc: Record<string, unknown>): DentalCase
     patientPhone: String(doc['patientPhone'] ?? ''),
     salaryAmount,
     paymentStatus: String(doc['paymentStatus'] ?? 'unpaid') === 'paid' ? 'paid' : 'unpaid',
+    paymentMethod: String(doc['paymentMethod'] || ''),
     finishingNotes,
     plyScanUrl: plyScanUrl || undefined,
     plyFileName: plyFileName || undefined,

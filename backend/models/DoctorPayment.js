@@ -35,7 +35,14 @@ const DoctorPaymentSchema = new mongoose.Schema({
   notes: {
     type: String,
     default: ''
-  }
+  },
+  /** cash | instapay | vodafone | bank */
+  paymentMethod: {
+    type: String,
+    enum: ['cash', 'instapay', 'vodafone', 'bank', ''],
+    default: '',
+    index: true,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DoctorPayment', DoctorPaymentSchema);

@@ -7,7 +7,7 @@ import { catchError, concatMap, forkJoin, from, map, of, Subscription, switchMap
 import type { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
-import { CaseApiService, type CaseBill } from '../../core/services/case-api.service';
+import { CaseApiService, PAY_METHODS, type CaseBill, type PayMethod } from '../../core/services/case-api.service';
 import { SharedCasesService, type DentalCase } from '../../core/services/shared-cases.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import {
@@ -3133,7 +3133,8 @@ export class Secretary implements OnInit, OnDestroy {
   billLoading = false;
   billError = '';
   collectAmount: number | null = null;
-  collectNotes = '';
+  collectMethod: PayMethod = 'cash';
+  readonly payMethods = PAY_METHODS;
   collectSaving = false;
 
   /** Show "unpaid" only on finished/exited cases; "paid" whenever paid. */
@@ -3149,7 +3150,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.billError = '';
     this.billLoading = true;
     this.collectAmount = null;
-    this.collectNotes = '';
+    this.collectMethod = 'cash';
     this.caseApi.getCaseBill(c.id).subscribe({
       next: (res) => {
         this.billLoading = false;
@@ -3190,16 +3191,18 @@ export class Secretary implements OnInit, OnDestroy {
     }
     this.collectSaving = true;
     this.billError = '';
-    const note = [`حالة ${b.caseNumber}`, b.patientName ? `المريض ${b.patientName}` : '', this.collectNotes.trim()]
+    const methodLabel = this.lang.t(`bill.method.${this.collectMethod}`);
+    const note = [`حالة ${b.caseNumber}`, b.patientName ? `المريض ${b.patientName}` : '', methodLabel]
       .filter(Boolean)
       .join(' — ');
-    this.caseApi.collectCasePayment(b, amount, note, this.collectNotes.trim()).subscribe({
+    this.caseApi.collectCasePayment(b, amount, note, this.collectMethod).subscribe({
       next: (res) => {
         this.collectSaving = false;
         const status = String(res?.data?.casePaymentStatus || '');
         if (status === 'paid') {
           c.paymentStatus = 'paid';
         }
+        c.paymentMethod = this.collectMethod;
         this.flash(this.lang.t('bill.collectedToast'));
         this.openBill(c);
         this.scheduleBackgroundReload();
@@ -3209,6 +3212,14 @@ export class Secretary implements OnInit, OnDestroy {
         this.billError = String(err?.error?.message || err?.message || 'تعذر تسجيل التحصيل');
       },
     });
+  }
+
+  payMethodLabel(method: string | null | undefined): string {
+    const k = String(method || '').toLowerCase();
+    if (k === 'cash' || k === 'instapay' || k === 'vodafone' || k === 'bank') {
+      return this.lang.t(`bill.method.${k}`);
+    }
+    return '';
   }
 
   formatMoney(n: number | null | undefined): string {

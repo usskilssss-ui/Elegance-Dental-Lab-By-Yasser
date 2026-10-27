@@ -20,6 +20,28 @@ function receiptWorkLines(dentalCase) {
   return lines;
 }
 
+const PAY_METHODS = {
+  cash: 'كاش',
+  instapay: 'انستا باي',
+  vodafone: 'فودافون كاش',
+  bank: 'تحويل بنكي',
+};
+
+function normalizePayMethod(raw) {
+  const k = String(raw || '').toLowerCase().trim();
+  if (PAY_METHODS[k]) return k;
+  if (/انستا|insta/.test(k)) return 'instapay';
+  if (/فودافون|vodafone/.test(k)) return 'vodafone';
+  if (/تحويل|بنك|bank/.test(k)) return 'bank';
+  if (/كاش|cash/.test(k)) return 'cash';
+  return '';
+}
+
+function payMethodLabel(raw) {
+  const k = normalizePayMethod(raw);
+  return k ? PAY_METHODS[k] : '';
+}
+
 function parseMetaQuick(notes) {
   const s = String(notes || '');
   if (!s.startsWith('__META__\n')) return {};
@@ -90,6 +112,8 @@ exports.addPayment = async (req, res) => {
       }
     }
 
+    const paymentMethod = type === 'payment' ? normalizePayMethod(req.body?.paymentMethod) : '';
+
     let payment = await DoctorPayment.create({
       doctorName: normalizedName,
       amount: Number(amount),
@@ -97,6 +121,7 @@ exports.addPayment = async (req, res) => {
       notes: normalizedNotes,
       entryType: type,
       caseId: req.body?.caseId || null,
+      paymentMethod,
     });
 
     // Force-repair if schema/default left it as payment despite charge intent
@@ -161,22 +186,34 @@ exports.addPayment = async (req, res) => {
           const covers = due > 0 ? paidTotal + 0.009 >= due : paidTotal > 0;
           data.casePaidTotal = paidTotal;
           data.caseDue = due;
+          let caseDirty = false;
+          if (paymentMethod) {
+            dentalCase.paymentMethod = paymentMethod;
+            caseDirty = true;
+          }
           if (covers && dentalCase.paymentStatus !== 'paid') {
             dentalCase.paymentStatus = 'paid';
             dentalCase.paidAt = payment.paymentDate || new Date();
             dentalCase.paidBy = req.user?.id || null;
             if (!(Number(dentalCase.salaryAmount) > 0) && due > 0) dentalCase.salaryAmount = due;
+            caseDirty = true;
+          }
+          if (caseDirty) {
             await dentalCase.save();
-            try {
-              const { emitToAll } = require('../services/socketService');
-              emitToAll('case:updated', {
-                caseId: String(dentalCase._id),
-                caseNumber: dentalCase.caseNumber,
-                paymentStatus: 'paid',
-              });
-            } catch (_) {}
+            if (dentalCase.paymentStatus === 'paid') {
+              try {
+                const { emitToAll } = require('../services/socketService');
+                emitToAll('case:updated', {
+                  caseId: String(dentalCase._id),
+                  caseNumber: dentalCase.caseNumber,
+                  paymentStatus: 'paid',
+                  paymentMethod: dentalCase.paymentMethod || paymentMethod,
+                });
+              } catch (_) {}
+            }
           }
           data.casePaymentStatus = dentalCase.paymentStatus;
+          data.paymentMethod = paymentMethod;
         }
       } catch (caseErr) {
         console.warn('Case paid flag update failed:', caseErr.message);
@@ -186,16 +223,25 @@ exports.addPayment = async (req, res) => {
     if (type === 'payment') {
       try {
         const { queueCashReceipt } = require('./printController');
+        const thisPay = Number(amount) || 0;
+        const paidTotal = Number(data.casePaidTotal) > 0 ? Number(data.casePaidTotal) : thisPay;
+        const hintDue = Number(req.body?.billTotal);
+        const computedDue = Number(data.caseDue) || 0;
+        const billTotal = hintDue > 0 ? hintDue : (computedDue > 0 ? computedDue : paidTotal);
+        const remaining = Math.max(0, Math.round((billTotal - paidTotal) * 100) / 100);
         const receipt = await queueCashReceipt(
           {
             doctorName: normalizedName,
-            amount: Number(amount),
+            amount: thisPay,
             paymentDate: payment.paymentDate,
             receiptNo: String(payment._id),
             patientName: linkedCase ? linkedCase.patientName : '',
             workLines: linkedCase ? receiptWorkLines(linkedCase) : [],
-            // Free-text note only; the ledger note (with case ref) stays in `notes`
-            receiptNote: req.body?.receiptNote !== undefined ? String(req.body.receiptNote) : (linkedCase ? '' : normalizedNotes),
+            billTotal,
+            paidTotal,
+            remaining,
+            payMethod: payMethodLabel(paymentMethod),
+            receiptNote: payMethodLabel(paymentMethod) || (req.body?.receiptNote !== undefined ? String(req.body.receiptNote) : ''),
           },
           req.user?.id
         );
@@ -222,7 +268,7 @@ exports.deletePayment = async (req, res) => {
       const DentalCase = require('../models/DentalCase');
       await DentalCase.updateOne(
         { _id: payment.caseId, paymentStatus: 'paid' },
-        { $set: { paymentStatus: 'unpaid', paidAt: null, paidBy: null } }
+        { $set: { paymentStatus: 'unpaid', paidAt: null, paidBy: null, paymentMethod: '' } }
       );
     }
     res.status(200).json({ success: true, message: 'Payment deleted successfully' });

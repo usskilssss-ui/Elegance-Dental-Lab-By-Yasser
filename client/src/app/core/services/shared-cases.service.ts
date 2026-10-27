@@ -40,6 +40,7 @@ export interface DentalCase {
   salaryAmount?: number;
   /** حالة الدفع من السيرفر (paid / unpaid) */
   paymentStatus?: 'paid' | 'unpaid';
+  paymentMethod?: string;
   finishingNotes?: string;
   /** مسار ملف المسح .ply (رابط كامل للعرض/التحميل) */
   plyScanUrl?: string;

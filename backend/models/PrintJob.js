@@ -15,6 +15,10 @@ const printJobSchema = new mongoose.Schema(
       printDate:  { type: String, default: '' },
       jobKind:    { type: String, enum: ['sheet', 'receipt'], default: 'sheet' },
       amount:     { type: Number, default: 0 },
+      billTotal:  { type: Number, default: 0 },
+      paidTotal:  { type: Number, default: 0 },
+      remaining:  { type: Number, default: 0 },
+      payMethod:  { type: String, default: '' },
       receiptNote:{ type: String, default: '' },
       intakeType: { type: String, enum: ['', 'impression', 'scan'], default: '' },
       /** FDI tooth chart selections for print sheet highlighting */
