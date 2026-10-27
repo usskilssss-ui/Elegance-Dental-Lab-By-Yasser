@@ -2,14 +2,14 @@ import { environment } from '../../../environments/environment';
 
 /** Production Elegance Railway API */
 export const ELEGANCE_RAILWAY_API =
-  'https://elegance-dental-lab-by-yasser-production-da7c.up.railway.app/api';
+  'https://elegance-dental-lab-by-yasser-production-5940.up.railway.app/api';
 
 /**
  * Demo Railway API — replace after you create the demo Railway service.
  * Keep this updated in vercel.demo.json rewrites too (see docs/DEMO.md).
  */
 export const DEMO_RAILWAY_API =
-  'https://elegance-demo-api.up.railway.app/api';
+  'https://elegance-demo-api-ussskils22-progs-projects.vercel.app/api';
 
 /** Hostnames that must talk to the demo API (never production Mongo). */
 const DEMO_HOSTS = new Set([
