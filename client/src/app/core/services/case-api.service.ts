@@ -229,11 +229,13 @@ export class CaseApiService {
   }
 
   /** Record a cash payment linked to a case (marks it paid when covered + prints receipt). */
-  collectCasePayment(bill: CaseBill, amount: number, notes: string = ''): Observable<any> {
+  /** `notes` = ledger note (with case ref); `receiptNote` = free text printed on the receipt only */
+  collectCasePayment(bill: CaseBill, amount: number, notes: string = '', receiptNote: string = ''): Observable<any> {
     return this.http.post(`${this.rootApiUrl}/doctor-payments`, {
       doctorName: bill.doctorName,
       amount,
       notes,
+      receiptNote,
       entryType: 'payment',
       caseId: bill.caseId,
     });

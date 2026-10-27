@@ -3193,7 +3193,7 @@ export class Secretary implements OnInit, OnDestroy {
     const note = [`حالة ${b.caseNumber}`, b.patientName ? `المريض ${b.patientName}` : '', this.collectNotes.trim()]
       .filter(Boolean)
       .join(' — ');
-    this.caseApi.collectCasePayment(b, amount, note).subscribe({
+    this.caseApi.collectCasePayment(b, amount, note, this.collectNotes.trim()).subscribe({
       next: (res) => {
         this.collectSaving = false;
         const status = String(res?.data?.casePaymentStatus || '');

@@ -824,7 +824,7 @@ function getLocalBrowserPath() {
 }
 
 function printPdf(pdfPath, printerName) {
-  const options = {};
+  const options = { scale: 'noscale' };
   const name = String(printerName || PRINTER_NAME || '').trim();
   if (name) options.printer = name;
   return print(pdfPath, options);
@@ -832,37 +832,83 @@ function printPdf(pdfPath, printerName) {
 
 function buildReceiptHtml(data) {
   const doctor = escapeHtml(data.doctor || '');
+  // Old receipt jobs stored a placeholder in `patient` — never print that
+  const patientRaw = String(data.patient || '').trim();
+  const patient = /^إيصال/.test(patientRaw) ? '' : escapeHtml(patientRaw);
   const amount = Number(data.amount) || 0;
-  const when = escapeHtml(data.printDate || '');
-  const note = escapeHtml(data.receiptNote || data.workDetail || '');
-  const receiptNo = escapeHtml(String(data.caseNumber || '').slice(-8));
-  const money = amount.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Keep the whole timestamp LTR so AM/PM stays after the time, not eaten by RTL
+  const whenRaw = String(data.printDate || '')
+    .trim()
+    .replace(/\s*ص$/u, ' AM')
+    .replace(/\s*م$/u, ' PM')
+    .replace(/\s*am$/i, ' AM')
+    .replace(/\s*pm$/i, ' PM');
+  const when = `<span class="num">${escapeHtml(whenRaw)}</span>`;
+  const note = escapeHtml(data.receiptNote || '');
+  const workLines = String(data.workDetail || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s && s.includes('×'));
+  const money = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8"/>
 <style>
-  @page { size: 80mm 150mm; margin: 4mm; }
-  body { font-family: Tahoma, sans-serif; width: 72mm; margin: 0; color: #000; font-size: 13px; }
-  h1 { font-size: 16px; text-align: center; margin: 0 0 4px; }
+  @page { size: 80mm 220mm; margin: 10mm 10mm 18mm 10mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: Tahoma, Arial, sans-serif;
+    color: #000;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 6mm 4mm 20mm 4mm;
+  }
+  h1 { font-size: 18px; text-align: center; margin: 0 0 8px; letter-spacing: 0.2px; }
+  .subtitle { text-align: center; font-size: 15px; margin: 0 0 4px; }
   .center { text-align: center; }
-  .line { border-top: 1px dashed #000; margin: 8px 0; }
-  .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
-  .amount { font-size: 22px; font-weight: 700; text-align: center; margin: 8px 0; }
+  .line { border-top: 1px dashed #000; margin: 14px 0; }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 10px 0;
+    padding: 0 2px;
+  }
+  .row .lbl { flex: 0 0 auto; padding-right: 2px; }
+  .row .v { font-weight: 600; text-align: left; flex: 1 1 auto; word-break: break-word; }
+  .work { margin: 8px 0; }
+  .work .item { display: flex; justify-content: space-between; gap: 10px; padding: 8px 2px; }
+  .work .item .qty { font-weight: 700; direction: ltr; unicode-bidi: isolate; }
+  .amount { font-size: 24px; font-weight: 700; text-align: center; margin: 16px 0; }
+  .num { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+  .thanks { text-align: center; margin: 12px 0 8px; }
 </style>
 </head>
 <body>
   <h1>Elegance Dental Lab</h1>
-  <div class="center">إيصال تحصيل</div>
+  <div class="subtitle">إيصال تحصيل</div>
   <div class="line"></div>
-  <div class="row"><span>الدكتور</span><span>${doctor}</span></div>
-  <div class="row"><span>التاريخ</span><span>${when}</span></div>
-  ${receiptNo ? `<div class="row"><span>رقم</span><span>${receiptNo}</span></div>` : ''}
+  <div class="row"><span class="lbl">الدكتور</span><span class="v">${doctor}</span></div>
+  ${patient ? `<div class="row"><span class="lbl">المريض</span><span class="v">${patient}</span></div>` : ''}
+  <div class="row"><span class="lbl">التاريخ</span><span class="v">${when}</span></div>
+  ${
+    workLines.length
+      ? `<div class="line"></div><div class="work">${workLines
+          .map((l) => {
+            const [name, qty] = l.split('×').map((s) => s.trim());
+            return `<div class="item"><span>${escapeHtml(name)}</span><span class="qty">× ${escapeHtml(qty || '1')}</span></div>`;
+          })
+          .join('')}</div>`
+      : ''
+  }
   <div class="line"></div>
-  <div class="amount">${money} ج.م</div>
+  <div class="amount"><span class="num">${money}</span> ج.م</div>
   ${note ? `<div class="center">${note}</div>` : ''}
   <div class="line"></div>
-  <div class="center">شكراً لتعاملكم معنا</div>
+  <div class="thanks">شكراً لتعاملكم معنا</div>
 </body>
 </html>`;
 }
@@ -924,10 +970,11 @@ function pdfPaper(kind) {
   if (kind === 'receipt') {
     return {
       width: '80mm',
-      height: '160mm',
+      height: '220mm',
       printBackground: true,
       preferCSSPageSize: true,
-      margin: { top: '4mm', right: '3mm', bottom: '4mm', left: '3mm' },
+      // CSS @page owns the page box — extra puppeteer margin here would double-shrink the content
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
     };
   }
   return {

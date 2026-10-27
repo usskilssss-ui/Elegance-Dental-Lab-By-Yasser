@@ -162,18 +162,33 @@ exports.queueCashReceipt = async function queueCashReceipt(payload, userId) {
   if (!doctor || !(amount > 0)) return null;
 
   const when = payload?.paymentDate ? new Date(payload.paymentDate) : new Date();
-  const printDate = when.toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' });
+  // Latin digits + AM/PM: "27/10/2026 06:39 PM"
+  const printDate = when
+    .toLocaleString('en-GB', {
+      timeZone: 'Africa/Cairo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    .replace(',', '')
+    .replace(/\s*am$/i, ' AM')
+    .replace(/\s*pm$/i, ' PM');
+  // Work lines like "Emax × 3" — one per line, built from the case type by the caller
+  const workLines = Array.isArray(payload?.workLines) ? payload.workLines.filter(Boolean) : [];
   const job = await PrintJob.create({
     printData: {
       doctor,
-      patient: 'إيصال تحصيل',
+      patient: String(payload?.patientName || '').trim(),
       workType: 'تحصيل',
-      workDetail: String(payload?.notes || '').trim(),
+      workDetail: workLines.join('\n'),
       caseNumber: String(payload?.receiptNo || '').trim(),
       printDate,
       jobKind: 'receipt',
       amount,
-      receiptNote: String(payload?.notes || '').trim(),
+      receiptNote: String(payload?.receiptNote ?? '').trim(),
     },
     status: 'pending',
     createdBy: userId || null,

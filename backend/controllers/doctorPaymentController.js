@@ -1,4 +1,30 @@
 const DoctorPayment = require('../models/DoctorPayment');
+const { splitNormalizedCaseTypeParts } = require('../utils/caseTypeParts');
+
+/** "Emax (3) + Redo - Zircon (2)" → ["Emax × 3", "Redo - Zircon × 2"] for the cash receipt */
+function receiptWorkLines(dentalCase) {
+  const parts = splitNormalizedCaseTypeParts(dentalCase?.caseType);
+  const lines = [];
+  for (const part of parts) {
+    const m = String(part).match(/^(.*?)\s*\((\d+)\)\s*$/);
+    const name = (m ? m[1] : String(part)).trim();
+    if (!name || /^(empty|unknown|غير معروف)$/i.test(name)) continue;
+    const qty = m ? Number(m[2]) : 1;
+    lines.push(`${name} × ${qty}`);
+  }
+  if (!lines.length) {
+    const meta = parseMetaQuick(dentalCase?.notes);
+    const name = String(meta.workDetail || '').trim();
+    if (name) lines.push(`${name} × ${Number(meta.quantity) || 1}`);
+  }
+  return lines;
+}
+
+function parseMetaQuick(notes) {
+  const s = String(notes || '');
+  if (!s.startsWith('__META__\n')) return {};
+  try { return JSON.parse(s.slice('__META__\n'.length)) || {}; } catch (_) { return {}; }
+}
 
 function isChargeEntry(doc) {
   const type = String(doc?.entryType || '').toLowerCase().trim();
@@ -116,11 +142,13 @@ exports.addPayment = async (req, res) => {
     data.notes = normalizedNotes;
 
     // Case-linked payment: mark the case paid once linked payments cover the bill
+    let linkedCase = null;
     if (type === 'payment' && payment.caseId) {
       try {
         const DentalCase = require('../models/DentalCase');
         const { frozenBillAmount, hasFrozenSnapshot } = require('../services/doctorBalanceService');
         const dentalCase = await DentalCase.findById(payment.caseId);
+        linkedCase = dentalCase;
         if (dentalCase) {
           const linked = await DoctorPayment.find({
             caseId: dentalCase._id,
@@ -162,9 +190,12 @@ exports.addPayment = async (req, res) => {
           {
             doctorName: normalizedName,
             amount: Number(amount),
-            notes: normalizedNotes,
             paymentDate: payment.paymentDate,
             receiptNo: String(payment._id),
+            patientName: linkedCase ? linkedCase.patientName : '',
+            workLines: linkedCase ? receiptWorkLines(linkedCase) : [],
+            // Free-text note only; the ledger note (with case ref) stays in `notes`
+            receiptNote: req.body?.receiptNote !== undefined ? String(req.body.receiptNote) : (linkedCase ? '' : normalizedNotes),
           },
           req.user?.id
         );
