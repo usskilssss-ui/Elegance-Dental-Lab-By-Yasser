@@ -399,7 +399,6 @@ function enqueueJob(job, source, opts = {}) {
   const kind = queueKindFor(job);
   queues[kind].push({ jobId: id, printData: job.printData || {} });
   console.log(`📥 Queued ${kind} job ${id} (via ${source}, pid ${process.pid})`);
-  if (kind === 'sheet') wakeSheetPrinter();
   processQueue(kind);
   return true;
 }
@@ -928,46 +927,8 @@ function printPdf(pdfPath, printerName) {
   return print(pdfPath, { scale: 'noscale', silent: true });
 }
 
-/** PJL ping — wakes the P1102 without printing a page, so the next request starts immediately. */
-function wakeSheetPrinter() {
-  if (process.platform !== 'win32' || !PRINTER_NAME) return;
-  const printer = String(PRINTER_NAME).replace(/'/g, "''");
-  const ps = `
-$ErrorActionPreference = 'SilentlyContinue'
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class RawWake {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
-  public class DOCINFOA { public string pDocName; public string pOutputFile; public string pDatatype; }
-  [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);
-  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);
-  [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool StartDocPrinter(IntPtr h, int l, [In] DOCINFOA d);
-  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);
-  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool WritePrinter(IntPtr h, byte[] b, int c, out int w);
-}
-"@
-$h = [IntPtr]::Zero
-if (-not [RawWake]::OpenPrinter('${printer}', [ref]$h, [IntPtr]::Zero)) { exit 0 }
-$di = New-Object RawWake+DOCINFOA
-$di.pDocName = 'wake'
-$di.pDatatype = 'RAW'
-[RawWake]::StartDocPrinter($h, 1, $di) | Out-Null
-$pjl = [Text.Encoding]::ASCII.GetBytes([char]27 + '%-12345X@PJL INFO STATUS' + [char]13 + [char]10 + '@PJL SET SLEEP=0' + [char]13 + [char]10 + [char]27 + '%-12345X')
-$w = 0
-[RawWake]::WritePrinter($h, $pjl, $pjl.Length, [ref]$w) | Out-Null
-[RawWake]::EndDocPrinter($h) | Out-Null
-[RawWake]::ClosePrinter($h) | Out-Null
-`;
-  execFile(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
-    { windowsHide: true, timeout: 4000 },
-    () => {}
-  );
-}
+/** Disabled: on HP P1102 USB these RAW "wake" docs sit in the queue and delay the real sheet. */
+function wakeSheetPrinter() {}
 
 function buildReceiptHtml(data) {
   const doctor = escapeHtml(data.doctor || '');
@@ -1253,8 +1214,6 @@ async function generatePdf(html, outputPath, kind) {
 
 // Pre-warm as soon as agent starts (don't wait for first job)
 warmPdfBrowser();
-setTimeout(() => wakeSheetPrinter(), 400);
-setInterval(() => wakeSheetPrinter(), 20000);
 setInterval(() => {
   for (const key of ['sheet', 'receipt']) {
     const page = pdfPages[key];
