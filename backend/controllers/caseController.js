@@ -1847,7 +1847,7 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    const dentalCase = await findCaseByScanCode(scannedRaw);
+    let dentalCase = await findCaseByScanCode(scannedRaw);
 
     if (!dentalCase) {
       return res.status(404).json({
@@ -1889,24 +1889,40 @@ exports.scanAtStation = async (req, res) => {
       });
     }
 
-    dentalCase.currentStage = targetStage;
-    // Keep status in sync with stage
-    if (targetStage === 'completed') {
-      dentalCase.status = 'completed';
-    } else if (targetStage === 'exited') {
-      dentalCase.status = 'exited';
-    } else if (targetStage === 'waiting') {
-      dentalCase.status = 'waiting';
-    } else {
-      dentalCase.status = 'in_progress';
-    }
+    let newStatus = 'in_progress';
+    if (targetStage === 'completed') newStatus = 'completed';
+    else if (targetStage === 'exited') newStatus = 'exited';
+    else if (targetStage === 'waiting') newStatus = 'waiting';
+
+    const setDoc = { currentStage: targetStage, status: newStatus };
     if (targetStage !== 'waiting') {
-      if (!dentalCase.stageTimestamps) dentalCase.stageTimestamps = {};
-      dentalCase.stageTimestamps[targetStage] = new Date();
-      dentalCase.markModified('stageTimestamps');
+      setDoc[`stageTimestamps.${targetStage}`] = new Date();
     }
 
-    await dentalCase.save();
+    // Atomic claim: if another scanner already moved this case (same barcode on
+    // two agents), keep that station's stage — don't let reception overwrite design.
+    const claimed = await DentalCase.findOneAndUpdate(
+      { _id: dentalCase._id, currentStage: oldStage },
+      { $set: setDoc },
+      { new: true }
+    );
+    if (!claimed) {
+      const fresh = await DentalCase.findById(dentalCase._id);
+      const liveStage = String(fresh?.currentStage || oldStage);
+      return res.status(200).json({
+        success: true,
+        alreadyAtStage: true,
+        message: `الحالة ${dentalCase.caseNumber} اتسجلت على محطة تانية (${liveStage})`,
+        case: {
+          id: fresh?._id || dentalCase._id,
+          caseNumber: dentalCase.caseNumber,
+          patientName: dentalCase.patientName,
+          currentStage: liveStage,
+          caseType: dentalCase.caseType,
+        },
+      });
+    }
+    dentalCase = claimed;
 
     const responseCase = {
       id: dentalCase._id,

@@ -235,6 +235,14 @@ function startPrintAgent() {
   try {
     if (fs.existsSync(LOCK_PATH)) fs.unlinkSync(LOCK_PATH);
   } catch (_) {}
+  try {
+    const locksDir = path.join(DAEMON_DIR, 'job-locks');
+    if (fs.existsSync(locksDir)) {
+      for (const name of fs.readdirSync(locksDir)) {
+        if (name.endsWith('.lock')) fs.unlinkSync(path.join(locksDir, name));
+      }
+    }
+  } catch (_) {}
   const pid = spawnDetached([AGENT_JS], ROOT, OUT_LOG, ERR_LOG);
   log('Print agent started pid', String(pid));
   return { ...printAgentStatus(), running: true, pid, started: true };
@@ -300,7 +308,12 @@ function stopScanner(n) {
 function startScanner(n) {
   const cur = scannerStatus(n);
   if (!cur.installed) return cur;
-  if (cur.running) return { ...cur, alreadyRunning: true };
+  // One barcode gun / one PC — running scanner1+2 together completes cases on design scan
+  for (const other of SCANNER_IDS) {
+    if (String(other) !== String(n)) stopScanner(other);
+  }
+  const afterStop = scannerStatus(n);
+  if (afterStop.running) return { ...afterStop, alreadyRunning: true };
   killPids(listNodePidsMatching(scannerPattern(n)));
   const pid = spawnDetached(
     [path.join(SCAN_AGENT_DIR, 'agent.js'), `config.scanner${n}.json`],
@@ -491,18 +504,30 @@ server.listen(PORT, HOST, () => {
       }
     }, 300);
   }
-  // Auto-start scanners that were running before (pid file present) or configured AUTO_START_SCANNERS
+  // Auto-start at most ONE scanner on this PC (pid leftovers of 1+2+3 used to start all)
   const autoScan = Array.isArray(config.AUTO_START_SCANNERS) ? config.AUTO_START_SCANNERS.map(String) : [];
-  for (const n of SCANNER_IDS) {
-    if (autoScan.includes(n) || fs.existsSync(scannerPidPath(n))) {
-      setTimeout(() => {
-        try {
-          startScanner(n);
-        } catch (err) {
-          log(`Auto-start scanner ${n} failed:`, err.message);
-        }
-      }, 800);
-    }
+  const leftover = SCANNER_IDS.filter((n) => fs.existsSync(scannerPidPath(n)));
+  let pick = autoScan.find((n) => SCANNER_IDS.includes(n)) || '';
+  if (!pick && leftover.length === 1) pick = leftover[0];
+  if (!pick && leftover.length > 1) {
+    leftover.sort((a, b) => {
+      try {
+        return fs.statSync(scannerPidPath(b)).mtimeMs - fs.statSync(scannerPidPath(a)).mtimeMs;
+      } catch (_) {
+        return 0;
+      }
+    });
+    pick = leftover[0];
+    log('Multiple leftover scanner pid files', leftover.join(','), '— auto-starting only', pick);
+  }
+  if (pick) {
+    setTimeout(() => {
+      try {
+        startScanner(pick);
+      } catch (err) {
+        log(`Auto-start scanner ${pick} failed:`, err.message);
+      }
+    }, 800);
   }
 });
 

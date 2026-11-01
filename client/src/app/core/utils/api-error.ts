@@ -22,9 +22,26 @@ export function formatCaseWorkflowError(
     return detail.trim();
   }
 
-  const errs = body?.errors;
-  if (Array.isArray(errs) && errs[0]?.msg) {
-    return String(errs[0].msg);
+  const errs = body?.errors as
+    | { msg?: string; path?: string; param?: string }[]
+    | undefined;
+  if (Array.isArray(errs) && errs[0]) {
+    const first = errs[0];
+    const field = String(first.path || first.param || '').trim();
+    const raw = String(first.msg || '').trim();
+    if (raw && raw.toLowerCase() !== 'invalid value') return raw;
+    const labels: Record<string, string> = {
+      patientName: 'اسم المريض',
+      patientEmail: 'البريد الإلكتروني',
+      patientPhone: 'رقم الموبايل',
+      dueDate: 'تاريخ التسليم',
+      caseType: 'نوع الشغل',
+      priority: 'الأولوية',
+      requesterType: 'نوع الحساب',
+      salaryAmount: 'السعر',
+    };
+    if (field && labels[field]) return `قيمة غير صحيحة في ${labels[field]}`;
+    return 'قيمة غير صحيحة — راجع بيانات الحالة';
   }
 
   if (anyErr?.status === 401) return 'يجب تسجيل الدخول أولًا';

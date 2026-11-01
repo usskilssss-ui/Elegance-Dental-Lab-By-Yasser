@@ -21,15 +21,15 @@ const createCaseValidation = [
 ];
 
 const updateCaseValidation = [
-  body('patientName').optional().trim().notEmpty(),
-  body('patientEmail').optional().isEmail(),
-  body('patientPhone').optional().trim().notEmpty(),
-  body('requesterType').optional().isIn(['doctor', 'student', 'lab']),
-  body('salaryAmount').optional().isFloat({ min: 0 }),
+  body('patientName').optional({ values: 'falsy' }).trim().notEmpty(),
+  body('patientEmail').optional({ values: 'falsy' }).isEmail(),
+  body('patientPhone').optional({ values: 'falsy' }).trim(),
+  body('requesterType').optional({ values: 'falsy' }).isIn(['doctor', 'student', 'lab']),
+  body('salaryAmount').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('notes').optional().isString(),
-  body('caseType').optional().trim().notEmpty(),
-  body('priority').optional().isIn(['low', 'normal', 'high', 'urgent']),
-  body('dueDate').optional().isISO8601(),
+  body('caseType').optional({ values: 'falsy' }).trim().notEmpty(),
+  body('priority').optional({ values: 'falsy' }).isIn(['low', 'normal', 'high', 'urgent']),
+  body('dueDate').optional({ values: 'falsy' }).isISO8601(),
   body('stageTimestamps').optional().isObject(),
 ];
 

@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const net = require('net');
 const { execFile, exec, spawn } = require('child_process');
 const readline = require('readline');
 
@@ -586,7 +587,27 @@ public static class SleepPreventer {
   }
 }
 
+function acquireBarcodeExclusive() {
+  const port = Number(config.HOOK_LOCK_PORT) || 3920;
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', (err) => {
+      if (err && err.code === 'EADDRINUSE') {
+        reject(
+          new Error(
+            'سكان تاني شغال على الجهاز ده. شغّل سكان واحد بس — سكان المنتهية + الديزاين مع بعض بيخلّوا الحالة منتهية.'
+          )
+        );
+        return;
+      }
+      reject(err);
+    });
+    srv.listen(port, '127.0.0.1', () => resolve(srv));
+  });
+}
+
 async function main() {
+  await acquireBarcodeExclusive();
   enableKeepAwake();
 
   for (;;) {

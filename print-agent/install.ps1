@@ -47,9 +47,11 @@ New-Item -ItemType Directory -Force -Path (Join-Path $dir 'daemon') | Out-Null
 $runBat = Join-Path $dir 'run-supervisor.bat'
 $wrapper = Join-Path $dir 'run-agent-hidden.vbs'
 $vbsLines = @(
+  'Set fso = CreateObject("Scripting.FileSystemObject")'
   'Set sh = CreateObject("WScript.Shell")'
-  ('sh.CurrentDirectory = "' + $dir + '"')
-  ('sh.Run """' + $runBat + '""", 0, False')
+  'dir = fso.GetParentFolderName(WScript.ScriptFullName)'
+  'sh.CurrentDirectory = dir'
+  'sh.Run """" & dir & "\run-supervisor.bat""", 0, False'
 )
 Set-Content -Path $wrapper -Value $vbsLines -Encoding ASCII
 

@@ -59,15 +59,17 @@ if ($LASTEXITCODE -ne 0) {
 $daemon = Join-Path $dir 'daemon'
 New-Item -ItemType Directory -Force -Path $daemon | Out-Null
 
-# Dedicated bat (no args) so VBS quoting works with spaces in the path
-$runBat = Join-Path $dir ("run-scanner" + $Scanner + ".bat")
+# Dedicated bat (no args). VBS uses its own folder so Arabic paths don't get corrupted.
+$runBatName = "run-scanner$Scanner.bat"
 $wrapper = Join-Path $dir ("run-scanner" + $Scanner + "-hidden.vbs")
 $vbsLines = @(
+  'Set fso = CreateObject("Scripting.FileSystemObject")'
   'Set sh = CreateObject("WScript.Shell")'
-  ('sh.CurrentDirectory = "' + $dir + '"')
-  ('sh.Run """' + $runBat + '""", 0, False')
+  'dir = fso.GetParentFolderName(WScript.ScriptFullName)'
+  'sh.CurrentDirectory = dir'
+  ('sh.Run """" & dir & "\' + $runBatName + '""", 0, False')
 )
-Set-Content -Path $wrapper -Value $vbsLines -Encoding Ascii
+Set-Content -Path $wrapper -Value $vbsLines -Encoding ASCII
 
 $taskName = "EleganceScanAgent$Scanner"
 $userId = $env:USERDOMAIN + '\' + $env:USERNAME
@@ -82,8 +84,9 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
-Write-Host 'Starting scan agent now (hidden)...'
+Write-Host 'Starting scan agent now...'
 Start-ScheduledTask -TaskName $taskName
+Start-Process -FilePath (Join-Path $dir $runBatName) -WorkingDirectory $dir -WindowStyle Minimized
 Start-Sleep -Seconds 3
 
 $t = Get-ScheduledTask -TaskName $taskName

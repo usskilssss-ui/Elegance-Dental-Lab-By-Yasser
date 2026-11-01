@@ -14,6 +14,7 @@ import {
   buildCreateCasePayload,
   mapApiCaseToDentalCase,
   normalizeRequesterType,
+  parseDeliveryDisplay,
   toStoredCaseImagePath,
   type RequesterType,
 } from '../../core/mappers/dental-case-api.mapper';
@@ -1953,8 +1954,7 @@ export class Secretary implements OnInit, OnDestroy {
       : '';
     this.clearPlySelection();
     this.intakeType = c.intakeType === 'scan' || c.plyScanUrl ? 'scan' : c.intakeType === 'impression' ? 'impression' : '';
-    const delivery = String(c.deliveryDate || '');
-    const dateMatch = delivery.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(.+))?$/);
+    const delivery = parseDeliveryDisplay(String(c.deliveryDate || ''));
     const currentCaseType = this.getCaseTypeFromWorkType(c.workType);
     this.formDraft = {
       doctor: c.doctor,
@@ -1967,8 +1967,8 @@ export class Secretary implements OnInit, OnDestroy {
       size: c.size,
       quantity: c.quantity,
       date: this.parseArabicDateToYmd(c.receivedDateRaw || c.receivedDate || c.date),
-      deliveryDate: dateMatch ? dateMatch[1] : '',
-      deliveryTime: dateMatch && dateMatch[2] ? dateMatch[2].trim().slice(0, 5) : '',
+      deliveryDate: delivery.date,
+      deliveryTime: delivery.time,
       caseType: currentCaseType,
       exitedAt: c.status === 'exited' ? this.parseArabicDateToYmd(c.exitedAtRaw || '') : '',
     };

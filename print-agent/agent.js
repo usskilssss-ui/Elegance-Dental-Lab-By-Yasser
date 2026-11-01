@@ -19,7 +19,7 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 const https = require('https');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
@@ -279,10 +279,14 @@ const startedIds = new Set();
 const printPdfChains = new Map();
 function printPdfSerialized(pdfPath, printerName) {
   const key = String(printerName || PRINTER_NAME || 'default');
+  const isSheet = key !== String(RECEIPT_PRINTER_NAME || '');
   const prev = printPdfChains.get(key) || Promise.resolve();
+  // Sheets: 2s is enough to hand the job to the spooler. Waiting longer just
+  // sits on a sleeping HP P1102 instead of returning so the next page can queue.
+  const limit = isSheet ? 800 : 8000;
   const next = prev
     .catch(() => {})
-    .then(() => withTimeout(printPdf(pdfPath, printerName), 8000, 'printPdf'));
+    .then(() => withTimeout(printPdf(pdfPath, printerName), limit, 'printPdf'));
   printPdfChains.set(key, next);
   return next;
 }
@@ -292,21 +296,65 @@ const JOB_LOCK_DIR = path.join(__dirname, 'daemon', 'job-locks');
  * Cross-process exclusive lock — only one agent (or one handler) may own a jobId.
  * Uses O_EXCL file create so two processes cannot both win.
  */
+function isLockPidAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function stealStaleJobLock(lockPath) {
+  try {
+    const raw = fs.readFileSync(lockPath, 'utf8');
+    const pid = Number(String(raw).split(/\r?\n/)[0]);
+    const ageMs = Date.now() - fs.statSync(lockPath).mtimeMs;
+    if (isLockPidAlive(pid) && ageMs < 20000) return false;
+    fs.unlinkSync(lockPath);
+    return true;
+  } catch (_) {
+    try {
+      fs.unlinkSync(lockPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function tryAcquireJobLock(id) {
   try {
     fs.mkdirSync(JOB_LOCK_DIR, { recursive: true });
   } catch (_) {}
   const lockPath = path.join(JOB_LOCK_DIR, `${id}.lock`);
-  try {
-    const fd = fs.openSync(lockPath, 'wx');
-    fs.writeFileSync(fd, `${process.pid}\n${new Date().toISOString()}\n`);
-    fs.closeSync(fd);
-    return true;
-  } catch (err) {
-    if (err && err.code === 'EEXIST') return false;
-    console.warn('⚠️  Job lock error:', err.message);
-    return false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeFileSync(fd, `${process.pid}\n${new Date().toISOString()}\n`);
+      fs.closeSync(fd);
+      return true;
+    } catch (err) {
+      if (err && err.code === 'EEXIST') {
+        if (attempt === 0 && stealStaleJobLock(lockPath)) continue;
+        return false;
+      }
+      console.warn('⚠️  Job lock error:', err.message);
+      return false;
+    }
   }
+  return false;
+}
+
+function sweepDeadJobLocks() {
+  try {
+    if (!fs.existsSync(JOB_LOCK_DIR)) return;
+    for (const name of fs.readdirSync(JOB_LOCK_DIR)) {
+      if (!name.endsWith('.lock')) continue;
+      stealStaleJobLock(path.join(JOB_LOCK_DIR, name));
+    }
+  } catch (_) {}
 }
 
 function isInPipeline(id) {
@@ -351,6 +399,7 @@ function enqueueJob(job, source, opts = {}) {
   const kind = queueKindFor(job);
   queues[kind].push({ jobId: id, printData: job.printData || {} });
   console.log(`📥 Queued ${kind} job ${id} (via ${source}, pid ${process.pid})`);
+  if (kind === 'sheet') wakeSheetPrinter();
   processQueue(kind);
   return true;
 }
@@ -551,18 +600,15 @@ async function processQueue(kind) {
         throw new Error('RECEIPT_PRINTER_NAME is empty in config.json');
       }
 
-      // Build PDF immediately — don't wait on Railway claim (that was adding 1–15s)
-      const htmlPromise = isReceipt
-        ? Promise.resolve(buildReceiptHtml(job.printData))
-        : buildPrintHtml(job.printData);
+      // PDF first. Claim runs in the background — a slow Railway hop must not delay the HP.
+      let claimed = true;
       const claimPromise = claimJob(job.jobId);
-      const html = await htmlPromise;
+      claimPromise.then((v) => { claimed = v; }).catch(() => { claimed = true; });
+      const html = isReceipt
+        ? buildReceiptHtml(job.printData)
+        : await buildPrintHtml(job.printData);
       const pdfPath = path.join(os.tmpdir(), `print_job_${job.jobId}.pdf`);
-      const pdfPromise = generatePdf(html, pdfPath, isReceipt ? 'receipt' : 'sheet');
-      const claimed = await claimPromise;
-      await pdfPromise.catch((err) => {
-        if (claimed !== false) throw err;
-      });
+      await generatePdf(html, pdfPath, isReceipt ? 'receipt' : 'sheet');
       if (claimed === false) {
         console.log(`⏭️  Skip ${job.jobId} — another agent already claimed it`);
         startedIds.delete(job.jobId);
@@ -596,6 +642,7 @@ async function processQueue(kind) {
       }
     } finally {
       currentIds.delete(job.jobId);
+      releaseJobLock(job.jobId);
     }
   }
 
@@ -739,22 +786,10 @@ async function fetchAndEnqueuePending(reason) {
     }
 
     if (sheets.length) {
-      const health = await getPrinterHealth(PRINTER_NAME);
-      if (!health.ok) {
-        printerDown = true;
-        lastPrinterOk = false;
-        console.warn(
-          `⏳ Sheet printer not ready (${health.error || 'unknown'}) — holding ${sheets.length} sheet(s); receipts still print`
-        );
-      } else {
-        if (printerDown || lastPrinterOk === false) {
-          console.log('🖨️  Sheet printer ready — releasing held jobs...');
-          printerDown = false;
-        }
-        lastPrinterOk = true;
-        for (const job of sheets) {
-          if (enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true })) added += 1;
-        }
+      // Don't probe WMI first — a sleeping HP often looks "busy" and we used
+      // to hold the job until it woke (tens of seconds). Send immediately.
+      for (const job of sheets) {
+        if (enqueueJob(job, `poll:${reason}`, { fromServerCatchUp: true })) added += 1;
       }
     }
     console.log(
@@ -832,6 +867,7 @@ setInterval(async () => {
 }, Math.max(PRINTER_CHECK_MS, 30000));
 
 // Catch-up on boot / agent restart (laptop was off, service just started)
+sweepDeadJobLocks();
 catchUpBurst('startup');
 setTimeout(() => catchUpBurst('startup-late'), 8000);
 
@@ -849,11 +885,88 @@ function getLocalBrowserPath() {
   return undefined;
 }
 
+const SUMATRA_EXE = path.join(__dirname, 'node_modules', 'pdf-to-printer', 'dist', 'SumatraPDF-3.4.6-32.exe');
+
+/**
+ * Hand the PDF to Windows immediately. Do not wait for a sleeping HP to finish
+ * waking — that wait was 10–20s and felt like "the printer is slow".
+ */
+function printSheetFast(pdfPath, printerName) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(SUMATRA_EXE)) {
+      return print(pdfPath, { printer: printerName, scale: 'noscale', silent: true }).then(resolve, reject);
+    }
+    const child = spawn(
+      SUMATRA_EXE,
+      ['-print-to', printerName, '-silent', '-print-settings', 'noscale', path.resolve(pdfPath)],
+      { windowsHide: true, stdio: 'ignore' }
+    );
+    let settled = false;
+    const done = (err) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve();
+    };
+    child.on('error', done);
+    child.on('exit', (code) => {
+      if (code && code !== 0) done(new Error(`Sumatra exited ${code}`));
+      else done();
+    });
+    // Hand off instantly — waiting here only delayed the next sheet
+    setTimeout(() => done(), 250);
+  });
+}
+
 function printPdf(pdfPath, printerName) {
-  const options = { scale: 'noscale', silent: true };
   const name = String(printerName || PRINTER_NAME || '').trim();
-  if (name) options.printer = name;
-  return print(pdfPath, options);
+  const isReceipt = name && name === String(RECEIPT_PRINTER_NAME || '');
+  if (isReceipt) {
+    return print(pdfPath, { printer: name, scale: 'noscale', silent: true });
+  }
+  if (name) return printSheetFast(pdfPath, name);
+  return print(pdfPath, { scale: 'noscale', silent: true });
+}
+
+/** PJL ping — wakes the P1102 without printing a page, so the next request starts immediately. */
+function wakeSheetPrinter() {
+  if (process.platform !== 'win32' || !PRINTER_NAME) return;
+  const printer = String(PRINTER_NAME).replace(/'/g, "''");
+  const ps = `
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class RawWake {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA { public string pDocName; public string pOutputFile; public string pDatatype; }
+  [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);
+  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);
+  [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool StartDocPrinter(IntPtr h, int l, [In] DOCINFOA d);
+  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.Drv", SetLastError=true)] public static extern bool WritePrinter(IntPtr h, byte[] b, int c, out int w);
+}
+"@
+$h = [IntPtr]::Zero
+if (-not [RawWake]::OpenPrinter('${printer}', [ref]$h, [IntPtr]::Zero)) { exit 0 }
+$di = New-Object RawWake+DOCINFOA
+$di.pDocName = 'wake'
+$di.pDatatype = 'RAW'
+[RawWake]::StartDocPrinter($h, 1, $di) | Out-Null
+$pjl = [Text.Encoding]::ASCII.GetBytes([char]27 + '%-12345X@PJL INFO STATUS' + [char]13 + [char]10 + '@PJL SET SLEEP=0' + [char]13 + [char]10 + [char]27 + '%-12345X')
+$w = 0
+[RawWake]::WritePrinter($h, $pjl, $pjl.Length, [ref]$w) | Out-Null
+[RawWake]::EndDocPrinter($h) | Out-Null
+[RawWake]::ClosePrinter($h) | Out-Null
+`;
+  execFile(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+    { windowsHide: true, timeout: 4000 },
+    () => {}
+  );
 }
 
 function buildReceiptHtml(data) {
@@ -1041,8 +1154,8 @@ function pdfPaper(kind) {
   }
   return {
     format: 'A4',
-    printBackground: true,
-    preferCSSPageSize: true,
+    printBackground: false,
+    preferCSSPageSize: false,
     margin: { top: '14mm', right: '18mm', bottom: '14mm', left: '18mm' },
   };
 }
@@ -1140,6 +1253,8 @@ async function generatePdf(html, outputPath, kind) {
 
 // Pre-warm as soon as agent starts (don't wait for first job)
 warmPdfBrowser();
+setTimeout(() => wakeSheetPrinter(), 400);
+setInterval(() => wakeSheetPrinter(), 20000);
 setInterval(() => {
   for (const key of ['sheet', 'receipt']) {
     const page = pdfPages[key];
@@ -1308,9 +1423,9 @@ async function buildPrintHtml(c) {
   if (caseNumber) {
     let barcodeDataUrl = '';
     try {
-      barcodeDataUrl = await buildBarcodeDataUrl(caseNumber);
+      barcodeDataUrl = await withTimeout(buildBarcodeDataUrl(caseNumber), 250, 'barcode');
     } catch (err) {
-      console.warn('   ⚠️ Barcode generation failed:', err.message);
+      console.warn('   ⚠️ Barcode skipped:', err.message);
     }
     barcodeBlock = `
   <div class="barcode-block">

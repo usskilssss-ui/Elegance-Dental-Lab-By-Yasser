@@ -223,11 +223,34 @@ export function buildDesignerNotesMeta(meta: CaseMeta): string {
   return stringifyMeta(meta);
 }
 
+function normalizeTimeHHmm(raw: string): string {
+  const s = String(raw || '').trim();
+  const twelve = s.match(/^(\d{1,2}):(\d{2})\s*(ص|م|am|pm|AM|PM)?/);
+  if (!twelve) return '';
+  let h = Math.min(23, Math.max(0, parseInt(twelve[1], 10)));
+  const min = Math.min(59, Math.max(0, parseInt(twelve[2], 10)));
+  const ap = String(twelve[3] || '').toLowerCase();
+  if (ap === 'م' || ap === 'pm') {
+    if (h < 12) h += 12;
+  } else if (ap === 'ص' || ap === 'am') {
+    if (h === 12) h = 0;
+  }
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/** Split mapped delivery display ("YYYY-MM-DD 2:00 م") into date + 24h time inputs. */
+export function parseDeliveryDisplay(delivery: string): { date: string; time: string } {
+  const s = String(delivery || '').trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(.+))?$/);
+  if (!m) return { date: '', time: '' };
+  return { date: m[1], time: normalizeTimeHHmm(m[2] || '') };
+}
+
 export function buildDueIso(form: SecretaryCaseFormPayload): string {
   if (form.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(form.deliveryDate)) {
-    const raw = (form.deliveryTime && form.deliveryTime.trim()) || '18:00';
-    const tm = raw.length === 5 ? `${raw}:00` : raw;
-    return new Date(`${form.deliveryDate}T${tm}`).toISOString();
+    const hhmm = normalizeTimeHHmm(form.deliveryTime || '') || '18:00';
+    const d = new Date(`${form.deliveryDate}T${hhmm}:00`);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
   const d = new Date();
   d.setDate(d.getDate() + 7);
@@ -265,8 +288,6 @@ export function buildCreateCasePayload(
   const originalEntry = snapshotOriginalEntry(form);
   const payload: Record<string, unknown> = {
     patientName: (form.patient || '').trim(),
-    patientEmail: email,
-    patientPhone: phone,
     requesterType: normalizeRequesterType(form.requesterType),
     salaryAmount: Number(form.studentPrice || 0),
     caseType: (form.workType || '').trim(),
@@ -275,6 +296,8 @@ export function buildCreateCasePayload(
     notes: buildSecretaryNotes({ ...form, originalEntry }, plyPreserve),
     originalEntry,
   };
+  if (email) payload['patientEmail'] = email;
+  if (phone) payload['patientPhone'] = phone;
 
   if (form.exitedAt) {
     payload['stageTimestamps'] = {
