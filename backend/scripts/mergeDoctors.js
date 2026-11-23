@@ -101,16 +101,22 @@ async function main() {
   cases.slice(0, 20).forEach((c) => console.log(`    - ${c.caseNumber} (${c.currentStage})`));
   if (cases.length > 20) console.log(`    … and ${cases.length - 20} more`);
 
+  if (fromPricing.length && intoPricing) {
+    console.log("  NOTE: price keys only the duplicate had will be added to the real doctor's list;");
+    console.log('        unfrozen exited bills of the real doctor are priced live and may change.');
+  }
+
   if (!apply) {
     await mongoose.disconnect();
     return;
   }
 
   for (const c of cases) {
-    c.referringDoctor = into;
-    c.notes = renameInNotes(c.notes, fromKey, into);
-    if (intoUser) c.referringDoctorId = intoUser._id;
-    await c.save({ validateModifiedOnly: true });
+    // updateOne with timestamps:false — bumping updatedAt would move legacy exited cases
+    // (no stageTimestamps.exited) into the current month in reports.
+    const set = { referringDoctor: into, notes: renameInNotes(c.notes, fromKey, into) };
+    if (intoUser) set.referringDoctorId = intoUser._id;
+    await DentalCase.updateOne({ _id: c._id }, { $set: set }, { timestamps: false });
     await AuditLog.create({
       caseId: c._id,
       caseNumber: c.caseNumber,
@@ -121,8 +127,7 @@ async function main() {
     });
   }
   for (const p of payments) {
-    p.doctorName = into;
-    await p.save();
+    await DoctorPayment.updateOne({ _id: p._id }, { $set: { doctorName: into } }, { timestamps: false });
   }
   if (fromPricing.length) {
     if (intoPricing) {

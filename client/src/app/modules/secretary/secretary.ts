@@ -447,7 +447,13 @@ export class Secretary implements OnInit, OnDestroy {
    */
   readonly overdueCases = signal<{ id: string; doctor: string; patient: string; hoursOverdue: number }[]>([]);
 
+  private lastAlertsAt = 0;
+
+  /** Throttled: case reloads fire on every socket event, the late list does not need that. */
   private refreshDeliveryAlerts(): void {
+    const now = Date.now();
+    if (now - this.lastAlertsAt < 60_000) return;
+    this.lastAlertsAt = now;
     this.caseApi.getDeliveryAlerts().subscribe({
       next: (res: { data?: { overdue?: { id: string; doctorName?: string; patientName?: string; hoursOverdue?: number }[] } }) => {
         const rows = res?.data?.overdue || [];
@@ -1604,7 +1610,6 @@ export class Secretary implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.reloadCasesFromBackend();
-    this.refreshDeliveryAlerts();
     this.connectRealtimeUpdates();
     this.startPrintAgentStatusWatch();
     this.loadAccountDoctors();
@@ -2006,8 +2011,9 @@ export class Secretary implements OnInit, OnDestroy {
       size: c.size,
       quantity: c.quantity,
       date: this.parseArabicDateToYmd(c.receivedDateRaw || c.receivedDate || c.date),
-      deliveryDate: dateMatch ? dateMatch[1] : '',
-      deliveryTime: dateMatch && dateMatch[2] ? dateMatch[2].trim().slice(0, 5) : '',
+      // Prefer the stored 24h values: re-parsing the 12h display ("10:30 م") turned 22:30 into 10:30.
+      deliveryDate: c.deliveryDateRaw || (dateMatch ? dateMatch[1] : ''),
+      deliveryTime: c.deliveryDateRaw ? c.deliveryTimeRaw || '' : dateMatch && dateMatch[2] ? dateMatch[2].trim().slice(0, 5) : '',
       caseType: currentCaseType,
       exitedAt: c.status === 'exited' ? this.parseArabicDateToYmd(c.exitedAtRaw || '') : '',
     };
@@ -2433,22 +2439,24 @@ export class Secretary implements OnInit, OnDestroy {
         this.saveInProgress.set(false);
         const similar = r?.action === 'similar' ? r.similar || [] : [];
         if (similar.length) {
-          const pick = similar[0];
-          if (window.confirm(`اسم الدكتور «${docName}» قريب من دكتور موجود: «${pick}».
-
-اضغط OK لاستخدام «${pick}» — أو Cancel لو ده دكتور جديد فعلًا.`)) {
-            this.formDraft.doctor = pick;
-            this.doctorNameConfirmed = pick;
-            this.flash(`اتغيّر اسم الدكتور لـ «${pick}» — راجع واضغط حفظ تاني`);
+          // OK keeps exactly what was typed; Cancel goes back so the secretary fixes the
+          // name herself (we never swap the doctor silently on a reflex click).
+          const list = similar.map((n) => `«${n}»`).join('، ');
+          const keep = window.confirm(
+            `اسم الدكتور «${docName}» قريب من دكتور موجود: ${list}.\n\n` +
+              `OK = احفظ باسم «${docName}» (دكتور جديد فعلًا)\n` +
+              `Cancel = ارجع أصلّح الاسم`
+          );
+          if (!keep) {
+            this.flash(`راجع اسم الدكتور — يمكن تقصد ${list}`);
             return;
           }
-          if (!window.confirm(`متأكد إن «${docName}» دكتور جديد؟ هيتعمله حساب وكشف حساب منفصل.`)) return;
         }
         this.doctorNameConfirmed = docName;
         this.save();
       },
       error: () => {
-        // Check unavailable: don't block the lab; the server still guards create/update.
+        // Check unavailable: don't block the lab — save as typed.
         this.saveInProgress.set(false);
         this.doctorNameConfirmed = docName;
         this.save();

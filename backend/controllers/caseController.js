@@ -84,23 +84,9 @@ const { arabicLooseRegex } = require('../utils/searchRegex');
 const { generateOperationsReport } = require('../services/operationsReport');
 const { findSimilarDoctorNames } = require('../utils/doctorName');
 
-/**
- * Staff typing a doctor name that is close to an existing doctor (typo) must
- * confirm it is really new; otherwise a new doctor account + separate bill is born.
- * Returns a ready 409 response body, or null when the name is fine.
- */
-async function doctorNameGate(req, name) {
-  if (!name || isClientPortalRole(req.user?.role)) return null;
-  const confirmed = req.body?.confirmNewDoctor === true || req.body?.confirmNewDoctor === 'true';
-  const decision = await checkDoctorName(name, confirmed);
-  if (decision.action !== 'similar') return null;
-  return {
-    success: false,
-    code: 'DOCTOR_NAME_SIMILAR',
-    message: `اسم الدكتور «${name}» قريب من دكتور موجود: ${decision.similar.join('، ')}. اختار الاسم الصح أو أكّد إنه دكتور جديد.`,
-    similar: decision.similar,
-  };
-}
+// Doctor-name typo check is advisory: screens call GET /cases/doctor-name-check and ask
+// "did you mean …?" before saving. The server does not block saves, because similar names
+// (سامي/سامح, منة/منى) are often different real doctors and intake must never stall.
 
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
@@ -496,8 +482,6 @@ exports.createCase = async (req, res) => {
       normalizeOriginalEntry(parseNotesMeta(notesFinal).originalEntry) ||
       normalizeOriginalEntry(buildOriginalEntry(caseType, createMeta));
     const referringDoctor = referringDoctorFromNotes(notesFinal);
-    const nameGate = await doctorNameGate(req, referringDoctor);
-    if (nameGate) return res.status(409).json(nameGate);
     const accountEnsure = await maybeEnsureClientAccount(
       req,
       referringDoctor,
@@ -2349,7 +2333,6 @@ exports.updateCase = async (req, res) => {
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
     }
-    const previousDoctorName = dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes);
 
     const incoming = req.body && typeof req.body === 'object' ? req.body : {};
     const providedKeys = Object.keys(incoming).filter((k) => incoming[k] !== undefined);
@@ -2622,14 +2605,6 @@ exports.updateCase = async (req, res) => {
           dentalCase?.caseNumber,
           priceErr?.message || priceErr
         );
-      }
-    }
-
-    if (!isClientPortalRole(req.user?.role)) {
-      const newDoctorName = dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes);
-      if (newDoctorName && newDoctorName !== previousDoctorName) {
-        const nameGate = await doctorNameGate(req, newDoctorName);
-        if (nameGate) return res.status(409).json(nameGate);
       }
     }
 
@@ -3194,11 +3169,20 @@ exports.doctorDuplicates = async (req, res) => {
       { $group: { _id: '$referringDoctor', cases: { $sum: 1 } } },
     ]);
     const caseCount = new Map(counts.map((c) => [String(c._id || '').trim(), c.cases]));
+    // Candidates: typos (similar spelling) AND names where one contains the other
+    // ("فرزات" / "سامي فرزات") — the old matching treated those as one doctor.
+    const { normalizeDoctorKey } = require('../utils/doctorName');
+    const containsEachOther = (a, b) => {
+      const ka = normalizeDoctorKey(a);
+      const kb = normalizeDoctorKey(b);
+      return ka && kb && ka !== kb && (ka.split(' ').every((w) => kb.split(' ').includes(w)) || kb.split(' ').every((w) => ka.split(' ').includes(w)));
+    };
     const used = new Set();
     const groups = [];
     for (const name of names) {
       if (used.has(name)) continue;
-      const similar = findSimilarDoctorNames(name, names.filter((n) => !used.has(n)), { limit: 10 });
+      const pool = names.filter((n) => !used.has(n) && n !== name);
+      const similar = [...new Set([...findSimilarDoctorNames(name, pool, { limit: 10 }), ...pool.filter((n) => containsEachOther(name, n))])];
       if (!similar.length) continue;
       const members = [name, ...similar];
       members.forEach((m) => used.add(m));

@@ -110,12 +110,12 @@ function scheduleOperationsReport() {
       if (!hours.includes(p.hour) || p.minute >= 10) return;
       const key = `${cairoDayKey(new Date())}-${p.hour}`;
       if (lastSent.has(key)) return;
-      lastSent.add(key);
       const wa = require('./whatsappService');
       await wa.reloadWhatsAppConfig();
-      if (!wa.providerConfigured()) return;
+      if (!wa.providerConfigured()) return; // retried next minute while still inside the window
       const text = formatReportText(await generateOperationsReport(), process.env.LAB_NAME || '');
       for (const phone of phones) await wa.sendWhatsAppText(phone, text);
+      lastSent.add(key); // only after a successful send
       console.log(`[ops-report] sent ${key} to ${phones.length} phone(s)`);
     } catch (err) {
       console.warn('[ops-report] failed:', err?.message || err);

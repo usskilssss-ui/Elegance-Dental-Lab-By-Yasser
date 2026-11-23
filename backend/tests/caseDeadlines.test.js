@@ -17,6 +17,11 @@ describe('cairoTime', () => {
     expect(cairoMonthRange(2026, 1).start.toISOString()).toBe('2025-12-31T22:00:00.000Z');
   });
 
+  test('a missing or bad date gives NaN parts instead of throwing', () => {
+    expect(Number.isNaN(cairoParts(null).year)).toBe(true);
+    expect(Number.isNaN(cairoParts('not a date').month)).toBe(true);
+  });
+
   test('converts a Cairo wall time to the right instant', () => {
     expect(cairoDateTimeToUtc('2026-11-24', '18:00').toISOString()).toBe('2026-11-24T16:00:00.000Z');
   });
@@ -33,8 +38,8 @@ describe('caseDueAt — one rule for the delivery deadline', () => {
     expect(caseDueAt(doc).toISOString()).toBe('2026-11-24T21:59:00.000Z');
   });
 
-  test('falls back to the dueDate field', () => {
-    expect(caseDueAt({ dueDate: '2026-11-25T10:00:00Z', notes: '' }).toISOString()).toBe('2026-11-25T10:00:00.000Z');
+  test('ignores the dueDate field (it is a synthetic now+7d default, not a real promise)', () => {
+    expect(caseDueAt({ dueDate: '2026-11-25T10:00:00Z', notes: '' })).toBeNull();
   });
 
   test('no deadline at all → null', () => {

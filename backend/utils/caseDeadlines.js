@@ -19,7 +19,7 @@ function metaOf(doc) {
 }
 
 /**
- * Delivery deadline: the form's delivery date (+ time) in Cairo time, else the dueDate field.
+ * Delivery deadline: the form's delivery date (+ time) in Cairo time.
  * A date with no time is due at 23:59 Cairo that day.
  */
 function caseDueAt(doc) {
@@ -28,10 +28,8 @@ function caseDueAt(doc) {
     const at = cairoDateTimeToUtc(meta.deliveryDate, meta.deliveryTime || '23:59');
     if (at) return at;
   }
-  if (doc?.dueDate) {
-    const d = new Date(doc.dueDate);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
+  // dueDate is NOT used: the client and print flow fill it with now+7d when no delivery
+  // date was chosen (and re-slide it on every edit), so it is not a real promise to a doctor.
   return null;
 }
 

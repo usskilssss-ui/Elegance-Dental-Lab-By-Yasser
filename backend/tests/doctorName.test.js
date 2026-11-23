@@ -52,6 +52,14 @@ describe('findSimilarDoctorNames — "did you mean" for typos', () => {
     expect(findSimilarDoctorNames('د. علي عبدالله', doctors)).toEqual([]);
   });
 
+  test('single-word names are too short to judge (سامي/سامح are different people)', () => {
+    expect(findSimilarDoctorNames('سامح', ['سامي', 'رامي'])).toEqual([]);
+  });
+
+  test('"DR/ Sami" strips the title', () => {
+    expect(doctorKeysMatch('DR/ Sami', 'sami')).toBe(true);
+  });
+
   test('a clearly different name returns nothing', () => {
     expect(findSimilarDoctorNames('كريم منصور', doctors)).toEqual([]);
   });

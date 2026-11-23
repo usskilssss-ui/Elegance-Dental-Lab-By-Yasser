@@ -17,7 +17,11 @@ const fmt = new Intl.DateTimeFormat('en-GB', {
 
 /** {year, month(1-12), day, hour, minute, second} of an instant in Cairo. */
 function cairoParts(date = new Date()) {
-  const d = date instanceof Date ? date : new Date(date);
+  const d = date instanceof Date ? date : new Date(date ?? NaN);
+  // Bad/missing dates: behave like getFullYear() on an invalid Date (NaN) instead of throwing.
+  if (Number.isNaN(d.getTime())) {
+    return { year: NaN, month: NaN, day: NaN, hour: NaN, minute: NaN, second: NaN };
+  }
   const out = {};
   for (const p of fmt.formatToParts(d)) {
     if (p.type !== 'literal') out[p.type] = Number(p.value);

@@ -9,7 +9,7 @@
  */
 
 // Note: \b is ASCII-only in JS, so Arabic titles use a (?=\s) lookahead instead.
-const TITLE_RE = /^(?:د\s*[./]|د(?=\s)|dr\s*\.|dr(?=\s)|doctor(?=\s)|دكتور[ةه]?(?=\s)|أ\s*\.|ا\s*\.)\s*/i;
+const TITLE_RE = /^(?:د\s*[./]|د(?=\s)|dr\s*[./]|dr(?=\s)|doctor(?=\s)|دكتور[ةه]?(?=\s)|أ\s*\.|ا\s*\.)\s*/i;
 
 /** Unify Arabic letter variants that people type interchangeably. */
 function unifyArabic(s) {
@@ -69,7 +69,8 @@ function levenshtein(a, b) {
  */
 function findSimilarDoctorNames(name, candidates, { limit = 5 } = {}) {
   const want = normalizeDoctorKey(name);
-  if (!want) return [];
+  // Single-word names are too short to tell a typo from a different person (سامي/سامح).
+  if (!want || !want.includes(' ')) return [];
   const maxEdits = want.replace(/\s/g, '').length >= 7 ? 2 : 1;
   const seen = new Set();
   const scored = [];

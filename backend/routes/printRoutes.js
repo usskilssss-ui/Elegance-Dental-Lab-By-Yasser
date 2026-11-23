@@ -38,7 +38,6 @@ const anonymousPrintLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
   skip: (req) => Boolean(req.user),
   message: { success: false, message: 'طلبات طباعة كتير من غير تسجيل دخول — حاول بعد شوية أو سجّل دخول' },
 });

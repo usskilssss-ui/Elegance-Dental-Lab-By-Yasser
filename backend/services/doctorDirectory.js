@@ -25,12 +25,16 @@ function decideDoctorName(name, knownNames, confirmedNew) {
 async function listKnownDoctorNames() {
   const User = require('../models/User');
   const DentalCase = require('../models/DentalCase');
-  const [users, caseNames] = await Promise.all([
+  const DoctorPayment = require('../models/DoctorPayment');
+  const DoctorPricing = require('../models/DoctorPricing');
+  const [users, caseNames, paymentNames, pricingNames] = await Promise.all([
     User.find({ role: { $in: ['doctor', 'student', 'lab'] } }).select('fullName').lean(),
     DentalCase.distinct('referringDoctor'),
+    DoctorPayment.distinct('doctorName'),
+    DoctorPricing.distinct('doctorName'),
   ]);
   const byKey = new Map();
-  for (const n of [...users.map((u) => u.fullName), ...caseNames]) {
+  for (const n of [...users.map((u) => u.fullName), ...caseNames, ...paymentNames, ...pricingNames]) {
     const name = String(n || '').trim();
     const key = normalizeDoctorKey(name);
     if (key && !byKey.has(key)) byKey.set(key, name);
