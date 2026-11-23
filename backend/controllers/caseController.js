@@ -1,3 +1,4 @@
+const { cairoParts, cairoMonthRange } = require('../utils/cairoTime');
 const DentalCase = require('../models/DentalCase');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
@@ -680,10 +681,9 @@ exports.getAllCases = async (req, res) => {
       const now = new Date();
       const yy = parseInt(year, 10);
       const mm = parseInt(month, 10);
-      const y = Number.isFinite(yy) ? yy : now.getFullYear();
-      const m = Number.isFinite(mm) && mm >= 1 && mm <= 12 ? mm : now.getMonth() + 1;
-      const start = new Date(y, m - 1, 1);
-      const end = new Date(y, m, 1);
+      const y = Number.isFinite(yy) ? yy : cairoParts(now).year;
+      const m = Number.isFinite(mm) && mm >= 1 && mm <= 12 ? mm : cairoParts(now).month;
+      const { start, endExclusive: end } = cairoMonthRange(y, m);
       pushAnd(filter, {
         $or: [
           { currentStage: { $ne: 'exited' } },
@@ -877,8 +877,8 @@ exports.getExitedMaterialStats = async (req, res) => {
       if (!raw) return false;
       const d = new Date(raw);
       if (Number.isNaN(d.getTime())) return false;
-      if (hasYear && d.getFullYear() !== year) return false;
-      if (hasMonth && d.getMonth() + 1 !== month) return false;
+      if (hasYear && cairoParts(d).year !== year) return false;
+      if (hasMonth && cairoParts(d).month !== month) return false;
       return true;
     };
 
@@ -1069,8 +1069,8 @@ exports.getFinancialReport = async (req, res) => {
       .filter(Boolean)
       .filter((row) => {
         const rowDate = row.exitedAt ? new Date(row.exitedAt) : new Date(row.receivedAt);
-        if (year && Number(year) !== rowDate.getFullYear()) return false;
-        if (month && Number(month) !== rowDate.getMonth() + 1) return false;
+        if (year && Number(year) !== cairoParts(rowDate).year) return false;
+        if (month && Number(month) !== cairoParts(rowDate).month) return false;
         if (doctor && !row.doctorName.toLowerCase().includes(String(doctor).toLowerCase().trim()))
           return false;
         return true;
@@ -1181,8 +1181,8 @@ exports.getDoctorAccountSummary = async (req, res) => {
           : doc.createdAt
             ? new Date(doc.createdAt)
             : new Date();
-      if (year && Number.isFinite(year) && exitedAt.getFullYear() !== year) continue;
-      if (month && Number.isFinite(month) && exitedAt.getMonth() + 1 !== month) continue;
+      if (year && Number.isFinite(year) && cairoParts(exitedAt).year !== year) continue;
+      if (month && Number.isFinite(month) && cairoParts(exitedAt).month !== month) continue;
 
       // Prefer case-doctor merged prices (same as financial report), fall back to query doctor.
       const casePrices = mergePricesForDoctor(pricings, caseDoctor) || prices;
@@ -1232,8 +1232,8 @@ exports.getDoctorAccountSummary = async (req, res) => {
       if (!year && !month) return true;
       const d = p.paymentDate ? new Date(p.paymentDate) : null;
       if (!d) return false;
-      if (year && Number.isFinite(year) && d.getFullYear() !== year) return false;
-      if (month && Number.isFinite(month) && d.getMonth() + 1 !== month) return false;
+      if (year && Number.isFinite(year) && cairoParts(d).year !== year) return false;
+      if (month && Number.isFinite(month) && cairoParts(d).month !== month) return false;
       return true;
     };
     const isChargeEntry = (p) => {

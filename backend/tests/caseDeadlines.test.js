@@ -1,4 +1,4 @@
-const { cairoParts, cairoDateTimeToUtc, cairoMonthKey } = require('../utils/cairoTime');
+const { cairoParts, cairoDateTimeToUtc, cairoMonthKey, cairoMonthRange } = require('../utils/cairoTime');
 const { caseDueAt, classifyCase } = require('../utils/caseDeadlines');
 
 const META = (o) => `__META__\n${JSON.stringify(o)}`;
@@ -8,6 +8,13 @@ describe('cairoTime', () => {
     const utc = new Date('2026-11-30T23:30:00Z'); // 01:30 on 1 Dec in Cairo (UTC+2)
     expect(cairoMonthKey(utc)).toBe('2026-12');
     expect(cairoParts(utc)).toMatchObject({ year: 2026, month: 12, day: 1, hour: 1 });
+  });
+
+  test('Cairo month range covers midnight-to-midnight Cairo time', () => {
+    const r = cairoMonthRange(2026, 12);
+    expect(r.start.toISOString()).toBe('2026-11-30T22:00:00.000Z');
+    expect(r.endExclusive.toISOString()).toBe('2026-12-31T22:00:00.000Z');
+    expect(cairoMonthRange(2026, 1).start.toISOString()).toBe('2025-12-31T22:00:00.000Z');
   });
 
   test('converts a Cairo wall time to the right instant', () => {

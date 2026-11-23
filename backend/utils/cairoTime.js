@@ -59,4 +59,18 @@ function cairoDateTimeToUtc(ymd, hm = '00:00') {
   return utc;
 }
 
-module.exports = { TZ, cairoParts, cairoMonthKey, cairoDayKey, cairoDateTimeToUtc };
+/**
+ * Cairo calendar month as UTC instants: [start, endExclusive).
+ * month is 1-12. Example: Dec 2026 starts 2026-11-30T22:00Z.
+ */
+function cairoMonthRange(year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  const start = cairoDateTimeToUtc(`${y}-${pad(m)}-01`, '00:00');
+  const endExclusive = cairoDateTimeToUtc(`${ny}-${pad(nm)}-01`, '00:00');
+  return { start, endExclusive, endInclusive: new Date(endExclusive.getTime() - 1) };
+}
+
+module.exports = { TZ, cairoParts, cairoMonthKey, cairoDayKey, cairoDateTimeToUtc, cairoMonthRange };
