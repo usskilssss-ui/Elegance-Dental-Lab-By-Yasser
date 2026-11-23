@@ -80,6 +80,7 @@ async function sweepUrgentLabCases() {
 
 const { checkDoctorName, listKnownDoctorNames } = require('../services/doctorDirectory');
 const { arabicLooseRegex } = require('../utils/searchRegex');
+const { generateOperationsReport } = require('../services/operationsReport');
 const { findSimilarDoctorNames } = require('../utils/doctorName');
 
 /**
@@ -953,45 +954,20 @@ exports.getExitedMaterialStats = async (req, res) => {
 /** Active cases past / near delivery due date (admin + secretary). */
 exports.getDeliveryAlerts = async (req, res) => {
   try {
-    const now = new Date();
-    const soonMs = 24 * 60 * 60 * 1000;
-    const cases = await DentalCase.find({
-      currentStage: { $nin: ['exited'] },
-      status: { $ne: 'cancelled' },
-    })
-      .select('caseNumber patientName caseType currentStage dueDate notes referringDoctor priority createdAt')
-      .lean();
-
-    const overdue = [];
-    const dueSoon = [];
-    for (const doc of cases) {
-      const meta = parseNotesMeta(doc.notes || '');
-      if (!meta.deliveryDate) continue;
-      const due = new Date(String(meta.deliveryDate));
-      if (Number.isNaN(due.getTime())) continue;
-      const row = {
-        id: String(doc._id),
-        caseNumber: String(doc.caseNumber || ''),
-        patientName: String(doc.patientName || ''),
-        doctorName: String(meta.doctor || meta.doctorName || doc.referringDoctor || ''),
-        currentStage: String(doc.currentStage || ''),
-        dueDate: due.toISOString(),
-        priority: String(doc.priority || 'normal'),
-        hoursOverdue: Math.round((now.getTime() - due.getTime()) / 3600000),
-      };
-      if (due.getTime() < now.getTime()) overdue.push(row);
-      else if (due.getTime() - now.getTime() <= soonMs) dueSoon.push(row);
-    }
-    overdue.sort((a, b) => b.hoursOverdue - a.hoursOverdue);
-    dueSoon.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
+    // One rule for "late" shared with the operations report (utils/caseDeadlines.js):
+    // ready (completed) cases waiting for pickup are not late.
+    const report = await generateOperationsReport();
     res.status(200).json({
       success: true,
       data: {
-        overdue,
-        dueSoon,
-        overdueCount: overdue.length,
-        dueSoonCount: dueSoon.length,
+        overdue: report.overdue,
+        dueSoon: report.dueSoon,
+        stuck: report.stuck,
+        readyWaiting: report.readyWaiting,
+        overdueCount: report.counts.overdue,
+        dueSoonCount: report.counts.dueSoon,
+        stuckCount: report.counts.stuck,
+        readyWaitingCount: report.counts.readyWaiting,
       },
     });
   } catch (error) {
@@ -1000,6 +976,15 @@ exports.getDeliveryAlerts = async (req, res) => {
       message: 'Failed to compute delivery alerts',
       error: error.message,
     });
+  }
+};
+
+/** GET /cases/operations-report — late, due soon, stuck, and ready-for-pickup cases. */
+exports.getOperationsReport = async (req, res) => {
+  try {
+    res.status(200).json({ success: true, data: await generateOperationsReport() });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'تعذّر تجهيز تقرير التشغيل' });
   }
 };
 

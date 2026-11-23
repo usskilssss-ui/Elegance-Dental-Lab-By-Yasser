@@ -8,6 +8,7 @@ import type { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
 import { CaseApiService, type CaseBill } from '../../core/services/case-api.service';
+import { renderOperationsReportHtml, type OperationsReport } from './operations-report';
 import { SharedCasesService, type DentalCase } from '../../core/services/shared-cases.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import {
@@ -440,21 +441,53 @@ export class Secretary implements OnInit, OnDestroy {
     Math.max(0, this.cases().length - this.listVisibleCount())
   );
 
-  /** حالات لم تخرج خلال 4 أيام من تاريخ الدخول */
-  readonly overdueCases = computed(() => {
-    this.lang.lang();
-    const now = Date.now();
-    const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
-    return this.sharedCases
-      .cases()
-      .filter((c) => c.status !== 'exited')
-      .map((c) => {
-        const receivedAt = this.parseCaseReceivedDate(c);
-        return { id: c.id, doctor: c.doctor || this.lang.t('common.unknown'), patient: c.patient || '—', receivedAt };
-      })
-      .filter((item) => item.receivedAt != null && now - item.receivedAt! >= fourDaysMs)
-      .sort((a, b) => (a.receivedAt || 0) - (b.receivedAt || 0));
-  });
+  /**
+   * Bell = cases past their delivery deadline and still in the lab (server rule in
+   * utils/caseDeadlines.js). Ready cases waiting for pickup are not "late".
+   */
+  readonly overdueCases = signal<{ id: string; doctor: string; patient: string; hoursOverdue: number }[]>([]);
+
+  private refreshDeliveryAlerts(): void {
+    this.caseApi.getDeliveryAlerts().subscribe({
+      next: (res: { data?: { overdue?: { id: string; doctorName?: string; patientName?: string; hoursOverdue?: number }[] } }) => {
+        const rows = res?.data?.overdue || [];
+        this.overdueCases.set(
+          rows.map((r) => ({
+            id: r.id,
+            doctor: r.doctorName || this.lang.t('common.unknown'),
+            patient: r.patientName || '—',
+            hoursOverdue: Number(r.hoursOverdue) || 0,
+          }))
+        );
+      },
+      error: () => {},
+    });
+  }
+
+  /** Opens a print-ready operations report (late, due soon, stuck, ready for pickup). */
+  printOperationsReport(): void {
+    const win = window.open('', '_blank');
+    if (!win) {
+      this.flash('المتصفح منع فتح نافذة الطباعة — اسمح بالنوافذ المنبثقة');
+      return;
+    }
+    win.document.write('<p dir="rtl" style="font-family:sans-serif">جاري تجهيز التقرير…</p>');
+    this.caseApi.getOperationsReport().subscribe({
+      next: (res: { data?: OperationsReport }) => {
+        if (res?.data) {
+          win.document.open();
+          win.document.write(renderOperationsReportHtml(res.data, this.brandTitle));
+          win.document.close();
+          win.focus();
+          setTimeout(() => win.print(), 300);
+        }
+      },
+      error: () => {
+        win.close();
+        this.flash('تعذّر تجهيز تقرير التشغيل');
+      },
+    });
+  }
 
   private parseCaseReceivedDate(c: { receivedDateRaw?: string; receivedDate?: string; date?: string }): number | null {
     const raw = c.receivedDateRaw || '';
@@ -1571,6 +1604,7 @@ export class Secretary implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.reloadCasesFromBackend();
+    this.refreshDeliveryAlerts();
     this.connectRealtimeUpdates();
     this.startPrintAgentStatusWatch();
     this.loadAccountDoctors();
@@ -1774,6 +1808,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   private reloadCasesFromBackend(silent = false, after?: () => void): void {
+    this.refreshDeliveryAlerts();
     if (!silent) this.casesLoading.set(true);
     this.caseApi
       .getAllCases(1, 800, {

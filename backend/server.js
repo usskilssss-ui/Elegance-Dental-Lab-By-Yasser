@@ -251,6 +251,7 @@ const startServer = async ({ listen = true } = {}) => {
       try {
         const { scheduleDailyWhatsAppSummary, reloadWhatsAppConfig } = require('./services/whatsappService');
         scheduleDailyWhatsAppSummary();
+        require('./services/operationsReport').scheduleOperationsReport();
         reloadWhatsAppConfig()
           .then((cfg) => {
             if (cfg?.enabled && cfg.provider === 'waweb') {

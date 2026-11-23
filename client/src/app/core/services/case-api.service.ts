@@ -56,6 +56,10 @@ export class CaseApiService {
   }
 
   /** Active cases overdue / due within 24h */
+  getOperationsReport(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/operations-report`);
+  }
+
   getDeliveryAlerts(): Observable<any> {
     return this.http.get(`${this.apiUrl}/delivery-alerts`);
   }
