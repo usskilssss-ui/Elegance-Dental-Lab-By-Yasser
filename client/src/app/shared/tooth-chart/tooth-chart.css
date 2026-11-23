@@ -41,7 +41,7 @@
 
 .tc-mat-btn.active {
   background: var(--mat-color);
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
   font-weight: 700;
 }
 
@@ -66,7 +66,7 @@
 .tc-mode.active {
   border-color: var(--accent-primary);
   background: var(--accent-primary);
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
 }
 
 .tc-clear {
@@ -149,7 +149,7 @@
 }
 
 .tc-tooth.selected {
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
   border-color: rgba(0, 0, 0, 0.25);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
 }
@@ -232,7 +232,7 @@
 }
 
 :host-context(body.dark-theme) .tc-mat-btn.active {
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
 }
 
 :host-context(body.dark-theme) .tc-mode,
@@ -245,7 +245,7 @@
 :host-context(body.dark-theme) .tc-mode.active {
   border-color: var(--accent-primary);
   background: var(--accent-hover);
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
 }
 
 :host-context(body.dark-theme) .tc-clear {
@@ -269,7 +269,7 @@
 }
 
 :host-context(body.dark-theme) .tc-tooth.selected {
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: label on a material data color */
   border-color: rgba(255, 255, 255, 0.35);
 }
 

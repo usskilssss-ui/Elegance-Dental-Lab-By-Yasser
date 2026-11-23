@@ -93,8 +93,8 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
-  background: var(--bg-card);
-  color: var(--on-accent);
+  background: var(--text-primary);
+  color: var(--bg-card);
   padding: 0.7rem 1.5rem;
   border-radius: 12px;
   font-size: 0.95rem;

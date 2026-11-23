@@ -66,13 +66,7 @@ body.dark-theme {
   --accent-green: #4ade80;
   --accent-red: #f87171;
   --accent-amber: #fbbf24;
-
-  --badge-green-bg: rgba(74, 222, 128, 0.15);
-  --badge-green-text: #4ade80;
-  --badge-red-bg: rgba(248, 113, 113, 0.15);
-  --badge-red-text: #f87171;
-  --badge-amber-bg: rgba(251, 191, 36, 0.15);
-  --badge-amber-text: #fbbf24;
+  /* --badge-* come from the stage aliases further down */
 }
 
 /* Only apply OS dark preference when the user has not forced light theme */
