@@ -335,7 +335,7 @@ body.dark-theme .input-wrap input::placeholder,
   flex-direction: column;
   justify-content: flex-end;
   padding: clamp(1.75rem, 4vw, 2.75rem);
-  color: var(--on-accent);
+  color: #fff; /* hex-ok: text over the dark hero photo */
   overflow: hidden;
 }
 

@@ -24,9 +24,9 @@
 
 .fp-tabs button.active,
 .fp-mode button.active {
-  background: var(--bg-primary);
+  background: var(--accent-primary);
   color: var(--on-accent);
-  border-color: var(--bg-primary);
+  border-color: var(--accent-primary);
 }
 
 .fp-hint {
@@ -313,7 +313,7 @@
 :host-context(body.dark-theme) .fp-box h3,
 :host-context(body.dark-theme) .fp-toolbar h3,
 :host-context(body.dark-theme) .fp-breakdown td {
-  color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 :host-context(body.dark-theme) .fp-breakdown td {
@@ -331,7 +331,7 @@
 :host-context(body.dark-theme) .fp-table select {
   background: var(--bg-card);
   border-color: var(--border-secondary);
-  color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 :host-context(body.dark-theme) .fp-table th {

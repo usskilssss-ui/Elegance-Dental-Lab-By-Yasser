@@ -759,7 +759,7 @@
         <!-- 2. عرض تفاصيل الدكتور المختار مع حالاته -->
         <ng-container *ngIf="reportDoctorFilter">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; background:var(--bg-card); padding:12px 20px; border-radius:12px; border-left:4px solid var(--success-solid);">
-            <h3 style="color:var(--on-accent); margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+            <h3 style="color:var(--text-primary); margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
               <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--success-text);"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
               {{ 'admin.reports.doctorAccountDetails' | t }}: {{ reportDoctorFilter }}
             </h3>
@@ -1303,7 +1303,7 @@
             {{ 'admin.wa.testWarn' | t }}
             <ng-container *ngIf="waWebLinkedPhone">
               <br />
-              {{ 'admin.wa.linkedPhone' | t }} <strong dir="ltr" style="color:var(--on-accent);">{{ waWebLinkedPhone }}</strong>
+              {{ 'admin.wa.linkedPhone' | t }} <strong dir="ltr" style="color:var(--warning-text);">{{ waWebLinkedPhone }}</strong>
             </ng-container>
           </p>
 
