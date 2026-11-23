@@ -78,6 +78,27 @@ async function sweepUrgentLabCases() {
   return labUrgentSweep;
 }
 
+const { checkDoctorName, listKnownDoctorNames } = require('../services/doctorDirectory');
+const { findSimilarDoctorNames } = require('../utils/doctorName');
+
+/**
+ * Staff typing a doctor name that is close to an existing doctor (typo) must
+ * confirm it is really new; otherwise a new doctor account + separate bill is born.
+ * Returns a ready 409 response body, or null when the name is fine.
+ */
+async function doctorNameGate(req, name) {
+  if (!name || isClientPortalRole(req.user?.role)) return null;
+  const confirmed = req.body?.confirmNewDoctor === true || req.body?.confirmNewDoctor === 'true';
+  const decision = await checkDoctorName(name, confirmed);
+  if (decision.action !== 'similar') return null;
+  return {
+    success: false,
+    code: 'DOCTOR_NAME_SIMILAR',
+    message: `اسم الدكتور «${name}» قريب من دكتور موجود: ${decision.similar.join('، ')}. اختار الاسم الصح أو أكّد إنه دكتور جديد.`,
+    similar: decision.similar,
+  };
+}
+
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
   try {
@@ -472,6 +493,8 @@ exports.createCase = async (req, res) => {
       normalizeOriginalEntry(parseNotesMeta(notesFinal).originalEntry) ||
       normalizeOriginalEntry(buildOriginalEntry(caseType, createMeta));
     const referringDoctor = referringDoctorFromNotes(notesFinal);
+    const nameGate = await doctorNameGate(req, referringDoctor);
+    if (nameGate) return res.status(409).json(nameGate);
     const accountEnsure = await maybeEnsureClientAccount(
       req,
       referringDoctor,
@@ -2339,6 +2362,7 @@ exports.updateCase = async (req, res) => {
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
     }
+    const previousDoctorName = dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes);
 
     const incoming = req.body && typeof req.body === 'object' ? req.body : {};
     const providedKeys = Object.keys(incoming).filter((k) => incoming[k] !== undefined);
@@ -2611,6 +2635,14 @@ exports.updateCase = async (req, res) => {
           dentalCase?.caseNumber,
           priceErr?.message || priceErr
         );
+      }
+    }
+
+    if (!isClientPortalRole(req.user?.role)) {
+      const newDoctorName = dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes);
+      if (newDoctorName && newDoctorName !== previousDoctorName) {
+        const nameGate = await doctorNameGate(req, newDoctorName);
+        if (nameGate) return res.status(409).json(nameGate);
       }
     }
 
@@ -3144,5 +3176,40 @@ exports.getCaseBill = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to load case bill', error: error.message });
+  }
+};
+
+/** GET /cases/doctor-name-check?name=… — "did you mean …?" while typing a doctor name. */
+exports.doctorNameCheck = async (req, res) => {
+  try {
+    const name = String(req.query.name || '').trim();
+    const decision = await checkDoctorName(name, false);
+    res.status(200).json({ success: true, ...decision });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'تعذّر فحص اسم الدكتور' });
+  }
+};
+
+/** GET /cases/doctor-duplicates — groups of doctor names that look like the same person. */
+exports.doctorDuplicates = async (req, res) => {
+  try {
+    const names = await listKnownDoctorNames();
+    const counts = await DentalCase.aggregate([
+      { $group: { _id: '$referringDoctor', cases: { $sum: 1 } } },
+    ]);
+    const caseCount = new Map(counts.map((c) => [String(c._id || '').trim(), c.cases]));
+    const used = new Set();
+    const groups = [];
+    for (const name of names) {
+      if (used.has(name)) continue;
+      const similar = findSimilarDoctorNames(name, names.filter((n) => !used.has(n)), { limit: 10 });
+      if (!similar.length) continue;
+      const members = [name, ...similar];
+      members.forEach((m) => used.add(m));
+      groups.push(members.map((m) => ({ name: m, cases: caseCount.get(m) || 0 })));
+    }
+    res.status(200).json({ success: true, groups });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'تعذّر تجميع الأسماء المكررة' });
   }
 };

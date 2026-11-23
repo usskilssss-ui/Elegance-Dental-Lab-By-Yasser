@@ -92,6 +92,14 @@ export class CaseApiService {
     return this.http.post(this.apiUrl, data);
   }
 
+  /** "Did you mean …?" check for a typed doctor name (secretary/admin). */
+  checkDoctorName(name: string): Observable<{ action?: 'ok' | 'similar'; existing?: string | null; similar?: string[] }> {
+    return this.http.get<{ action?: 'ok' | 'similar'; existing?: string | null; similar?: string[] }>(
+      `${this.apiUrl}/doctor-name-check`,
+      { params: { name } }
+    );
+  }
+
   updateCase(id: string, data: unknown): Observable<any> {
     return this.http.put(`${this.apiUrl}/${id}`, data);
   }

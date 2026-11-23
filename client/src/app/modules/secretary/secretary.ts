@@ -1907,6 +1907,8 @@ export class Secretary implements OnInit, OnDestroy {
       return;
     }
     this.dialogMode.set('create');
+    this.doctorNameConfirmed = '';
+    this.doctorNameAtOpen = '';
     this.createRequesterType = normalizeRequesterType(type);
     this.formRequesterType.set(this.createRequesterType);
     this.editingId = null;
@@ -1934,6 +1936,8 @@ export class Secretary implements OnInit, OnDestroy {
       this.flash(this.lang.t('secretary.month.readonly'));
       return;
     }
+    this.doctorNameConfirmed = '';
+    this.doctorNameAtOpen = String(c?.doctor || '').trim();
     if (c.status === 'exited' && this.auth.getSession()?.role !== 'admin') {
       this.openPasswordProtection('edit', c);
       return;
@@ -2376,6 +2380,48 @@ export class Secretary implements OnInit, OnDestroy {
     });
   }
 
+  /** Doctor name the secretary already confirmed for this dialog (typo gate). */
+  private doctorNameConfirmed = '';
+  /** Doctor name the case had when the edit dialog opened (unchanged names skip the check). */
+  private doctorNameAtOpen = '';
+
+  /**
+   * Before saving, ask the server whether the typed doctor name looks like a typo of an
+   * existing doctor. Returns true when save may continue now; false when it will resume
+   * (or was cancelled) after the check.
+   */
+  private passDoctorNameGate(docName: string): boolean {
+    if (!docName || docName === this.doctorNameConfirmed || docName === this.doctorNameAtOpen) return true;
+    this.saveInProgress.set(true);
+    this.caseApi.checkDoctorName(docName).subscribe({
+      next: (r) => {
+        this.saveInProgress.set(false);
+        const similar = r?.action === 'similar' ? r.similar || [] : [];
+        if (similar.length) {
+          const pick = similar[0];
+          if (window.confirm(`اسم الدكتور «${docName}» قريب من دكتور موجود: «${pick}».
+
+اضغط OK لاستخدام «${pick}» — أو Cancel لو ده دكتور جديد فعلًا.`)) {
+            this.formDraft.doctor = pick;
+            this.doctorNameConfirmed = pick;
+            this.flash(`اتغيّر اسم الدكتور لـ «${pick}» — راجع واضغط حفظ تاني`);
+            return;
+          }
+          if (!window.confirm(`متأكد إن «${docName}» دكتور جديد؟ هيتعمله حساب وكشف حساب منفصل.`)) return;
+        }
+        this.doctorNameConfirmed = docName;
+        this.save();
+      },
+      error: () => {
+        // Check unavailable: don't block the lab; the server still guards create/update.
+        this.saveInProgress.set(false);
+        this.doctorNameConfirmed = docName;
+        this.save();
+      },
+    });
+    return false;
+  }
+
   save(): void {
     const d = this.formDraft;
     const existing =
@@ -2419,6 +2465,8 @@ export class Secretary implements OnInit, OnDestroy {
     }
     let patientName = d.patient.trim();
     const docName = d.doctor.trim();
+    if (!this.passDoctorNameGate(docName)) return;
+    const confirmNewDoctor = docName === this.doctorNameConfirmed;
 
     const formPayload = {
       requesterType,
@@ -2502,7 +2550,7 @@ export class Secretary implements OnInit, OnDestroy {
         .pipe(
           switchMap((created) => {
             createdAccount = created;
-            return this.caseApi.createCase(buildCreateCasePayload(formPayload));
+            return this.caseApi.createCase({ ...buildCreateCasePayload(formPayload), confirmNewDoctor });
           }),
           switchMap((res: {
             case?: { caseNumber?: string; _id?: string; id?: string };
@@ -2552,7 +2600,10 @@ export class Secretary implements OnInit, OnDestroy {
       this.ensureFormAccount(docName, requesterType)
         .pipe(
           switchMap(() =>
-            this.caseApi.updateCase(this.editingId!, buildCreateCasePayload(formPayload, plyPreserveMeta))
+            this.caseApi.updateCase(this.editingId!, {
+              ...(buildCreateCasePayload(formPayload, plyPreserveMeta) as Record<string, unknown>),
+              confirmNewDoctor,
+            })
           )
         )
         .subscribe({
