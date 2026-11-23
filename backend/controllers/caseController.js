@@ -79,6 +79,7 @@ async function sweepUrgentLabCases() {
 }
 
 const { checkDoctorName, listKnownDoctorNames } = require('../services/doctorDirectory');
+const { arabicLooseRegex } = require('../utils/searchRegex');
 const { findSimilarDoctorNames } = require('../utils/doctorName');
 
 /**
@@ -692,14 +693,15 @@ exports.getAllCases = async (req, res) => {
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
 
-    if (search) {
+    const searchRe = arabicLooseRegex(search);
+    if (searchRe) {
       pushAnd(filter, {
         $or: [
-          { patientName: { $regex: search, $options: 'i' } },
-          { caseNumber: { $regex: search, $options: 'i' } },
-          { patientEmail: { $regex: search, $options: 'i' } },
-          { patientPhone: { $regex: search, $options: 'i' } },
-          { referringDoctor: { $regex: search, $options: 'i' } },
+          { patientName: searchRe },
+          { caseNumber: searchRe },
+          { patientEmail: searchRe },
+          { patientPhone: searchRe },
+          { referringDoctor: searchRe },
         ],
       });
     }
@@ -2894,6 +2896,15 @@ exports.reopenCase = async (req, res) => {
 
     if (!dentalCase) {
       return res.status(404).json({ message: 'Case not found' });
+    }
+
+    // Exited cases are financial history (frozen bill/revenue). Reopening one would let it
+    // exit again with a new price in a different month. Use a new Redo/Modification case.
+    if (isExitedCase(dentalCase)) {
+      return res.status(409).json({
+        success: false,
+        message: 'الحالة خارجة ومتسجّلة في الحسابات — مينفعش تتفتح تاني. اعمل حالة جديدة (إعادة/تعديل) مربوطة بيها.',
+      });
     }
 
     const oldStage = dentalCase.currentStage;
