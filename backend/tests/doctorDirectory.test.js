@@ -23,6 +23,13 @@ describe('decideDoctorName — stop typos from creating a new doctor', () => {
     expect(decideDoctorName('كريم منصور', known, false)).toEqual({ action: 'ok', existing: null, similar: [] });
   });
 
+  test('a shorter or longer version of a known name is flagged (two secretaries, two spellings)', () => {
+    const lab = ['معمل شيماء', 'الجندي مهندسين', 'الجندي حاتم'];
+    expect(decideDoctorName('شيماء', lab, false)).toMatchObject({ action: 'similar', similar: ['معمل شيماء'] });
+    expect(decideDoctorName('د. شيماء', ['شيماء'], false).action).toBe('ok'); // same name
+    expect(decideDoctorName('الجندي', lab, false).similar).toEqual(['الجندي مهندسين', 'الجندي حاتم']);
+  });
+
   test('an empty name is not checked', () => {
     expect(decideDoctorName('', known, false).action).toBe('ok');
   });

@@ -15,7 +15,16 @@ function decideDoctorName(name, knownNames, confirmedNew) {
   const existing = (knownNames || []).find((n) => normalizeDoctorKey(n) === key) || null;
   if (existing) return { action: 'ok', existing, similar: [] };
   if (confirmedNew) return { action: 'ok', existing: null, similar: [] };
-  const similar = findSimilarDoctorNames(name, knownNames);
+  // Also flag names whose words are all inside another known name (or the reverse):
+  // "شيماء" vs "معمل شيماء" — different secretaries writing the same doctor differently.
+  const words = key.split(' ');
+  const contained = (knownNames || []).filter((n) => {
+    const k = normalizeDoctorKey(n);
+    if (!k || k === key) return false;
+    const other = k.split(' ');
+    return words.every((w) => other.includes(w)) || other.every((w) => words.includes(w));
+  });
+  const similar = [...new Set([...findSimilarDoctorNames(name, knownNames), ...contained])].slice(0, 5);
   return similar.length
     ? { action: 'similar', existing: null, similar }
     : { action: 'ok', existing: null, similar: [] };

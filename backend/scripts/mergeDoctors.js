@@ -16,6 +16,8 @@
  * Every change is written to the audit log as "doctor_merged".
  */
 require('dotenv').config();
+// Some ISPs' DNS cannot answer mongodb+srv SRV lookups (querySrv EBADRESP): set DNS_SERVERS=8.8.8.8,1.1.1.1
+if (process.env.DNS_SERVERS) require('dns').setServers(process.env.DNS_SERVERS.split(',').map((s) => s.trim()));
 const mongoose = require('mongoose');
 const DentalCase = require('../models/DentalCase');
 const DoctorPayment = require('../models/DoctorPayment');
