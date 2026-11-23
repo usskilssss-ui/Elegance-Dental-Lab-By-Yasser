@@ -287,6 +287,31 @@ body {
   --badge-amber-text: var(--stage-finishing-text);
   --badge-red-bg: var(--stage-urgent-bg);
   --badge-red-text: var(--stage-urgent-text);
+
+  /* Semantic roles (not stages): reuse the stage palette so meaning stays one-to-one */
+  --success-bg: var(--stage-finished-bg);
+  --success-border: var(--stage-finished-border);
+  --success-text: var(--stage-finished-text);
+  --success-solid: var(--stage-finished-solid);
+  --danger-bg: var(--stage-urgent-bg);
+  --danger-border: var(--stage-urgent-border);
+  --danger-text: var(--stage-urgent-text);
+  --danger-solid: var(--stage-urgent-solid);
+  --warning-bg: var(--stage-finishing-bg);
+  --warning-border: var(--stage-finishing-border);
+  --warning-text: var(--stage-finishing-text);
+  --warning-solid: var(--stage-finishing-solid);
+  --neutral-bg: var(--stage-pending-bg);
+  --neutral-border: var(--stage-pending-border);
+  --neutral-text: var(--stage-pending-text);
+
+  /* Brand teal: tints and text on solid fills */
+  --accent-tint-bg: var(--accent-secondary);
+  --accent-tint-border: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  --accent-tint-text: var(--accent-primary);
+  --accent-hover: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
+  --on-accent: var(--bg-card); /* text on a solid teal fill */
+  --on-tone: var(--bg-card);   /* text on any solid stage/semantic fill */
 }
 
 /* Tone helpers: put .tone-<stage> on an element, style it with var(--tone-*) */
