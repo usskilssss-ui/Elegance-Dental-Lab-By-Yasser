@@ -56,6 +56,16 @@ export class CaseApiService {
   }
 
   /** Active cases overdue / due within 24h */
+  /** Admin: groups of client names that look like the same person. */
+  getDoctorDuplicates(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/doctor-duplicates`);
+  }
+
+  /** Admin: preview (apply=false) or merge one client name into another. */
+  mergeDoctorNames(from: string, into: string, apply: boolean): Observable<any> {
+    return this.http.post(`${this.apiUrl}/doctor-merge`, { from, into, apply });
+  }
+
   getOperationsReport(): Observable<any> {
     return this.http.get(`${this.apiUrl}/operations-report`);
   }

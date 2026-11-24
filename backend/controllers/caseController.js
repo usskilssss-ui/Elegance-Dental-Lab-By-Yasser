@@ -3234,3 +3234,23 @@ exports.doctorDuplicates = async (req, res) => {
     res.status(500).json({ success: false, message: 'تعذّر تجميع الأسماء المكررة' });
   }
 };
+
+/** POST /cases/doctor-merge {from, into, apply} — admin: preview (apply=false) or merge two client names. */
+exports.doctorMerge = async (req, res) => {
+  try {
+    const { mergeClientNames } = require('../services/doctorMerge');
+    const from = String(req.body?.from || '').trim();
+    const into = String(req.body?.into || '').trim();
+    const apply = req.body?.apply === true;
+    const summary = await mergeClientNames({
+      from,
+      into,
+      apply,
+      admin: { _id: req.user.id, fullName: req.user.fullName },
+      source: 'admin: possible duplicates',
+    });
+    res.status(200).json({ success: true, data: summary });
+  } catch (error) {
+    res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'تعذّر دمج الأسماء' });
+  }
+};

@@ -82,6 +82,7 @@ router.get(
 // Doctor name typo guard + duplicate finder (must be before /:id)
 router.get('/doctor-name-check', authorize('admin', 'secretary'), caseController.doctorNameCheck);
 router.get('/doctor-duplicates', authorize('admin'), caseController.doctorDuplicates);
+router.post('/doctor-merge', authorize('admin'), caseController.doctorMerge);
 
 // Station barcode/QR scan (must be before /:id)
 router.post(
