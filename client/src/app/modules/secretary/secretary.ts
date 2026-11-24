@@ -9,7 +9,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
 import { CaseApiService, type CaseBill } from '../../core/services/case-api.service';
 import { renderOperationsReportHtml, type OperationsReport } from './operations-report';
-import { sameDoctorName } from '../../core/utils/doctor-name';
+import { rankNameSuggestions, sameDoctorName, spacingOnlyMatch } from '../../core/utils/doctor-name';
 import { SharedCasesService, type DentalCase } from '../../core/services/shared-cases.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import {
@@ -740,9 +740,22 @@ export class Secretary implements OnInit, OnDestroy {
     if (!normalizedInput) {
       return unique.slice(0, 10);
     }
-    return unique.filter(doc => 
-      this.normalizeArabic(doc).includes(normalizedInput)
-    );
+    // Contains-matches first, then names that look like a typo of what was typed
+    // ("محمد حالد" → "محمد خالد", "م حمد خالد" → "محمد خالد").
+    return rankNameSuggestions(input, unique, 10);
+  });
+
+  /**
+   * Persistent "did you mean …?" under the name field: shown when what was typed is not
+   * an existing name but closely matches one (works even after the dropdown closes).
+   */
+  readonly doctorTypoHint = computed(() => {
+    const input = (this.doctorSearchQuery() || '').trim();
+    if (input.length < 3) return null;
+    const unique = this.uniqueDoctors();
+    if (unique.some((n) => sameDoctorName(n, input))) return null;
+    const top = rankNameSuggestions(input, unique, 1)[0];
+    return top && !sameDoctorName(top, input) ? top : null;
   });
 
   onDoctorInputChange(): void {
@@ -2506,6 +2519,13 @@ export class Secretary implements OnInit, OnDestroy {
     if (this.showWorkPhaseOptions && !this.workPhase) {
       this.flash(this.lang.t('secretary.toast.needWorkPhase'));
       return;
+    }
+    // Same letters, different spaces ("م حمد خالد") → use the stored spelling automatically.
+    const spacingFix = spacingOnlyMatch(d.doctor, this.uniqueDoctors());
+    if (spacingFix) {
+      d.doctor = spacingFix;
+      this.doctorSearchQuery.set(spacingFix);
+      this.flash(`اتصحّح الاسم لـ «${spacingFix}»`);
     }
     let patientName = d.patient.trim();
     const docName = d.doctor.trim();
