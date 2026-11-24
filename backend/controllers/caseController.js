@@ -81,6 +81,8 @@ async function sweepUrgentLabCases() {
 
 const { checkDoctorName, listKnownDoctorNames } = require('../services/doctorDirectory');
 const { arabicLooseRegex } = require('../utils/searchRegex');
+const { canAddClient, mustPickFromList, notInListMessage, findClientAccount } = require('../services/clientDirectoryPolicy');
+const { normalizeDoctorKey: sameNameKey } = require('../utils/doctorName');
 const { generateOperationsReport } = require('../services/operationsReport');
 const { findSimilarDoctorNames } = require('../utils/doctorName');
 
@@ -90,6 +92,8 @@ const { findSimilarDoctorNames } = require('../utils/doctorName');
 
 async function maybeEnsureClientAccount(req, name, requesterType) {
   if (!name || isClientPortalRole(req.user?.role)) return null;
+  // Doctors and labs are added by the admin only; reception may still auto-add students.
+  if (!canAddClient(req.user?.role, requesterType)) return null;
   try {
     return await ensureClientAccount(name, requesterType, { retag: false });
   } catch (err) {
@@ -482,7 +486,18 @@ exports.createCase = async (req, res) => {
       normalizeOriginalEntry(parseNotesMeta(notesFinal).originalEntry) ||
       normalizeOriginalEntry(buildOriginalEntry(caseType, createMeta));
     const referringDoctor = referringDoctorFromNotes(notesFinal);
-    const accountEnsure = await maybeEnsureClientAccount(
+    let listAccount = null;
+    if (referringDoctor && mustPickFromList(req.user?.role, normalizedRequesterType)) {
+      listAccount = await findClientAccount(referringDoctor, normalizedRequesterType);
+      if (!listAccount) {
+        return res.status(422).json({
+          success: false,
+          code: 'CLIENT_NOT_IN_LIST',
+          message: notInListMessage(normalizedRequesterType, referringDoctor),
+        });
+      }
+    }
+    const accountEnsure = listAccount ? { user: listAccount, action: 'existing' } : await maybeEnsureClientAccount(
       req,
       referringDoctor,
       normalizedRequesterType
@@ -604,6 +619,9 @@ exports.retagRequesterByName = async (req, res) => {
       : [];
     if (!fullName) {
       return res.status(400).json({ message: 'الاسم مطلوب' });
+    }
+    if (!canAddClient(req.user?.role, requesterType) && !(await findClientAccount(fullName, requesterType))) {
+      return res.status(403).json({ success: false, message: 'تحويل الاسم لدكتور أو معمل جديد من صلاحية الأدمن بس' });
     }
 
     let account = { action: 'skipped', updatedCases: 0 };
@@ -2334,6 +2352,8 @@ exports.updateCase = async (req, res) => {
       return res.status(404).json({ message: 'Case not found' });
     }
 
+    const previousDoctorKey = sameNameKey(dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes));
+    const previousRequesterType = dentalCase.requesterType || 'doctor';
     const incoming = req.body && typeof req.body === 'object' ? req.body : {};
     const providedKeys = Object.keys(incoming).filter((k) => incoming[k] !== undefined);
     const requesterRetagOnly =
@@ -2362,6 +2382,14 @@ exports.updateCase = async (req, res) => {
           referringDoctorFromNotes(dentalCase.notes) ||
           ''
       ).trim();
+      if (
+        displayName &&
+        mustPickFromList(req.user?.role, nextType) &&
+        (nextType !== previousRequesterType || sameNameKey(displayName) !== previousDoctorKey) &&
+        !(await findClientAccount(displayName, nextType))
+      ) {
+        return res.status(422).json({ success: false, code: 'CLIENT_NOT_IN_LIST', message: notInListMessage(nextType, displayName) });
+      }
       const nextNotes = setRequesterTypeInNotes(
         dentalCase.notes || '',
         nextType,
@@ -2605,6 +2633,19 @@ exports.updateCase = async (req, res) => {
           dentalCase?.caseNumber,
           priceErr?.message || priceErr
         );
+      }
+    }
+
+    {
+      const nextName = dentalCase.referringDoctor || referringDoctorFromNotes(dentalCase.notes);
+      const nextType = dentalCase.requesterType || 'doctor';
+      const changed = sameNameKey(nextName) !== previousDoctorKey || nextType !== previousRequesterType;
+      if (nextName && changed && mustPickFromList(req.user?.role, nextType)) {
+        const listed = await findClientAccount(nextName, nextType);
+        if (!listed) {
+          return res.status(422).json({ success: false, code: 'CLIENT_NOT_IN_LIST', message: notInListMessage(nextType, nextName) });
+        }
+        dentalCase.referringDoctorId = listed._id;
       }
     }
 

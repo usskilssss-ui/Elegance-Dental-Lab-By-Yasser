@@ -9,6 +9,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { type ClientAccountKind } from '../../core/auth/client-account';
 import { CaseApiService, type CaseBill } from '../../core/services/case-api.service';
 import { renderOperationsReportHtml, type OperationsReport } from './operations-report';
+import { sameDoctorName } from '../../core/utils/doctor-name';
 import { SharedCasesService, type DentalCase } from '../../core/services/shared-cases.service';
 import { UserApiService } from '../../core/services/user-api.service';
 import {
@@ -1365,7 +1366,7 @@ export class Secretary implements OnInit, OnDestroy {
   }
 
   private namesMatch(a: string, b: string): boolean {
-    return a.trim().toLowerCase() === b.trim().toLowerCase();
+    return sameDoctorName(a, b);
   }
 
   private nameHasRoleAccount(name: string, kind: ClientAccountKind): boolean {
@@ -2508,7 +2509,14 @@ export class Secretary implements OnInit, OnDestroy {
     }
     let patientName = d.patient.trim();
     const docName = d.doctor.trim();
-    if (!this.passDoctorNameGate(docName)) return;
+    // Doctors and labs come from the admin's list only; reception adds students freely.
+    const listOnly = !this.isAdminUser() && (requesterType === 'doctor' || requesterType === 'lab');
+    if (listOnly && docName !== this.doctorNameAtOpen && !this.nameHasRoleAccount(docName, requesterType)) {
+      const kind = requesterType === 'lab' ? 'المعمل' : 'الدكتور';
+      this.flash(`${kind} «${docName}» مش في القائمة — اختار من القائمة، ولو ${kind} جديد اطلب من الأدمن يضيفه`);
+      return;
+    }
+    if (!listOnly && !this.passDoctorNameGate(docName)) return;
     const confirmNewDoctor = docName === this.doctorNameConfirmed;
 
     const formPayload = {

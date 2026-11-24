@@ -749,9 +749,10 @@ export class EntryComponent implements OnInit, OnDestroy {
           );
           this.loadTodayJobs();
         },
-        error: () => {
+        error: (err: { error?: { message?: string } }) => {
           this.saveInProgress.set(false);
-          this.flash(this.lang.t('entry.toast.saveFail'));
+          // Show the server's reason (e.g. doctor not in the admin's list), not a generic failure.
+          this.flash(err?.error?.message || this.lang.t('entry.toast.saveFail'));
         },
       });
   }
