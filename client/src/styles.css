@@ -546,14 +546,16 @@ body:not(.dark-theme) .app-menu-lang-label {
   gap: 0.85rem 0.75rem;
   align-items: start;
 }
-.case-form-modal .cf-seg {
+.case-form-modal .cf-seg,
+.bill-collect .cf-seg {
   display: flex;
   min-height: 42px;
   border: 1px solid var(--border-primary);
   border-radius: 12px;
   overflow: hidden;
 }
-.case-form-modal .cf-seg button {
+.case-form-modal .cf-seg button,
+.bill-collect .cf-seg button {
   flex: 1;
   border: 0;
   border-inline-start: 1px solid var(--border-primary);
@@ -565,13 +567,16 @@ body:not(.dark-theme) .app-menu-lang-label {
   cursor: pointer;
   padding: 0.4rem 0.5rem;
 }
-.case-form-modal .cf-seg button:first-child {
+.case-form-modal .cf-seg button:first-child,
+.bill-collect .cf-seg button:first-child {
   border-inline-start: 0;
 }
-.case-form-modal .cf-seg button:hover {
+.case-form-modal .cf-seg button:hover,
+.bill-collect .cf-seg button:hover {
   background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
 }
-.case-form-modal .cf-seg button.on {
+.case-form-modal .cf-seg button.on,
+.bill-collect .cf-seg button.on {
   background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
   color: var(--accent-primary);
   font-weight: 700;
