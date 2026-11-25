@@ -83,10 +83,11 @@ function log(...args) {
 }
 
 function nodePath() {
+  // The node running this supervisor first: the OCCLA installer ships its own copy
   const candidates = [
+    process.execPath,
     'C:\\Program Files\\nodejs\\node.exe',
     'C:\\Program Files (x86)\\nodejs\\node.exe',
-    process.execPath,
   ];
   for (const p of candidates) {
     if (p && fs.existsSync(p)) return p;

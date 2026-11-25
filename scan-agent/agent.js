@@ -56,8 +56,11 @@ const BACKGROUND_SCAN =
 const HIDE_CONSOLE =
   config.HIDE_CONSOLE !== undefined ? config.HIDE_CONSOLE === true : BACKGROUND_SCAN;
 
-if (!SERVER_URL || !EMAIL || !PASSWORD) {
-  console.error('❌ Config needs SERVER_URL, EMAIL, PASSWORD');
+/** Paired by the OCCLA installer: no email/password on the PC, only this device token. */
+const DEVICE_TOKEN = String(config.DEVICE_TOKEN || '').trim();
+
+if (!SERVER_URL || (!DEVICE_TOKEN && (!EMAIL || !PASSWORD))) {
+  console.error('❌ Config needs SERVER_URL and DEVICE_TOKEN (or EMAIL + PASSWORD)');
   process.exit(1);
 }
 
@@ -194,10 +197,9 @@ function sleep(ms) {
 }
 
 async function loginOnce() {
-  const res = await httpJson('POST', `${SERVER_URL}/api/auth/login`, {
-    email: EMAIL,
-    password: PASSWORD,
-  });
+  const res = DEVICE_TOKEN
+    ? await httpJson('POST', `${SERVER_URL}/api/stations/session`, {}, { 'x-device-token': DEVICE_TOKEN })
+    : await httpJson('POST', `${SERVER_URL}/api/auth/login`, { email: EMAIL, password: PASSWORD });
   if (res.status >= 400 || !res.data?.token) {
     const msg = res.data?.message || res.data?.errors?.[0]?.msg || `HTTP ${res.status}`;
     throw new Error(`Login failed: ${msg}`);

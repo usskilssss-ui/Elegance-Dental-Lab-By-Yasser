@@ -148,6 +148,8 @@ const configRaw = fs
 const config = JSON.parse(configRaw);
 const SERVER_URL      = config.SERVER_URL.replace(/\/$/, '');
 const AGENT_SECRET    = config.PRINT_AGENT_SECRET;
+/** Paired by the OCCLA installer (preferred): this PC's own token instead of the shared secret. */
+const DEVICE_TOKEN    = String(config.DEVICE_TOKEN || '').trim();
 const PRINTER_NAME    = config.PRINTER_NAME;
 const RECEIPT_PRINTER_NAME = config.RECEIPT_PRINTER_NAME || 'XP-Q808K';
 /** true only when the receipt printer is installed and ready on THIS PC */
@@ -172,7 +174,11 @@ require('./keep-awake').startKeepAwake((m) => console.log(m));
 // ── Connect to server ─────────────────────────────────────
 const socket = io(SERVER_URL, {
   // auth is re-evaluated on every (re)connect so the server knows our current capabilities
-  auth: (cb) => cb({ agentSecret: AGENT_SECRET, caps: receiptPrinterOk ? 'sheet,receipt' : 'sheet' }),
+  auth: (cb) =>
+    cb({
+      ...(DEVICE_TOKEN ? { deviceToken: DEVICE_TOKEN } : { agentSecret: AGENT_SECRET }),
+      caps: receiptPrinterOk ? 'sheet,receipt' : 'sheet',
+    }),
   reconnection: true,
   reconnectionDelay: RECONNECT_DELAY,
   reconnectionDelayMax: 15000,
@@ -245,12 +251,16 @@ let lastError = '';
 
 function noteConnectionError(message) {
   const msg = String(message || '');
-  const isAuth = /invalid agent secret|HTTP 401/i.test(msg);
+  const isAuth = /invalid agent secret|invalid device token|HTTP 401/i.test(msg);
   if (isAuth && !authError) {
     console.error('⛔ PRINT_AGENT_SECRET in config.json is wrong — the server refuses this printer. Update it to the server value.');
   }
   authError = isAuth;
-  lastError = isAuth ? 'كلمة سر الطباعة على الجهاز ده غلط — لازم تتحدّث' : msg.slice(0, 200);
+  lastError = isAuth
+    ? DEVICE_TOKEN
+      ? 'الجهاز ده اتفصل من الأدمن — اربطه تاني بكود جديد'
+      : 'كلمة سر الطباعة على الجهاز ده غلط — لازم تتحدّث'
+    : msg.slice(0, 200);
 }
 
 /** Per-job retry count for errors that happen BEFORE the sheet reaches the printer. */
@@ -729,7 +739,7 @@ function httpJson(method, url, body) {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'x-agent-secret': AGENT_SECRET,
+          ...(DEVICE_TOKEN ? { 'x-device-token': DEVICE_TOKEN } : { 'x-agent-secret': AGENT_SECRET }),
           'x-agent-id': `pid-${process.pid}`,
           // Only agents with a receipt printer configured may claim receipt jobs
           'x-agent-caps': receiptPrinterOk ? 'sheet,receipt' : 'sheet',
