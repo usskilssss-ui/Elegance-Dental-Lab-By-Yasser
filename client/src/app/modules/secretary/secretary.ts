@@ -64,6 +64,7 @@ function emptyDraft(): CaseDraft {
   return {
     doctor: '',
     patient: '',
+    branch: '',
     patientPhone: '',
     studentPrice: 0,
     workType: '',
@@ -2017,6 +2018,7 @@ export class Secretary implements OnInit, OnDestroy {
     this.formDraft = {
       doctor: c.doctor,
       patient: c.patient,
+      branch: String((c as { branch?: string }).branch || '').trim(),
       patientPhone: c.patientPhone || '',
       studentPrice: Number(c.salaryAmount || 0),
       workType: c.workType,
@@ -2544,6 +2546,8 @@ export class Secretary implements OnInit, OnDestroy {
       studentPrice: requesterType === 'student' ? Number(d.studentPrice || 0) : 0,
       doctor: docName,
       patient: patientName,
+      // Branch (doctors only, optional): printed on the case sheet
+      branch: requesterType === 'doctor' ? String(d.branch || '').trim() : '',
       patientEmail: existing?.patientEmail?.trim() || undefined,
       patientPhone: d.patientPhone?.trim(),
       workType: d.workType.trim(),
@@ -2598,7 +2602,7 @@ export class Secretary implements OnInit, OnDestroy {
       const printDraft = {
         doctor: docName,
         patient: patientName,
-        branch: '',
+        branch: formPayload.branch,
         caseType: (['New', 'Modification', 'Redo', 'Empty'].includes(String(d.caseType))
           ? d.caseType
           : 'New') as 'New' | 'Modification' | 'Redo' | 'Empty',
